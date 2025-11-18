@@ -1,4 +1,5 @@
 EmulationStation
+<img width="1366" height="768" alt="emulationstation-x" src="https://github.com/user-attachments/assets/883e7810-0f1c-4872-98c4-cf7e83971064" />
 ================
 
 This is a fork of EmulationStation for RetroPie.
