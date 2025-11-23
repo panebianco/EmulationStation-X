@@ -22,6 +22,9 @@
 #include "FileSorts.h"
 #include "views/gamelist/IGameListView.h"
 #include "guis/GuiInfoPopup.h"
+#include "Settings.h"
+#include "utils/FileSystemUtil.h"
+#include "utils/StringUtil.h"
 
 GuiMenu::GuiMenu(Window* window) : GuiComponent(window), mMenu(window, "MAIN MENU"), mVersion(window)
 {
@@ -55,7 +58,7 @@ void GuiMenu::openScraperSettings()
 	std::vector<std::string> scrapers = getScraperList();
 
 	// Select either the first entry of the one read from the settings, just in case the scraper from settings has vanished.
-	for(auto it = scrapers.cbegin(); it != scrapers.cend(); it++)
+	for (auto it = scrapers.cbegin(); it != scrapers.cend(); it++)
 		scraper_list->add(*it, *it, *it == Settings::getInstance()->getString("Scraper"));
 
 	s->addWithLabel("SCRAPE FROM", scraper_list);
@@ -106,11 +109,11 @@ void GuiMenu::openSoundSettings()
 		audio_cards.push_back("plughw");
 		audio_cards.push_back("null");
 		if (Settings::getInstance()->getString("AudioCard") != "") {
-			if(std::find(audio_cards.begin(), audio_cards.end(), Settings::getInstance()->getString("AudioCard")) == audio_cards.end()) {
+			if (std::find(audio_cards.begin(), audio_cards.end(), Settings::getInstance()->getString("AudioCard")) == audio_cards.end()) {
 				audio_cards.push_back(Settings::getInstance()->getString("AudioCard"));
 			}
 		}
-		for(auto ac = audio_cards.cbegin(); ac != audio_cards.cend(); ac++)
+		for (auto ac = audio_cards.cbegin(); ac != audio_cards.cend(); ac++)
 			audio_card->add(*ac, *ac, Settings::getInstance()->getString("AudioCard") == *ac);
 		s->addWithLabel("AUDIO CARD", audio_card);
 		s->addSaveFunc([audio_card] {
@@ -130,11 +133,11 @@ void GuiMenu::openSoundSettings()
 		transitions.push_back("Digital");
 		transitions.push_back("Analogue");
 		if (Settings::getInstance()->getString("AudioDevice") != "") {
-			if(std::find(transitions.begin(), transitions.end(), Settings::getInstance()->getString("AudioDevice")) == transitions.end()) {
+			if (std::find(transitions.begin(), transitions.end(), Settings::getInstance()->getString("AudioDevice")) == transitions.end()) {
 				transitions.push_back(Settings::getInstance()->getString("AudioDevice"));
 			}
 		}
-		for(auto it = transitions.cbegin(); it != transitions.cend(); it++)
+		for (auto it = transitions.cbegin(); it != transitions.cend(); it++)
 			vol_dev->add(*it, *it, Settings::getInstance()->getString("AudioDevice") == *it);
 		s->addWithLabel("AUDIO DEVICE", vol_dev);
 		s->addSaveFunc([vol_dev] {
@@ -205,24 +208,24 @@ void GuiMenu::openUISettings()
 		UImodeSelection->add(*it, *it, Settings::getInstance()->getString("UIMode") == *it);
 	s->addWithLabel("UI MODE", UImodeSelection);
 	Window* window = mWindow;
-	s->addSaveFunc([ UImodeSelection, window]
-	{
-		std::string selectedMode = UImodeSelection->getSelected();
-		if (selectedMode != "Full")
+	s->addSaveFunc([UImodeSelection, window]
 		{
-			std::string msg = "You are changing the UI to a restricted mode:\n" + selectedMode + "\n";
-			msg += "This will hide most menu-options to prevent changes to the system.\n";
-			msg += "To unlock and return to the full UI, enter this code: \n";
-			msg += "\"" + UIModeController::getInstance()->getFormattedPassKeyStr() + "\"\n\n";
-			msg += "Do you want to proceed?";
-			window->pushGui(new GuiMsgBox(window, msg,
-				"YES", [selectedMode] {
-					LOG(LogDebug) << "Setting UI mode to " << selectedMode;
-					Settings::getInstance()->setString("UIMode", selectedMode);
-					Settings::getInstance()->saveFile();
-			}, "NO",nullptr));
-		}
-	});
+			std::string selectedMode = UImodeSelection->getSelected();
+			if (selectedMode != "Full")
+			{
+				std::string msg = "You are changing the UI to a restricted mode:\n" + selectedMode + "\n";
+				msg += "This will hide most menu-options to prevent changes to the system.\n";
+				msg += "To unlock and return to the full UI, enter this code: \n";
+				msg += "\"" + UIModeController::getInstance()->getFormattedPassKeyStr() + "\"\n\n";
+				msg += "Do you want to proceed?";
+				window->pushGui(new GuiMsgBox(window, msg,
+					"YES", [selectedMode] {
+						LOG(LogDebug) << "Setting UI mode to " << selectedMode;
+						Settings::getInstance()->setString("UIMode", selectedMode);
+						Settings::getInstance()->saveFile();
+					}, "NO", nullptr));
+			}
+		});
 
 	// screensaver
 	ComponentListRow screensaver_row;
@@ -259,7 +262,7 @@ void GuiMenu::openUISettings()
 	transitions.push_back("fade");
 	transitions.push_back("slide");
 	transitions.push_back("instant");
-	for(auto it = transitions.cbegin(); it != transitions.cend(); it++)
+	for (auto it = transitions.cbegin(); it != transitions.cend(); it++)
 		transition_style->add(*it, *it, Settings::getInstance()->getString("TransitionStyle") == *it);
 	s->addWithLabel("TRANSITION STYLE", transition_style);
 	s->addSaveFunc([transition_style] {
@@ -276,33 +279,77 @@ void GuiMenu::openUISettings()
 	// theme set
 	auto themeSets = ThemeData::getThemeSets();
 
-	if(!themeSets.empty())
+	if (!themeSets.empty())
 	{
 		std::map<std::string, ThemeSet>::const_iterator selectedSet = themeSets.find(Settings::getInstance()->getString("ThemeSet"));
-		if(selectedSet == themeSets.cend())
+		if (selectedSet == themeSets.cend())
 			selectedSet = themeSets.cbegin();
 
 		auto theme_set = std::make_shared< OptionListComponent<std::string> >(mWindow, "THEME SET", false);
-		for(auto it = themeSets.cbegin(); it != themeSets.cend(); it++)
+		for (auto it = themeSets.cbegin(); it != themeSets.cend(); it++)
 			theme_set->add(it->first, it->first, it == selectedSet);
 		s->addWithLabel("THEME SET", theme_set);
 
 		Window* window = mWindow;
 		s->addSaveFunc([window, theme_set]
-		{
-			bool needReload = false;
-			std::string oldTheme = Settings::getInstance()->getString("ThemeSet");
-			if(oldTheme != theme_set->getSelected())
-				needReload = true;
-
-			Settings::getInstance()->setString("ThemeSet", theme_set->getSelected());
-
-			if(needReload)
 			{
-				Scripting::fireEvent("theme-changed", theme_set->getSelected(), oldTheme);
-				CollectionSystemManager::get()->updateSystemsList();
-				ViewController::get()->reloadAll(true); // TODO - replace this with some sort of signal-based implementation
+				bool needReload = false;
+				std::string oldTheme = Settings::getInstance()->getString("ThemeSet");
+				if (oldTheme != theme_set->getSelected())
+					needReload = true;
+
+				Settings::getInstance()->setString("ThemeSet", theme_set->getSelected());
+
+				if (needReload)
+				{
+					Scripting::fireEvent("theme-changed", theme_set->getSelected(), oldTheme);
+					CollectionSystemManager::get()->updateSystemsList();
+					ViewController::get()->reloadAll(true); // TODO - replace this with some sort of signal-based implementation
+				}
+			});
+	}
+
+	// LANGUAGE (nuevo)
+	{
+		auto language_list = std::make_shared< OptionListComponent<std::string> >(mWindow, "LANGUAGE", false);
+
+		// Idioma actual desde Settings
+		std::string currentLang = Settings::getInstance()->getString("Language");
+		if (currentLang.empty())
+			currentLang = "en";
+
+		// Lista base
+		std::vector<std::string> languages;
+		languages.push_back("en");
+		languages.push_back("es");
+
+		// Buscar .lang en ~/.emulationstation/lang
+		std::string langDir = Utils::FileSystem::getHomePath() + "/.emulationstation/lang";
+		if (Utils::FileSystem::isDirectory(langDir))
+		{
+			Utils::FileSystem::stringList files = Utils::FileSystem::getDirContent(langDir);
+			for (auto it = files.cbegin(); it != files.cend(); ++it)
+			{
+				if (Utils::FileSystem::isRegularFile(*it) && Utils::FileSystem::getExtension(*it) == ".lang")
+				{
+					std::string code = Utils::FileSystem::getStem(*it); // nombre del archivo sin extensión
+					if (std::find(languages.begin(), languages.end(), code) == languages.end())
+						languages.push_back(code);
+				}
 			}
+		}
+
+		// Poblar el OptionList con label en mayúsculas (EN, ES, PT_BR, etc.)
+		for (auto &code : languages)
+		{
+			std::string label = Utils::String::toUpper(code);
+			language_list->add(label, code, (currentLang == code));
+		}
+
+		s->addWithLabel("LANGUAGE", language_list);
+		s->addSaveFunc([language_list] {
+			Settings::getInstance()->setString("Language", language_list->getSelected());
+			// Más adelante acá podremos recargar textos, temas, etc.
 		});
 	}
 
@@ -439,7 +486,7 @@ void GuiMenu::openOtherSettings()
 	saveModes.push_back("always");
 	saveModes.push_back("never");
 
-	for(auto it = saveModes.cbegin(); it != saveModes.cend(); it++)
+	for (auto it = saveModes.cbegin(); it != saveModes.cend(); it++)
 		gamelistsSaveMode->add(*it, *it, Settings::getInstance()->getString("SaveGamelistsMode") == *it);
 	s->addWithLabel("SAVE METADATA", gamelistsSaveMode);
 	s->addSaveFunc([gamelistsSaveMode] {
@@ -468,17 +515,17 @@ void GuiMenu::openOtherSettings()
 	omx_player->setState(Settings::getInstance()->getBool("VideoOmxPlayer"));
 	s->addWithLabel("USE OMX PLAYER (HW ACCELERATED)", omx_player);
 	s->addSaveFunc([omx_player]
-	{
-		// need to reload all views to re-create the right video components
-		bool needReload = false;
-		if(Settings::getInstance()->getBool("VideoOmxPlayer") != omx_player->getState())
-			needReload = true;
+		{
+			// need to reload all views to re-create the right video components
+			bool needReload = false;
+			if (Settings::getInstance()->getBool("VideoOmxPlayer") != omx_player->getState())
+				needReload = true;
 
-		Settings::getInstance()->setBool("VideoOmxPlayer", omx_player->getState());
+			Settings::getInstance()->setBool("VideoOmxPlayer", omx_player->getState());
 
-		if(needReload)
-			ViewController::get()->reloadAll();
-	});
+			if (needReload)
+				ViewController::get()->reloadAll();
+		});
 
 #endif
 
@@ -504,8 +551,8 @@ void GuiMenu::openConfigInput()
 	Window* window = mWindow;
 	window->pushGui(new GuiMsgBox(window, "ARE YOU SURE YOU WANT TO CONFIGURE INPUT?", "YES",
 		[window] {
-		window->pushGui(new GuiDetectDevice(window, false, nullptr));
-	}, "NO", nullptr)
+			window->pushGui(new GuiDetectDevice(window, false, nullptr));
+		}, "NO", nullptr)
 	);
 
 }
@@ -539,7 +586,7 @@ void GuiMenu::openQuitMenu()
 		row.addElement(std::make_shared<TextComponent>(window, "RESTART EMULATIONSTATION", Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
 		s->addRow(row);
 
-		if(Settings::getInstance()->getBool("ShowExit"))
+		if (Settings::getInstance()->getBool("ShowExit"))
 		{
 			auto static quit_es_fx = [] {
 				Scripting::fireEvent("quit");
@@ -570,7 +617,7 @@ void GuiMenu::openQuitMenu()
 	row.elements.clear();
 	if (confirm_quit) {
 		row.makeAcceptInputHandler([window] {
-			window->pushGui(new GuiMsgBox(window, "REALLY RESTART?", "YES", {reboot_sys_fx}, "NO", nullptr));
+			window->pushGui(new GuiMsgBox(window, "REALLY RESTART?", "YES", { reboot_sys_fx }, "NO", nullptr));
 		});
 	} else {
 		row.makeAcceptInputHandler(reboot_sys_fx);
@@ -601,7 +648,7 @@ void GuiMenu::openQuitMenu()
 
 void GuiMenu::addVersionInfo()
 {
-	std::string  buildDate = (Settings::getInstance()->getBool("Debug") ? std::string( "   (" + Utils::String::toUpper(PROGRAM_BUILT_STRING) + ")") : (""));
+	std::string  buildDate = (Settings::getInstance()->getBool("Debug") ? std::string("   (" + Utils::String::toUpper(PROGRAM_BUILT_STRING) + ")") : (""));
 
 	mVersion.setFont(Font::get(FONT_SIZE_SMALL));
 	mVersion.setColor(0x5E5E5EFF);
@@ -632,7 +679,7 @@ void GuiMenu::addEntry(const char* name, unsigned int color, bool add_arrow, con
 	ComponentListRow row;
 	row.addElement(std::make_shared<TextComponent>(mWindow, name, font, color), true);
 
-	if(add_arrow)
+	if (add_arrow)
 	{
 		std::shared_ptr<ImageComponent> bracket = makeArrow(mWindow);
 		row.addElement(bracket, false);
@@ -645,10 +692,10 @@ void GuiMenu::addEntry(const char* name, unsigned int color, bool add_arrow, con
 
 bool GuiMenu::input(InputConfig* config, Input input)
 {
-	if(GuiComponent::input(config, input))
+	if (GuiComponent::input(config, input))
 		return true;
 
-	if((config->isMappedTo("b", input) || config->isMappedTo("start", input)) && input.value != 0)
+	if ((config->isMappedTo("b", input) || config->isMappedTo("start", input)) && input.value != 0)
 	{
 		delete this;
 		return true;

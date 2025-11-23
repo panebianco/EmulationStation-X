@@ -53,7 +53,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "backgroundColor", COLOR },
 		{ "backgroundCenterColor", COLOR },
 		{ "backgroundEdgeColor", COLOR } } },
-	{ "text", {
+		{ "text", {
 		{ "pos", RESOLUTION_PAIR },
 		{ "size", RESOLUTION_PAIR },
 		{ "origin", NORMALIZED_PAIR },
@@ -69,7 +69,13 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "lineSpacing", FLOAT },
 		{ "value", STRING },
 		{ "visible", BOOLEAN },
-		{ "zIndex", FLOAT } } },
+		{ "zIndex", FLOAT },
+
+		// NUEVO: borde de texto
+		{ "textStrokeColor", COLOR },
+		{ "textStrokeSize", FLOAT }
+	} },
+
 	{ "textlist", {
 		{ "pos", RESOLUTION_PAIR },
 		{ "size", RESOLUTION_PAIR },
