@@ -10,6 +10,7 @@
 #include "components/VideoPlayerComponent.h"
 #endif
 #include "components/VideoVlcComponent.h"
+#include "LocaleES.h"
 
 GridGameListView::GridGameListView(Window* window, FileData* root) :
 	ISimpleGameListView(window, root),
@@ -28,7 +29,10 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 {
 	const float padding = 0.01f;
 
-// Create the correct type of video window
+	// Localización
+	LocaleES& loc = LocaleES::getInstance();
+
+	// Create the correct type of video window
 #ifdef _OMX_
 	if (Settings::getInstance()->getBool("VideoOmxPlayer"))
 		mVideo = new VideoPlayerComponent(window, "");
@@ -45,30 +49,37 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 
 	populateList(root->getChildrenListToDisplay());
 
-	// metadata labels + values
-	mLblRating.setText("Rating: ");
+	// metadata labels + values (localizados)
+	mLblRating.setText(       loc.translate("RATING")        + ": ");
 	addChild(&mLblRating);
 	addChild(&mRating);
-	mLblReleaseDate.setText("Released: ");
+
+	mLblReleaseDate.setText(  loc.translate("RELEASE DATE")  + ": ");
 	addChild(&mLblReleaseDate);
 	addChild(&mReleaseDate);
-	mLblDeveloper.setText("Developer: ");
+
+	mLblDeveloper.setText(    loc.translate("DEVELOPER")     + ": ");
 	addChild(&mLblDeveloper);
 	addChild(&mDeveloper);
-	mLblPublisher.setText("Publisher: ");
+
+	mLblPublisher.setText(    loc.translate("PUBLISHER")     + ": ");
 	addChild(&mLblPublisher);
 	addChild(&mPublisher);
-	mLblGenre.setText("Genre: ");
+
+	mLblGenre.setText(        loc.translate("GENRE")         + ": ");
 	addChild(&mLblGenre);
 	addChild(&mGenre);
-	mLblPlayers.setText("Players: ");
+
+	mLblPlayers.setText(      loc.translate("PLAYERS")       + ": ");
 	addChild(&mLblPlayers);
 	addChild(&mPlayers);
-	mLblLastPlayed.setText("Last played: ");
+
+	mLblLastPlayed.setText(   loc.translate("LAST PLAYED")   + ": ");
 	addChild(&mLblLastPlayed);
 	mLastPlayed.setDisplayRelative(true);
 	addChild(&mLastPlayed);
-	mLblPlayCount.setText("Times played: ");
+
+	mLblPlayCount.setText(    loc.translate("PLAY COUNT")    + ": ");
 	addChild(&mLblPlayCount);
 	addChild(&mPlayCount);
 
@@ -377,8 +388,19 @@ void GridGameListView::updateInfoPanel()
 
 void GridGameListView::addPlaceholder()
 {
+	LocaleES& loc = LocaleES::getInstance();
+
+	std::string placeholderName = loc.translate("NO ENTRIES FOUND");
+	if (placeholderName == "NO ENTRIES FOUND")
+		placeholderName = "<No Entries Found>";
+
 	// empty grid - add a placeholder
-	FileData* placeholder = new FileData(PLACEHOLDER, "<No Entries Found>", this->mRoot->getSystem()->getSystemEnvData(), this->mRoot->getSystem());
+	FileData* placeholder = new FileData(
+		PLACEHOLDER,
+		placeholderName,
+		this->mRoot->getSystem()->getSystemEnvData(),
+		this->mRoot->getSystem());
+
 	mGrid.add(placeholder->getName(), "", placeholder);
 }
 
@@ -472,17 +494,20 @@ std::vector<GuiComponent*> GridGameListView::getMDValues()
 
 std::vector<HelpPrompt> GridGameListView::getHelpPrompts()
 {
+	LocaleES& loc = LocaleES::getInstance();
+
 	std::vector<HelpPrompt> prompts;
 
 	if(Settings::getInstance()->getBool("QuickSystemSelect"))
-		prompts.push_back(HelpPrompt("lr", "system"));
-	prompts.push_back(HelpPrompt("up/down/left/right", "choose"));
-	prompts.push_back(HelpPrompt("a", "launch"));
-	prompts.push_back(HelpPrompt("b", "back"));
+		prompts.push_back(HelpPrompt("lr", loc.translate("SYSTEM")));
+
+	prompts.push_back(HelpPrompt("up/down/left/right", loc.translate("CHOOSE")));
+	prompts.push_back(HelpPrompt("a",                   loc.translate("START")));
+	prompts.push_back(HelpPrompt("b",                   loc.translate("BACK")));
 	if(!UIModeController::getInstance()->isUIModeKid())
-		prompts.push_back(HelpPrompt("select", "options"));
+		prompts.push_back(HelpPrompt("select",           loc.translate("OPTIONS")));
 	if(mRoot->getSystem()->isGameSystem())
-		prompts.push_back(HelpPrompt("x", "random"));
+		prompts.push_back(HelpPrompt("x",                loc.translate("RANDOM")));
 	if(mRoot->getSystem()->isGameSystem() && !UIModeController::getInstance()->isUIModeKid())
 	{
 		std::string prompt = CollectionSystemManager::get()->getEditingCollection();

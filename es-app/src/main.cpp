@@ -28,6 +28,9 @@
 
 #include <FreeImage.h>
 
+// NUEVO: sistema de localización ES-X
+#include "LocaleES.h"
+
 bool scrape_cmdline = false;
 
 bool parseArgs(int argc, char* argv[])
@@ -342,6 +345,10 @@ int main(int argc, char* argv[])
 	Log::init();
 	Log::open();
 	LOG(LogInfo) << "EmulationStation - v" << PROGRAM_VERSION_STRING << ", built " << PROGRAM_BUILT_STRING;
+
+	// 🔤 NUEVO: inicializar localización según Settings::Language
+	// Carga ~/.emulationstation/lang/<idioma>.ini (por ejemplo es.ini, en.ini, etc.)
+	LocaleES::getInstance().loadFromSettings();
 
 	//always close the log on exit
 	atexit(&onExit);

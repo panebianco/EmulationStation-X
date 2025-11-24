@@ -7,11 +7,17 @@
 #include "Settings.h"
 #include "Sound.h"
 #include "SystemData.h"
+#include "LocaleES.h"   // ← NUEVO: soporte de idioma
 
-ISimpleGameListView::ISimpleGameListView(Window* window, FileData* root) : IGameListView(window, root),
+ISimpleGameListView::ISimpleGameListView(Window* window, FileData* root) 
+	: IGameListView(window, root),
 	mHeaderText(window), mHeaderImage(window), mBackground(window)
 {
-	mHeaderText.setText("Logo Text");
+	// Localización del texto por defecto del encabezado
+	LocaleES& loc = LocaleES::getInstance();
+	loc.loadFromSettings();
+
+	mHeaderText.setText(loc.translate("LOGO TEXT")); // ← Traducción desde .ini
 	mHeaderText.setSize(mSize.x(), 0);
 	mHeaderText.setPosition(0, 0);
 	mHeaderText.setHorizontalAlignment(ALIGN_CENTER);
@@ -51,11 +57,14 @@ void ISimpleGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme
 		addChild(extra);
 	}
 
-	if(mHeaderImage.hasImage())
+	// Mostrar imagen si está disponible, sino texto
+	if (mHeaderImage.hasImage())
 	{
 		removeChild(&mHeaderText);
 		addChild(&mHeaderImage);
-	}else{
+	}
+	else
+	{
 		addChild(&mHeaderText);
 		removeChild(&mHeaderImage);
 	}
@@ -63,8 +72,6 @@ void ISimpleGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme
 
 void ISimpleGameListView::onFileChanged(FileData* /*file*/, FileChangeType /*change*/)
 {
-	// we could be tricky here to be efficient;
-	// but this shouldn't happen very often so we'll just always repopulate
 	FileData* cursor = getCursor();
 	if (!cursor->isPlaceHolder()) {
 		populateList(cursor->getParent()->getChildrenListToDisplay());
@@ -79,7 +86,7 @@ void ISimpleGameListView::onFileChanged(FileData* /*file*/, FileChangeType /*cha
 
 bool ISimpleGameListView::input(InputConfig* config, Input input)
 {
-	if(input.value != 0)
+	if (input.value != 0)
 	{
 		if(config->isMappedTo("a", input))
 		{
@@ -88,19 +95,20 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 			{
 				Sound::getFromTheme(getTheme(), getName(), "launch")->play();
 				launch(cursor);
-			}else{
-				// it's a folder
+			}
+			else
+			{
 				if(cursor->getChildren().size() > 0)
 				{
 					mCursorStack.push(cursor);
 					populateList(cursor->getChildrenListToDisplay());
-					FileData* cursor = getCursor();
-					setCursor(cursor);
+					setCursor(getCursor());
 				}
 			}
 
 			return true;
-		}else if(config->isMappedTo("b", input))
+		}
+		else if(config->isMappedTo("b", input))
 		{
 			if(mCursorStack.size())
 			{
@@ -108,7 +116,9 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 				setCursor(mCursorStack.top());
 				mCursorStack.pop();
 				Sound::getFromTheme(getTheme(), getName(), "back")->play();
-			}else{
+			}
+			else
+			{
 				onFocusLost();
 				SystemData* systemToView = getCursor()->getSystem();
 				if (systemToView->isCollection())
@@ -119,7 +129,8 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 			}
 
 			return true;
-		}else if(config->isMappedLike(getQuickSystemSelectRightButton(), input))
+		}
+		else if(config->isMappedLike(getQuickSystemSelectRightButton(), input))
 		{
 			if(Settings::getInstance()->getBool("QuickSystemSelect"))
 			{
@@ -127,7 +138,8 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 				ViewController::get()->goToNextGameList();
 				return true;
 			}
-		}else if(config->isMappedLike(getQuickSystemSelectLeftButton(), input))
+		}
+		else if(config->isMappedLike(getQuickSystemSelectLeftButton(), input))
 		{
 			if(Settings::getInstance()->getBool("QuickSystemSelect"))
 			{
@@ -135,11 +147,11 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 				ViewController::get()->goToPrevGameList();
 				return true;
 			}
-		}else if (config->isMappedTo("x", input))
+		}
+		else if (config->isMappedTo("x", input))
 		{
 			if (mRoot->getSystem()->isGameSystem())
 			{
-				// go to random system game
 				FileData* randomGame = getCursor()->getSystem()->getRandomGame();
 				if (randomGame)
 				{
@@ -147,7 +159,8 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 				}
 				return true;
 			}
-		}else if (config->isMappedTo("y", input) && !UIModeController::getInstance()->isUIModeKid())
+		}
+		else if (config->isMappedTo("y", input) && !UIModeController::getInstance()->isUIModeKid())
 		{
 			if(mRoot->getSystem()->isGameSystem())
 			{
@@ -161,9 +174,9 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 
 	FileData* cursor = getCursor();
 	SystemData* system = this->mRoot->getSystem();
-    	if (system != NULL) {
-            Scripting::fireEvent("game-select", system->getName(), cursor->getPath(), cursor->getName(), "input");
-        }
+    if (system != NULL) {
+        Scripting::fireEvent("game-select", system->getName(), cursor->getPath(), cursor->getName(), "input");
+    }
 	else
 	{
 	    Scripting::fireEvent("game-select", "NULL", "NULL", "NULL", "input");

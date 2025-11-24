@@ -6,6 +6,7 @@
 #include "CollectionSystemManager.h"
 #include "Settings.h"
 #include "SystemData.h"
+#include "LocaleES.h"
 
 BasicGameListView::BasicGameListView(Window* window, FileData* root)
 	: ISimpleGameListView(window, root), mList(window)
@@ -102,7 +103,6 @@ void BasicGameListView::setViewportTop(int index)
 	mList.setViewportTop(index);
 }
 
-
 int BasicGameListView::getViewportTop()
 {
 	return mList.getViewportTop();
@@ -110,8 +110,20 @@ int BasicGameListView::getViewportTop()
 
 void BasicGameListView::addPlaceholder()
 {
+	LocaleES& loc = LocaleES::getInstance();
+
+	// Intentamos traducir; si no hay traducción, dejamos el texto por defecto.
+	std::string placeholderName = loc.translate("NO ENTRIES FOUND");
+	if (placeholderName == "NO ENTRIES FOUND")
+		placeholderName = "<No Entries Found>";
+
 	// empty list - add a placeholder
-	FileData* placeholder = new FileData(PLACEHOLDER, "<No Entries Found>", this->mRoot->getSystem()->getSystemEnvData(), this->mRoot->getSystem());
+	FileData* placeholder = new FileData(
+		PLACEHOLDER,
+		placeholderName,
+		this->mRoot->getSystem()->getSystemEnvData(),
+		this->mRoot->getSystem());
+
 	mList.add(placeholder->getName(), placeholder, (placeholder->getType() == PLACEHOLDER));
 }
 
@@ -208,22 +220,35 @@ void BasicGameListView::remove(FileData *game, bool deleteFile, bool refreshView
 
 std::vector<HelpPrompt> BasicGameListView::getHelpPrompts()
 {
+	LocaleES& loc = LocaleES::getInstance();
+
 	std::vector<HelpPrompt> prompts;
 
 	if(Settings::getInstance()->getBool("QuickSystemSelect"))
-		prompts.push_back(HelpPrompt("left/right", "system"));
-	prompts.push_back(HelpPrompt("up/down", "choose"));
-	prompts.push_back(HelpPrompt("a", "launch"));
-	prompts.push_back(HelpPrompt("b", "back"));
+	{
+		// "SYSTEM" no está en tu .ini aún, pero si no existe saldrá "SYSTEM"
+		prompts.push_back(HelpPrompt("left/right", loc.translate("SYSTEM")));
+	}
+
+	prompts.push_back(HelpPrompt("up/down",   loc.translate("CHOOSE")));
+	prompts.push_back(HelpPrompt("a",         loc.translate("START")));
+	prompts.push_back(HelpPrompt("b",         loc.translate("BACK")));
+
 	if(!UIModeController::getInstance()->isUIModeKid())
-		prompts.push_back(HelpPrompt("select", "options"));
+	{
+		// Puedes añadir OPTIONS=OPCIONES al .ini si quieres
+		prompts.push_back(HelpPrompt("select", loc.translate("OPTIONS")));
+	}
+
 	if(mRoot->getSystem()->isGameSystem())
-		prompts.push_back(HelpPrompt("x", "random"));
+		prompts.push_back(HelpPrompt("x", loc.translate("RANDOM")));
+
 	if(mRoot->getSystem()->isGameSystem() && !UIModeController::getInstance()->isUIModeKid())
 	{
 		std::string prompt = CollectionSystemManager::get()->getEditingCollection();
 		prompts.push_back(HelpPrompt("y", prompt));
 	}
+
 	return prompts;
 }
 
