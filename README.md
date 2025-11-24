@@ -40,8 +40,7 @@ Languages are stored in:
 
 ~/.emulationstation/lang/
 
-makefile
-Copiar código
+
 
 Example `.ini` file:
 
