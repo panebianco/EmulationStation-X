@@ -1,4 +1,3 @@
-
 # EmulationStation-X (ES-X)
 
 **ES-X** is a personal and experimental fork of **EmulationStation**, focused on:
@@ -41,9 +40,11 @@ Languages are stored in:
 
 ~/.emulationstation/lang/
 
+makefile
+Copiar código
 
+Example `.ini` file:
 
-Example:
 ```ini
 [MAIN]
 MAIN MENU=MENÚ PRINCIPAL
@@ -54,16 +55,18 @@ CANCEL=CANCELAR
 ✔ Anyone can edit or add new languages
 ✔ Text is loaded dynamically at runtime
 
-🎨 Theme Extensions — Engine Level
+🎨 Theme Extensions (Engine-Level)
 Supported or partially tested theme tags:
 
-
+xml
+Copiar código
 <logoScale>1.1</logoScale>
 <scaledLogoSpacing>0.20</scaledLogoSpacing>
 <minLogoOpacity>0.25</minLogoOpacity>
 Concept / planned (not active yet):
 
-
+xml
+Copiar código
 <centerLogoOffsetY>
 <zIndexOffset>
 <centerLogoPos>
@@ -72,13 +75,13 @@ are theme-specific additions and not part of ES-X core.
 
 🚀 Build Instructions (Linux / Raspberry Pi / Orange Pi)
 bash
-
+Copiar código
 sudo apt update
 sudo apt install cmake libsdl2-dev libboost-dev libfreeimage-dev \
 libfreetype6-dev libcurl4-openssl-dev libvlc-dev libvlccore-dev \
 libasound2-dev
 bash
-
+Copiar código
 git clone https://github.com/Renetrox/EmulationStation-X.git
 cd EmulationStation-X
 mkdir build && cd build
@@ -87,7 +90,7 @@ make -j4
 sudo make install
 📂 Suggested User Folder Structure
 bash
-
+Copiar código
 ~/.emulationstation/
  ├── lang/              # Language files (.ini)
  ├── themes/
@@ -106,11 +109,12 @@ Priority	Feature
 
 👤 Author
 Dino René Caballero Marquez — Renetrox
-🎮 Paraguay | Educator • RetroPie Enthusiast • Theme Developer
+Educator • RetroPie Enthusiast • Theme Developer
+Paraguay
 GitHub: @Renetrox
 
 📜 License
 Same license as original EmulationStation (MIT License).
 Experimental features may change, evolve, or be removed at any time.
 
-“Accessibility means not just using it — but reading it, hearing it, and shaping it your way.”
+"Accessibility means not just using it — but reading it, hearing it, and shaping it your way."
