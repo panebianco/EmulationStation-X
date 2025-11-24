@@ -57,30 +57,27 @@ CANCEL=CANCELAR
 🎨 Theme Extensions (Engine-Level)
 Supported or partially tested theme tags:
 
-xml
-Copiar código
+
 <logoScale>1.1</logoScale>
 <scaledLogoSpacing>0.20</scaledLogoSpacing>
 <minLogoOpacity>0.25</minLogoOpacity>
 Concept / planned (not active yet):
 
-xml
-Copiar código
+
 <centerLogoOffsetY>
 <zIndexOffset>
 <centerLogoPos>
 ⚠️ Avatar, username, WiFi icon, or floating system information
 are theme-specific additions and not part of ES-X core.
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/a0897a12-f12c-4dd3-a9b5-b859c7c1c6d1" />
 
 🚀 Build Instructions (Linux / Raspberry Pi / Orange Pi)
-bash
-Copiar código
+
 sudo apt update
 sudo apt install cmake libsdl2-dev libboost-dev libfreeimage-dev \
 libfreetype6-dev libcurl4-openssl-dev libvlc-dev libvlccore-dev \
 libasound2-dev
-bash
-Copiar código
+
 git clone https://github.com/Renetrox/EmulationStation-X.git
 cd EmulationStation-X
 mkdir build && cd build
@@ -88,8 +85,7 @@ cmake ..
 make -j4
 sudo make install
 📂 Suggested User Folder Structure
-bash
-Copiar código
+
 ~/.emulationstation/
  ├── lang/              # Language files (.ini)
  ├── themes/
