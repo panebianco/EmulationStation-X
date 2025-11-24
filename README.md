@@ -53,7 +53,7 @@ CANCEL=CANCELAR
 ✔ No need to recompile
 ✔ Anyone can edit or add new languages
 ✔ Text is loaded dynamically at runtime
-
+---
 🎨 Theme Extensions (Engine-Level)
 Supported or partially tested theme tags:
 
@@ -69,6 +69,7 @@ Concept / planned (not active yet):
 <centerLogoPos>
 ⚠️ Avatar, username, WiFi icon, or floating system information
 are theme-specific additions and not part of ES-X core.
+---
 <img width="1366" height="768" alt="Captura de pantalla_2025-11-24_16-19-55" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" />
 
 🚀 Build Instructions (Linux / Raspberry Pi / Orange Pi)
@@ -84,7 +85,7 @@ mkdir build && cd build
 cmake ..
 make -j4
 sudo make install
-
+---
 📂 Suggested User Folder Structure
 <img width="1366" height="768" alt="Captura de pantalla_2025-11-24_16-20-34" src="https://github.com/user-attachments/assets/ee725018-2b51-4ab1-98b9-0750e303d0e7" />
 
@@ -96,6 +97,7 @@ sudo make install
  │       ├── sounds/
  │       ├── layout/
  │       └── ...
+---
 🛣️ Roadmap
 Priority	Feature
 🔄	Complete language coverage for all GUIs
@@ -103,7 +105,7 @@ Priority	Feature
 🚧	Build test branch for basic sound hooks
 📘	Document new theme attributes
 💭	Keep ES-X experimental — fork, not replacement
-
+---
 👤 Author
 Dino René Caballero Marquez — Renetrox
 Educator • RetroPie Enthusiast • Theme Developer
