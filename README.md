@@ -16,6 +16,8 @@
 
 ES-X does **not** aim to replace EmulationStation.  
 It is a **sandbox for new ideas** — testing approaches to localization, UI flexibility, theme expressiveness, and user accessibility, while maintaining compatibility with **RetroPie**.
+<img width="1366" height="768" alt="Captura de pantalla_2025-11-24_16-19-55" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" />
+<img width="1366" height="768" alt="Captura de pantalla_2025-11-24_16-20-34" src="https://github.com/user-attachments/assets/ee725018-2b51-4ab1-98b9-0750e303d0e7" />
 
 ---
 
@@ -70,7 +72,6 @@ Concept / planned (not active yet):
 ⚠️ Avatar, username, WiFi icon, or floating system information
 are theme-specific additions and not part of ES-X core.
 ---
-<img width="1366" height="768" alt="Captura de pantalla_2025-11-24_16-19-55" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" />
 
 🚀 Build Instructions (Linux / Raspberry Pi / Orange Pi)
 
@@ -87,7 +88,6 @@ make -j4
 sudo make install
 ---
 📂 Suggested User Folder Structure
-<img width="1366" height="768" alt="Captura de pantalla_2025-11-24_16-20-34" src="https://github.com/user-attachments/assets/ee725018-2b51-4ab1-98b9-0750e303d0e7" />
 
 ~/.emulationstation/
  ├── lang/              # Language files (.ini)
