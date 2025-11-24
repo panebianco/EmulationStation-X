@@ -25,10 +25,11 @@
 #include "Settings.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
-#include "resources/Font.h"      // <-- añadido
+#include "resources/Font.h"
 
 #include "LocaleES.h"
 
+// Helper local para traducciones .ini
 namespace
 {
 	inline std::string _(const std::string& key)
@@ -42,7 +43,7 @@ GuiMenu::GuiMenu(Window* window) : GuiComponent(window), mMenu(window, "MAIN MEN
 	// Cargar idioma actual antes de crear las entradas
 	LocaleES::getInstance().loadFromSettings();
 
-	// Título del menú (se ajusta al sistema de títulos de MenuComponent)
+	// Título del menú
 	mMenu.setTitle(_("MAIN MENU").c_str(), Font::get(FONT_SIZE_LARGE));
 
 	bool isFullUI = UIModeController::getInstance()->isUIModeFull();
@@ -58,7 +59,7 @@ GuiMenu::GuiMenu(Window* window) : GuiComponent(window), mMenu(window, "MAIN MEN
 		addEntry(_("SOUND SETTINGS").c_str(), 0x777777FF, true, [this] { openSoundSettings(); });
 	}
 
-	addEntry(_("QUIT").c_str(), 0x777777FF, true, [this] {openQuitMenu(); });
+	addEntry(_("QUIT").c_str(), 0x777777FF, true, [this] { openQuitMenu(); });
 
 	addChild(&mMenu);
 	addVersionInfo();
@@ -74,24 +75,30 @@ void GuiMenu::openScraperSettings()
 	auto scraper_list = std::make_shared< OptionListComponent< std::string > >(mWindow, _("SCRAPE FROM").c_str(), false);
 	std::vector<std::string> scrapers = getScraperList();
 
-	// Select either the first entry of the one read from the settings, just in case the scraper from settings has vanished.
 	for (auto it = scrapers.cbegin(); it != scrapers.cend(); it++)
 		scraper_list->add(*it, *it, *it == Settings::getInstance()->getString("Scraper"));
 
 	s->addWithLabel(_("SCRAPE FROM").c_str(), scraper_list);
-	s->addSaveFunc([scraper_list] { Settings::getInstance()->setString("Scraper", scraper_list->getSelected()); });
+	s->addSaveFunc([scraper_list] {
+		Settings::getInstance()->setString("Scraper", scraper_list->getSelected());
+	});
 
 	// scrape ratings
 	auto scrape_ratings = std::make_shared<SwitchComponent>(mWindow);
 	scrape_ratings->setState(Settings::getInstance()->getBool("ScrapeRatings"));
 	s->addWithLabel(_("SCRAPE RATINGS").c_str(), scrape_ratings);
-	s->addSaveFunc([scrape_ratings] { Settings::getInstance()->setBool("ScrapeRatings", scrape_ratings->getState()); });
+	s->addSaveFunc([scrape_ratings] {
+		Settings::getInstance()->setBool("ScrapeRatings", scrape_ratings->getState());
+	});
 
 	// scrape now
 	ComponentListRow row;
 	auto openScrapeNow = [this] { mWindow->pushGui(new GuiScraperStart(mWindow)); };
 	std::function<void()> openAndSave = openScrapeNow;
-	openAndSave = [s, openAndSave] { s->save(); openAndSave(); };
+	openAndSave = [s, openAndSave] {
+		s->save();
+		openAndSave();
+	};
 	row.makeAcceptInputHandler(openAndSave);
 
 	auto scrape_now = std::make_shared<TextComponent>(mWindow, _("SCRAPE NOW"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF);
@@ -111,7 +118,9 @@ void GuiMenu::openSoundSettings()
 	auto volume = std::make_shared<SliderComponent>(mWindow, 0.f, 100.f, 1.f, "%");
 	volume->setValue((float)VolumeControl::getInstance()->getVolume());
 	s->addWithLabel(_("SYSTEM VOLUME").c_str(), volume);
-	s->addSaveFunc([volume] { VolumeControl::getInstance()->setVolume((int)Math::round(volume->getValue())); });
+	s->addSaveFunc([volume] {
+		VolumeControl::getInstance()->setVolume((int)Math::round(volume->getValue()));
+	});
 
 	if (UIModeController::getInstance()->isUIModeFull())
 	{
@@ -182,13 +191,14 @@ void GuiMenu::openSoundSettings()
 		auto video_audio = std::make_shared<SwitchComponent>(mWindow);
 		video_audio->setState(Settings::getInstance()->getBool("VideoAudio"));
 		s->addWithLabel(_("ENABLE VIDEO AUDIO").c_str(), video_audio);
-		s->addSaveFunc([video_audio] { Settings::getInstance()->setBool("VideoAudio", video_audio->getState()); });
+		s->addSaveFunc([video_audio] {
+			Settings::getInstance()->setBool("VideoAudio", video_audio->getState());
+		});
 
 #ifdef _OMX_
 		// OMX player Audio Device
 		auto omx_audio_dev = std::make_shared< OptionListComponent<std::string> >(mWindow, _("OMX PLAYER AUDIO DEVICE").c_str(), false);
 		std::vector<std::string> omx_cards;
-		// RPi Specific  Audio Cards
 		omx_cards.push_back("local");
 		omx_cards.push_back("hdmi");
 		omx_cards.push_back("both");
@@ -211,38 +221,36 @@ void GuiMenu::openSoundSettings()
 	}
 
 	mWindow->pushGui(s);
-
 }
 
 void GuiMenu::openUISettings()
 {
 	auto s = new GuiSettings(mWindow, _("UI SETTINGS").c_str());
 
-	//UI mode
+	// UI mode
 	auto UImodeSelection = std::make_shared< OptionListComponent<std::string> >(mWindow, _("UI MODE").c_str(), false);
 	std::vector<std::string> UImodes = UIModeController::getInstance()->getUIModes();
 	for (auto it = UImodes.cbegin(); it != UImodes.cend(); it++)
 		UImodeSelection->add(*it, *it, Settings::getInstance()->getString("UIMode") == *it);
-	s->addWithLabel(_("UI MODE").c_str(), UImodeSelection);
 	Window* window = mWindow;
 	s->addSaveFunc([UImodeSelection, window]
+	{
+		std::string selectedMode = UImodeSelection->getSelected();
+		if (selectedMode != "Full")
 		{
-			std::string selectedMode = UImodeSelection->getSelected();
-			if (selectedMode != "Full")
-			{
-				std::string msg = _("You are changing the UI to a restricted mode:") + "\n" + selectedMode + "\n";
-				msg += _("This will hide most menu-options to prevent changes to the system.") + "\n";
-				msg += _("To unlock and return to the full UI, enter this code:") + " \n";
-				msg += "\"" + UIModeController::getInstance()->getFormattedPassKeyStr() + "\"\n\n";
-				msg += _("Do you want to proceed?");
-				window->pushGui(new GuiMsgBox(window, msg,
-					_("YES").c_str(), [selectedMode] {
-						LOG(LogDebug) << "Setting UI mode to " << selectedMode;
-						Settings::getInstance()->setString("UIMode", selectedMode);
-						Settings::getInstance()->saveFile();
-					}, _("NO").c_str(), nullptr));
-			}
-		});
+			std::string msg = _("You are changing the UI to a restricted mode:") + "\n" + selectedMode + "\n";
+			msg += _("This will hide most menu-options to prevent changes to the system.") + "\n";
+			msg += _("To unlock and return to the full UI, enter this code:") + " \n";
+			msg += "\"" + UIModeController::getInstance()->getFormattedPassKeyStr() + "\"\n\n";
+			msg += _("Do you want to proceed?");
+			window->pushGui(new GuiMsgBox(window, msg,
+				_("YES").c_str(), [selectedMode] {
+					LOG(LogDebug) << "Setting UI mode to " << selectedMode;
+					Settings::getInstance()->setString("UIMode", selectedMode);
+					Settings::getInstance()->saveFile();
+				}, _("NO").c_str(), nullptr));
+		}
+	});
 
 	// screensaver
 	ComponentListRow screensaver_row;
@@ -252,13 +260,15 @@ void GuiMenu::openUISettings()
 	screensaver_row.makeAcceptInputHandler(std::bind(&GuiMenu::openScreensaverOptions, this));
 	s->addRow(screensaver_row);
 
-	// quick system select (left/right in game list view)
+	// quick system select
 	auto quick_sys_select = std::make_shared<SwitchComponent>(mWindow);
 	quick_sys_select->setState(Settings::getInstance()->getBool("QuickSystemSelect"));
 	s->addWithLabel(_("QUICK SYSTEM SELECT").c_str(), quick_sys_select);
-	s->addSaveFunc([quick_sys_select] { Settings::getInstance()->setBool("QuickSystemSelect", quick_sys_select->getState()); });
+	s->addSaveFunc([quick_sys_select] {
+		Settings::getInstance()->setBool("QuickSystemSelect", quick_sys_select->getState());
+	});
 
-	// carousel transition option
+	// carousel transitions
 	auto move_carousel = std::make_shared<SwitchComponent>(mWindow);
 	move_carousel->setState(Settings::getInstance()->getBool("MoveCarousel"));
 	s->addWithLabel(_("CAROUSEL TRANSITIONS").c_str(), move_carousel);
@@ -309,38 +319,35 @@ void GuiMenu::openUISettings()
 
 		Window* window2 = mWindow;
 		s->addSaveFunc([window2, theme_set]
+		{
+			bool needReload = false;
+			std::string oldTheme = Settings::getInstance()->getString("ThemeSet");
+			if (oldTheme != theme_set->getSelected())
+				needReload = true;
+
+			Settings::getInstance()->setString("ThemeSet", theme_set->getSelected());
+
+			if (needReload)
 			{
-				bool needReload = false;
-				std::string oldTheme = Settings::getInstance()->getString("ThemeSet");
-				if (oldTheme != theme_set->getSelected())
-					needReload = true;
-
-				Settings::getInstance()->setString("ThemeSet", theme_set->getSelected());
-
-				if (needReload)
-				{
-					Scripting::fireEvent("theme-changed", theme_set->getSelected(), oldTheme);
-					CollectionSystemManager::get()->updateSystemsList();
-					ViewController::get()->reloadAll(true); // TODO - replace this with some sort of signal-based implementation
-				}
-			});
+				Scripting::fireEvent("theme-changed", theme_set->getSelected(), oldTheme);
+				CollectionSystemManager::get()->updateSystemsList();
+				ViewController::get()->reloadAll(true);
+			}
+		});
 	}
 
-	// LANGUAGE (nuevo, usando .ini)
+	// LANGUAGE (usando .ini en ~/.emulationstation/lang)
 	{
 		auto language_list = std::make_shared< OptionListComponent<std::string> >(mWindow, _("LANGUAGE").c_str(), false);
 
-		// Idioma actual desde Settings
 		std::string currentLang = Settings::getInstance()->getString("Language");
 		if (currentLang.empty())
 			currentLang = "en";
 
-		// Lista base
 		std::vector<std::string> languages;
 		languages.push_back("en");
 		languages.push_back("es");
 
-		// Buscar .ini en ~/.emulationstation/lang
 		std::string langDir = Utils::FileSystem::getHomePath() + "/.emulationstation/lang";
 		if (Utils::FileSystem::isDirectory(langDir))
 		{
@@ -349,14 +356,13 @@ void GuiMenu::openUISettings()
 			{
 				if (Utils::FileSystem::isRegularFile(*it) && Utils::FileSystem::getExtension(*it) == ".ini")
 				{
-					std::string code = Utils::FileSystem::getStem(*it); // nombre del archivo sin extensión
+					std::string code = Utils::FileSystem::getStem(*it);
 					if (std::find(languages.begin(), languages.end(), code) == languages.end())
 						languages.push_back(code);
 				}
 			}
 		}
 
-		// Poblar el OptionList con etiqueta bonita
 		for (auto &code : languages)
 		{
 			std::string label;
@@ -373,7 +379,7 @@ void GuiMenu::openUISettings()
 		s->addWithLabel(_("LANGUAGE").c_str(), language_list);
 		s->addSaveFunc([language_list] {
 			Settings::getInstance()->setString("Language", language_list->getSelected());
-			// Recargar el sistema de idioma
+			// *** AQUÍ ESTABA EL ERROR: usar . en lugar de -> ***
 			LocaleES::getInstance().loadFromSettings();
 		});
 	}
@@ -399,7 +405,7 @@ void GuiMenu::openUISettings()
 			ViewController::get()->reloadAll();
 	});
 
-	// Optionally ignore leading articles when sorting game titles
+	// Ignore articles
 	auto ignore_articles = std::make_shared<SwitchComponent>(mWindow);
 	ignore_articles->setState(Settings::getInstance()->getBool("IgnoreLeadingArticles"));
 	s->addWithLabel(_("IGNORE ARTICLES (NAME SORT ONLY)").c_str(), ignore_articles);
@@ -408,24 +414,19 @@ void GuiMenu::openUISettings()
 		Settings::getInstance()->setBool("IgnoreLeadingArticles", ignore_articles->getState());
 		if (ignore_articles->getState() != articles_are_ignored)
 		{
-			//For each system...
 			for (auto it = SystemData::sSystemVector.cbegin(); it != SystemData::sSystemVector.cend(); it++)
 			{
-				//Apply sort recursively
 				FileData* root = (*it)->getRootFolder();
 				root->sort(getSortTypeFromString(root->getSortName()));
-
-				//Notify that the root folder was sorted
 				ViewController::get()->getGameListView((*it))->onFileChanged(root, FILE_SORTED);
 			}
 
-			//Display popup to inform user
 			GuiInfoPopup* popup = new GuiInfoPopup(window, _("FILES SORTED"), 4000);
 			window->setInfoPopup(popup);
 		}
 	});
 
-	// lb/rb uses full screen size paging instead of -10/+10 steps
+	// full screen paging
 	auto use_fullscreen_paging = std::make_shared<SwitchComponent>(mWindow);
 	use_fullscreen_paging->setState(Settings::getInstance()->getBool("UseFullscreenPaging"));
 	s->addWithLabel(_("USE FULL SCREEN PAGING FOR LB/RB").c_str(), use_fullscreen_paging);
@@ -433,7 +434,7 @@ void GuiMenu::openUISettings()
 		Settings::getInstance()->setBool("UseFullscreenPaging", use_fullscreen_paging->getState());
 	});
 
-	// Optionally start in selected system
+	// startup system
 	auto systemfocus_list = std::make_shared< OptionListComponent<std::string> >(mWindow, _("START ON SYSTEM").c_str(), false);
 	systemfocus_list->add(_("NONE"), "", Settings::getInstance()->getString("StartupSystem") == "");
 	for (auto it = SystemData::sSystemVector.cbegin(); it != SystemData::sSystemVector.cend(); it++)
@@ -452,26 +453,30 @@ void GuiMenu::openUISettings()
 	auto show_help = std::make_shared<SwitchComponent>(mWindow);
 	show_help->setState(Settings::getInstance()->getBool("ShowHelpPrompts"));
 	s->addWithLabel(_("ON-SCREEN HELP").c_str(), show_help);
-	s->addSaveFunc([show_help] { Settings::getInstance()->setBool("ShowHelpPrompts", show_help->getState()); });
+	s->addSaveFunc([show_help] {
+		Settings::getInstance()->setBool("ShowHelpPrompts", show_help->getState());
+	});
 
-	// enable filters (ForceDisableFilters)
+	// enable filters
 	auto enable_filter = std::make_shared<SwitchComponent>(mWindow);
 	enable_filter->setState(!Settings::getInstance()->getBool("ForceDisableFilters"));
 	s->addWithLabel(_("ENABLE FILTERS").c_str(), enable_filter);
 	s->addSaveFunc([enable_filter] {
 		bool filter_is_enabled = !Settings::getInstance()->getBool("ForceDisableFilters");
 		Settings::getInstance()->setBool("ForceDisableFilters", !enable_filter->getState());
-		if (enable_filter->getState() != filter_is_enabled) ViewController::get()->ReloadAndGoToStart();
+		if (enable_filter->getState() != filter_is_enabled)
+			ViewController::get()->ReloadAndGoToStart();
 	});
 
-	// hide start menu in Kid Mode
+	// disable start menu in kid mode
 	auto disable_start = std::make_shared<SwitchComponent>(mWindow);
 	disable_start->setState(Settings::getInstance()->getBool("DisableKidStartMenu"));
 	s->addWithLabel(_("DISABLE START MENU IN KID MODE").c_str(), disable_start);
-	s->addSaveFunc([disable_start] { Settings::getInstance()->setBool("DisableKidStartMenu", disable_start->getState()); });
+	s->addSaveFunc([disable_start] {
+		Settings::getInstance()->setBool("DisableKidStartMenu", disable_start->getState());
+	});
 
 	mWindow->pushGui(s);
-
 }
 
 void GuiMenu::openOtherSettings()
@@ -482,7 +487,9 @@ void GuiMenu::openOtherSettings()
 	auto max_vram = std::make_shared<SliderComponent>(mWindow, 0.f, 1000.f, 10.f, "Mb");
 	max_vram->setValue((float)(Settings::getInstance()->getInt("MaxVRAM")));
 	s->addWithLabel(_("VRAM LIMIT").c_str(), max_vram);
-	s->addSaveFunc([max_vram] { Settings::getInstance()->setInt("MaxVRAM", (int)Math::round(max_vram->getValue())); });
+	s->addSaveFunc([max_vram] {
+		Settings::getInstance()->setInt("MaxVRAM", (int)Math::round(max_vram->getValue()));
+	});
 
 	// power saver
 	auto power_saver = std::make_shared< OptionListComponent<std::string> >(mWindow, _("POWER SAVER MODES").c_str(), false);
@@ -521,18 +528,24 @@ void GuiMenu::openOtherSettings()
 	auto parse_gamelists = std::make_shared<SwitchComponent>(mWindow);
 	parse_gamelists->setState(Settings::getInstance()->getBool("ParseGamelistOnly"));
 	s->addWithLabel(_("PARSE GAMESLISTS ONLY").c_str(), parse_gamelists);
-	s->addSaveFunc([parse_gamelists] { Settings::getInstance()->setBool("ParseGamelistOnly", parse_gamelists->getState()); });
+	s->addSaveFunc([parse_gamelists] {
+		Settings::getInstance()->setBool("ParseGamelistOnly", parse_gamelists->getState());
+	});
 
 	auto local_art = std::make_shared<SwitchComponent>(mWindow);
 	local_art->setState(Settings::getInstance()->getBool("LocalArt"));
 	s->addWithLabel(_("SEARCH FOR LOCAL ART").c_str(), local_art);
-	s->addSaveFunc([local_art] { Settings::getInstance()->setBool("LocalArt", local_art->getState()); });
+	s->addSaveFunc([local_art] {
+		Settings::getInstance()->setBool("LocalArt", local_art->getState());
+	});
 
 	// hidden files
 	auto hidden_files = std::make_shared<SwitchComponent>(mWindow);
 	hidden_files->setState(Settings::getInstance()->getBool("ShowHiddenFiles"));
 	s->addWithLabel(_("SHOW HIDDEN FILES").c_str(), hidden_files);
-	s->addSaveFunc([hidden_files] { Settings::getInstance()->setBool("ShowHiddenFiles", hidden_files->getState()); });
+	s->addSaveFunc([hidden_files] {
+		Settings::getInstance()->setBool("ShowHiddenFiles", hidden_files->getState());
+	});
 
 #ifdef _OMX_
 	// Video Player - VideoOmxPlayer
@@ -540,35 +553,33 @@ void GuiMenu::openOtherSettings()
 	omx_player->setState(Settings::getInstance()->getBool("VideoOmxPlayer"));
 	s->addWithLabel(_("USE OMX PLAYER (HW ACCELERATED)").c_str(), omx_player);
 	s->addSaveFunc([omx_player]
-		{
-			// need to reload all views to re-create the right video components
-			bool needReload = false;
-			if (Settings::getInstance()->getBool("VideoOmxPlayer") != omx_player->getState())
-				needReload = true;
+	{
+		bool needReload = false;
+		if (Settings::getInstance()->getBool("VideoOmxPlayer") != omx_player->getState())
+			needReload = true;
 
-			Settings::getInstance()->setBool("VideoOmxPlayer", omx_player->getState());
+		Settings::getInstance()->setBool("VideoOmxPlayer", omx_player->getState());
 
-			if (needReload)
-				ViewController::get()->reloadAll();
-		});
-
+		if (needReload)
+			ViewController::get()->reloadAll();
+	});
 #endif
 
-	// hidden files
 	auto background_indexing = std::make_shared<SwitchComponent>(mWindow);
 	background_indexing->setState(Settings::getInstance()->getBool("BackgroundIndexing"));
 	s->addWithLabel(_("INDEX FILES DURING SCREENSAVER").c_str(), background_indexing);
-	s->addSaveFunc([background_indexing] { Settings::getInstance()->setBool("BackgroundIndexing", background_indexing->getState()); });
+	s->addSaveFunc([background_indexing] {
+		Settings::getInstance()->setBool("BackgroundIndexing", background_indexing->getState());
+	});
 
-	// framerate
 	auto framerate = std::make_shared<SwitchComponent>(mWindow);
 	framerate->setState(Settings::getInstance()->getBool("DrawFramerate"));
 	s->addWithLabel(_("SHOW FRAMERATE").c_str(), framerate);
-	s->addSaveFunc([framerate] { Settings::getInstance()->setBool("DrawFramerate", framerate->getState()); });
-
+	s->addSaveFunc([framerate] {
+		Settings::getInstance()->setBool("DrawFramerate", framerate->getState());
+	});
 
 	mWindow->pushGui(s);
-
 }
 
 void GuiMenu::openConfigInput()
@@ -580,7 +591,6 @@ void GuiMenu::openConfigInput()
 			window->pushGui(new GuiDetectDevice(window, false, nullptr));
 		}, _("NO").c_str(), nullptr)
 	);
-
 }
 
 void GuiMenu::openQuitMenu()
@@ -588,8 +598,6 @@ void GuiMenu::openQuitMenu()
 	auto s = new GuiSettings(mWindow, _("QUIT").c_str());
 
 	Window* window = mWindow;
-
-	// command line switch
 	bool confirm_quit = Settings::getInstance()->getBool("ConfirmQuit");
 
 	ComponentListRow row;
@@ -669,6 +677,7 @@ void GuiMenu::openQuitMenu()
 	}
 	row.addElement(std::make_shared<TextComponent>(window, _("SHUTDOWN SYSTEM"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
 	s->addRow(row);
+
 	mWindow->pushGui(s);
 }
 
@@ -683,11 +692,13 @@ void GuiMenu::addVersionInfo()
 	addChild(&mVersion);
 }
 
-void GuiMenu::openScreensaverOptions() {
+void GuiMenu::openScreensaverOptions()
+{
 	mWindow->pushGui(new GuiGeneralScreensaverOptions(mWindow, _("SCREENSAVER SETTINGS").c_str()));
 }
 
-void GuiMenu::openCollectionSystemSettings() {
+void GuiMenu::openCollectionSystemSettings()
+{
 	mWindow->pushGui(new GuiCollectionSystemsOptions(mWindow));
 }
 
@@ -701,7 +712,6 @@ void GuiMenu::addEntry(const char* name, unsigned int color, bool add_arrow, con
 {
 	std::shared_ptr<Font> font = Font::get(FONT_SIZE_MEDIUM);
 
-	// populate the list
 	ComponentListRow row;
 	row.addElement(std::make_shared<TextComponent>(mWindow, name, font, color), true);
 
@@ -712,7 +722,6 @@ void GuiMenu::addEntry(const char* name, unsigned int color, bool add_arrow, con
 	}
 
 	row.makeAcceptInputHandler(func);
-
 	mMenu.addRow(row);
 }
 
@@ -740,8 +749,8 @@ HelpStyle GuiMenu::getHelpStyle()
 std::vector<HelpPrompt> GuiMenu::getHelpPrompts()
 {
 	std::vector<HelpPrompt> prompts;
-	prompts.push_back(HelpPrompt("up/down", _("choose")));
-	prompts.push_back(HelpPrompt("a", _("select")));
-	prompts.push_back(HelpPrompt("start", _("close")));
+	prompts.push_back(HelpPrompt("up/down", _("CHOOSE")));
+	prompts.push_back(HelpPrompt("a", _("SELECT")));
+	prompts.push_back(HelpPrompt("start", _("CLOSE")));
 	return prompts;
 }

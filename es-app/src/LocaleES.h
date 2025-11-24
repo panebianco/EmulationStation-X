@@ -1,9 +1,6 @@
 #pragma once
-#ifndef ES_CORE_LOCALE_ES_H
-#define ES_CORE_LOCALE_ES_H
-
-#include <map>
 #include <string>
+#include <map>
 
 class LocaleES
 {
@@ -11,26 +8,24 @@ public:
     // Singleton
     static LocaleES& getInstance();
 
-    // Carga el idioma a partir de Settings::Language ("en", "es", etc.)
+    // Carga archivo .ini desde una ruta
+    bool loadLanguageFile(const std::string& filePath);
+
+    // Carga el idioma según Settings ("Language")
     void loadFromSettings();
 
-    // Carga directamente un archivo .ini
-    void load(const std::string& path);
+    // Traduce una clave usando la instancia global
+    static std::string get(const std::string& key);
 
-    // Traduce una clave. Si no existe, devuelve la clave original (inglés).
+    // Traduce una clave usando esta instancia
     std::string translate(const std::string& key) const;
 
-    const std::string& getCurrentLanguage() const { return mCurrentLanguage; }
-
 private:
-    LocaleES();
-    LocaleES(const LocaleES&) = delete;
-    LocaleES& operator=(const LocaleES&) = delete;
+    LocaleES(); // constructor privado (singleton)
 
-    void clear();
-
-    std::map<std::string, std::string> mStrings;
     std::string mCurrentLanguage;
+    std::map<std::string, std::string> mTranslations;
 };
 
-#endif // ES_CORE_LOCALE_ES_H
+// Función accesible desde cualquier parte (incluido es-core)
+std::string es_translate(const std::string& key);

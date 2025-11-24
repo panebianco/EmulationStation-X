@@ -12,9 +12,12 @@
 #include "views/ViewController.h"
 #include "CollectionSystemManager.h"
 #include "Window.h"
+#include "Settings.h"
+#include "renderers/Renderer.h"
+
 #include "LocaleES.h"
 
-// Pequeño helper para traducciones .ini
+// Pequeño helper local para traducciones .ini
 namespace
 {
 	inline std::string _(const std::string& key)
@@ -48,9 +51,9 @@ void GuiCollectionSystemsOptions::initializeMenu()
 	if (CollectionSystemManager::get()->isEditing())
 	{
 		std::string label =
-			_( "FINISH EDITING" ) + " '" +
+			_("FINISH EDITING") + std::string(" '") +
 			Utils::String::toUpper(CollectionSystemManager::get()->getEditingCollection()) +
-			"' " + _("COLLECTION");
+			std::string("' ") + _("COLLECTION");
 
 		row.addElement(std::make_shared<TextComponent>(
 			mWindow,
@@ -64,9 +67,9 @@ void GuiCollectionSystemsOptions::initializeMenu()
 	}
 	else
 	{
-		// "Crear nueva colección desde el tema"
+		// Crear nueva colección desde el tema
 		std::vector<std::string> unusedFolders = CollectionSystemManager::get()->getUnusedSystemsFromTheme();
-		if (unusedFolders.size() > 0)
+		if (!unusedFolders.empty())
 		{
 			addEntry(_("CREATE NEW CUSTOM COLLECTION FROM THEME").c_str(), 0x777777FF, true,
 				[this, unusedFolders] {
@@ -78,11 +81,11 @@ void GuiCollectionSystemsOptions::initializeMenu()
 							true);
 
 					// añadir sistemas del tema
-					for (auto it = unusedFolders.cbegin(); it != unusedFolders.cend(); it++)
+					for (auto it = unusedFolders.cbegin(); it != unusedFolders.cend(); ++it)
 					{
 						ComponentListRow row;
-						std::string name = *it;
 
+						std::string name = *it;
 						std::function<void()> createCollectionCall = [name, this, s] {
 							createCollection(name);
 						};
@@ -93,14 +96,17 @@ void GuiCollectionSystemsOptions::initializeMenu()
 							Utils::String::toUpper(name),
 							Font::get(FONT_SIZE_SMALL),
 							0x777777FF);
+
 						row.addElement(themeFolder, true);
 						s->addRow(row);
 					}
+
 					mWindow->pushGui(s);
 				});
 		}
 
-		// "Crear nueva colección personalizada"
+		// Crear nueva colección personalizada
+		row.elements.clear();
 		row.addElement(std::make_shared<TextComponent>(
 			mWindow,
 			_("CREATE NEW CUSTOM COLLECTION"),
@@ -167,9 +173,7 @@ void GuiCollectionSystemsOptions::initializeMenu()
 		CollectionSystemManager::get()->getCustomCollectionSystems();
 
 	// añadir sistemas personalizados habilitados
-	for (std::map<std::string, CollectionSystemData>::const_iterator it = customSystems.cbegin();
-	     it != customSystems.cend();
-	     it++)
+	for (auto it = customSystems.cbegin(); it != customSystems.cend(); ++it)
 	{
 		if (it->second.isEnabled)
 			defaultScreenSaverCollection->add(
@@ -246,7 +250,6 @@ void GuiCollectionSystemsOptions::exitEditMode()
 
 GuiCollectionSystemsOptions::~GuiCollectionSystemsOptions()
 {
-
 }
 
 void GuiCollectionSystemsOptions::addSystemsToMenu()
@@ -261,9 +264,7 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 			true);
 
 	// añadir sistemas automáticos
-	for (std::map<std::string, CollectionSystemData>::const_iterator it = autoSystems.cbegin();
-	     it != autoSystems.cend();
-	     it++)
+	for (auto it = autoSystems.cbegin(); it != autoSystems.cend(); ++it)
 	{
 		autoOptionList->add(
 			it->second.decl.longName,
@@ -282,9 +283,7 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 			true);
 
 	// añadir sistemas personalizados
-	for (std::map<std::string, CollectionSystemData>::const_iterator it = customSystems.cbegin();
-	     it != customSystems.cend();
-	     it++)
+	for (auto it = customSystems.cbegin(); it != customSystems.cend(); ++it)
 	{
 		customOptionList->add(
 			it->second.decl.longName,
@@ -311,13 +310,13 @@ void GuiCollectionSystemsOptions::applySettings()
 	// si no, ponerla en "" (se muestra como <DEFAULT>)
 	std::string enabledCollectionName = "";
 	std::vector<std::string> selection = defaultScreenSaverCollection->getSelectedObjects();
-	if (selection.size() > 0)
+	if (!selection.empty())
 	{
 		std::string selectedCollection = selection.at(0);
-		if (selectedCollection != "")
+		if (!selectedCollection.empty())
 		{
 			std::vector<std::string> enabledCollections = customOptionList->getSelectedObjects();
-			for (auto nameIt = enabledCollections.begin(); nameIt != enabledCollections.end(); nameIt++)
+			for (auto nameIt = enabledCollections.begin(); nameIt != enabledCollections.end(); ++nameIt)
 			{
 				if (*nameIt == selectedCollection)
 				{
