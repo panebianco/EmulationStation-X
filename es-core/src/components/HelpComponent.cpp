@@ -7,6 +7,7 @@
 #include "utils/StringUtil.h"
 #include "Log.h"
 #include "Settings.h"
+#include "../LocaleESHook.h"   // 🔹 Para es_translate()
 
 #define OFFSET_X 12 // move the entire thing right by this amount (px)
 #define OFFSET_Y 12 // move the entire thing up by this amount (px)
@@ -77,7 +78,15 @@ void HelpComponent::updateGrid()
 		icon->setResize(0, height);
 		icons.push_back(icon);
 
-		auto lbl = std::make_shared<TextComponent>(mWindow, Utils::String::toUpper(it->second), font, mStyle.textColor);
+		// 🔹 Traducir el texto del help prompt antes de mostrarlo
+		std::string translated = es_translate(it->second);
+
+		auto lbl = std::make_shared<TextComponent>(
+			mWindow,
+			Utils::String::toUpper(translated),
+			font,
+			mStyle.textColor
+		);
 		labels.push_back(lbl);
 
 		width += icon->getSize().x() + lbl->getSize().x() + ICON_TEXT_SPACING + ENTRY_SPACING;
