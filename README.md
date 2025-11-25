@@ -1,5 +1,5 @@
 # EmulationStation-X (ES-X)
-<img width="1280" height="720" alt="LOGO" src="https://github.com/user-attachments/assets/3ce62386-2b9b-4287-b587-623452f415f1" />
+<img width="1280" height="720" alt="LOGO" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" />
 
 **ES-X** is a personal and experimental fork of **EmulationStation**, focused on:
 
