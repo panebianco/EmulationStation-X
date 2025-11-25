@@ -4,6 +4,8 @@
 
 #include "components/OptionListComponent.h"
 #include "components/SwitchComponent.h"
+#include "components/TextComponent.h"
+#include "components/ImageComponent.h"
 #include "guis/GuiInfoPopup.h"
 #include "guis/GuiRandomCollectionOptions.h"
 #include "guis/GuiSettings.h"
@@ -17,7 +19,7 @@
 
 #include "LocaleES.h"
 
-// Pequeño helper local para traducciones .ini
+// Helper local para traducciones .ini
 namespace
 {
 	inline std::string _(const std::string& key)
@@ -43,7 +45,8 @@ void GuiCollectionSystemsOptions::initializeMenu()
 	// obtener colecciones
 	addSystemsToMenu();
 
-	// gestionar colección aleatoria
+	// *** OJO: ESTA LÍNEA ***
+	// Debe quedar EXACTAMENTE así, en una sola línea:
 	addEntry(_("RANDOM GAME COLLECTION SETTINGS").c_str(), 0x777777FF, true,
 		[this] { openRandomCollectionSettings(); });
 
@@ -77,7 +80,7 @@ void GuiCollectionSystemsOptions::initializeMenu()
 					std::shared_ptr< OptionListComponent<std::string> > folderThemes =
 						std::make_shared< OptionListComponent<std::string> >(
 							mWindow,
-							_("SELECT THEME FOLDER").c_str(),
+							_("SELECT THEME FOLDER"),
 							true);
 
 					// añadir sistemas del tema
@@ -126,7 +129,7 @@ void GuiCollectionSystemsOptions::initializeMenu()
 		row.makeAcceptInputHandler([this, createCustomCollection] {
 			mWindow->pushGui(new GuiTextEditPopup(
 				mWindow,
-				_("New Collection Name"),
+				_("NEW COLLECTION NAME"),
 				"",
 				createCustomCollection,
 				false));
@@ -137,28 +140,28 @@ void GuiCollectionSystemsOptions::initializeMenu()
 	// agrupar colecciones sin tema
 	bundleCustomCollections = std::make_shared<SwitchComponent>(mWindow);
 	bundleCustomCollections->setState(Settings::getInstance()->getBool("UseCustomCollectionsSystem"));
-	mMenu.addWithLabel(_("GROUP UNTHEMED CUSTOM COLLECTIONS").c_str(), bundleCustomCollections);
+	mMenu.addWithLabel(_("GROUP UNTHEMED CUSTOM COLLECTIONS"), bundleCustomCollections);
 
 	// ordenar colecciones y sistemas
 	sortAllSystemsSwitch = std::make_shared<SwitchComponent>(mWindow);
 	sortAllSystemsSwitch->setState(Settings::getInstance()->getBool("SortAllSystems"));
-	mMenu.addWithLabel(_("SORT CUSTOM COLLECTIONS AND SYSTEMS").c_str(), sortAllSystemsSwitch);
+	mMenu.addWithLabel(_("SORT CUSTOM COLLECTIONS AND SYSTEMS"), sortAllSystemsSwitch);
 
 	// mostrar nombre del sistema en colecciones
 	toggleSystemNameInCollections = std::make_shared<SwitchComponent>(mWindow);
 	toggleSystemNameInCollections->setState(Settings::getInstance()->getBool("CollectionShowSystemInfo"));
-	mMenu.addWithLabel(_("SHOW SYSTEM NAME IN COLLECTIONS").c_str(), toggleSystemNameInCollections);
+	mMenu.addWithLabel(_("SHOW SYSTEM NAME IN COLLECTIONS"), toggleSystemNameInCollections);
 
 	// doble pulsación en Y para quitar de favoritos/colección
 	doublePressToRemoveFavs = std::make_shared<SwitchComponent>(mWindow);
 	doublePressToRemoveFavs->setState(Settings::getInstance()->getBool("DoublePressRemovesFromFavs"));
-	mMenu.addWithLabel(_("PRESS (Y) TWICE TO REMOVE FROM FAVS./COLL.").c_str(), doublePressToRemoveFavs);
+	mMenu.addWithLabel(_("PRESS (Y) TWICE TO REMOVE FROM FAVS./COLL."), doublePressToRemoveFavs);
 
 	// opción de colección por defecto para screensaver
 	defaultScreenSaverCollection =
 		std::make_shared< OptionListComponent<std::string> >(
 			mWindow,
-			_("ADD/REMOVE GAMES WHILE SCREENSAVER TO").c_str(),
+			_("ADD/REMOVE GAMES WHILE SCREENSAVER TO"),
 			false);
 
 	// opción por defecto
@@ -182,10 +185,10 @@ void GuiCollectionSystemsOptions::initializeMenu()
 				defaultScreenSaverCollectionName == it->second.decl.name);
 	}
 
-	mMenu.addWithLabel(_("ADD/REMOVE GAMES WHILE SCREENSAVER TO").c_str(), defaultScreenSaverCollection);
+	mMenu.addWithLabel(_("ADD/REMOVE GAMES WHILE SCREENSAVER TO"), defaultScreenSaverCollection);
 
 	// botón volver
-	mMenu.addButton(_("BACK").c_str(), "back", std::bind(&GuiCollectionSystemsOptions::applySettings, this));
+	mMenu.addButton(_("BACK"), "back", std::bind(&GuiCollectionSystemsOptions::applySettings, this));
 
 	mMenu.setPosition(
 		(Renderer::getScreenWidth() - mMenu.getSize().x()) / 2,
@@ -217,7 +220,8 @@ void GuiCollectionSystemsOptions::createCollection(std::string inName)
 	std::string name = collSysMgr->getValidNewCollectionName(inName);
 
 	SystemData* newSys = collSysMgr->addNewCustomCollection(name, true);
-	if (!collSysMgr->saveCustomCollection(newSys)) {
+	if (!collSysMgr->saveCustomCollection(newSys))
+	{
 		GuiInfoPopup* s = new GuiInfoPopup(
 			mWindow,
 			"Failed creating '" + Utils::String::toUpper(name) + "' Collection. See log for details.",
@@ -225,6 +229,7 @@ void GuiCollectionSystemsOptions::createCollection(std::string inName)
 		mWindow->setInfoPopup(s);
 		return;
 	}
+
 	customOptionList->add(name, name, true);
 	std::string outAuto = Utils::String::vectorToDelimitedString(autoOptionList->getSelectedObjects(), ",");
 	std::string outCustom = Utils::String::vectorToDelimitedString(customOptionList->getSelectedObjects(), ",");
@@ -260,7 +265,7 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 	autoOptionList =
 		std::make_shared< OptionListComponent<std::string> >(
 			mWindow,
-			_("SELECT COLLECTIONS").c_str(),
+			_("SELECT COLLECTIONS"),
 			true);
 
 	// añadir sistemas automáticos
@@ -271,7 +276,7 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 			it->second.decl.name,
 			it->second.isEnabled);
 	}
-	mMenu.addWithLabel(_("AUTOMATIC GAME COLLECTIONS").c_str(), autoOptionList);
+	mMenu.addWithLabel(_("AUTOMATIC GAME COLLECTIONS"), autoOptionList);
 
 	std::map<std::string, CollectionSystemData> customSystems =
 		CollectionSystemManager::get()->getCustomCollectionSystems();
@@ -279,7 +284,7 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 	customOptionList =
 		std::make_shared< OptionListComponent<std::string> >(
 			mWindow,
-			_("SELECT COLLECTIONS").c_str(),
+			_("SELECT COLLECTIONS"),
 			true);
 
 	// añadir sistemas personalizados
@@ -290,7 +295,7 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 			it->second.decl.name,
 			it->second.isEnabled);
 	}
-	mMenu.addWithLabel(_("CUSTOM GAME COLLECTIONS").c_str(), customOptionList);
+	mMenu.addWithLabel(_("CUSTOM GAME COLLECTIONS"), customOptionList);
 }
 
 void GuiCollectionSystemsOptions::applySettings()
