@@ -45,8 +45,7 @@ void GuiCollectionSystemsOptions::initializeMenu()
 	// obtener colecciones
 	addSystemsToMenu();
 
-	// *** OJO: ESTA LÍNEA ***
-	// Debe quedar EXACTAMENTE así, en una sola línea:
+	// opción de ajustes de colección aleatoria
 	addEntry(_("RANDOM GAME COLLECTION SETTINGS").c_str(), 0x777777FF, true,
 		[this] { openRandomCollectionSettings(); });
 
@@ -268,11 +267,21 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 			_("SELECT COLLECTIONS"),
 			true);
 
-	// añadir sistemas automáticos
+	// añadir sistemas automáticos (ALL GAMES, FAVORITES, RANDOM, LAST PLAYED) con traducción .ini
 	for (auto it = autoSystems.cbegin(); it != autoSystems.cend(); ++it)
 	{
+		// longName viene como "ALL GAMES", "FAVORITES", etc.
+		std::string label = it->second.decl.longName;
+
+		// Las claves en el .ini están en minúsculas: "all games", "favorites", "random", "last played"
+		std::string lowerKey = Utils::String::toLower(label);
+		std::string translated = LocaleES::getInstance().translate(lowerKey);
+
+		if (translated != lowerKey)
+			label = translated; // usar la traducción si existe
+
 		autoOptionList->add(
-			it->second.decl.longName,
+			label,
 			it->second.decl.name,
 			it->second.isEnabled);
 	}
@@ -287,7 +296,7 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 			_("SELECT COLLECTIONS"),
 			true);
 
-	// añadir sistemas personalizados
+	// añadir sistemas personalizados (se muestran con el nombre que les ponga el usuario)
 	for (auto it = customSystems.cbegin(); it != customSystems.cend(); ++it)
 	{
 		customOptionList->add(

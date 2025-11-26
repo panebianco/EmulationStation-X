@@ -1,4 +1,5 @@
 #pragma once
+
 #include <string>
 #include <map>
 
@@ -22,6 +23,10 @@ public:
 
 private:
     LocaleES(); // constructor privado (singleton)
+
+    // Evitar copias
+    LocaleES(const LocaleES&) = delete;
+    LocaleES& operator=(const LocaleES&) = delete;
 
     std::string mCurrentLanguage;
     std::map<std::string, std::string> mTranslations;

@@ -460,7 +460,19 @@ void CollectionSystemManager::setEditMode(std::string collectionName, bool quiet
 	mEditingCollectionSystemData = sysData;
 
 	if (!quiet) {
-		GuiInfoPopup* s = new GuiInfoPopup(mWindow, "Editing the '" + Utils::String::toUpper(collectionName) + "' Collection. Add/remove games with Y.", 8000);
+		std::string colUpper = Utils::String::toUpper(collectionName);
+
+		std::string editingBase = LocaleES::get("EDITING_COLLECTION");
+		if (editingBase == "EDITING_COLLECTION")
+			editingBase = "Editing the collection";
+
+		std::string addRemove = LocaleES::get("ADD_REMOVE_GAMES_Y");
+		if (addRemove == "ADD_REMOVE_GAMES_Y")
+			addRemove = "Add/remove games with Y.";
+
+		std::string msg = editingBase + " '" + colUpper + "'. " + addRemove;
+
+		GuiInfoPopup* s = new GuiInfoPopup(mWindow, msg, 8000);
 		mWindow->setInfoPopup(s);
 	}
 }
@@ -468,7 +480,12 @@ void CollectionSystemManager::setEditMode(std::string collectionName, bool quiet
 void CollectionSystemManager::exitEditMode(bool quiet)
 {
 	if (!quiet) {
-		GuiInfoPopup* s = new GuiInfoPopup(mWindow, "Finished editing the '" + Utils::String::toUpper(mEditingCollection) + "' Collection.", 4000);
+		std::string finishedBase = LocaleES::get("FINISHED_EDITING_COLLECTION");
+		if (finishedBase == "FINISHED_EDITING_COLLECTION")
+			finishedBase = "Finished editing the collection";
+
+		std::string msg = finishedBase + " '" + Utils::String::toUpper(mEditingCollection) + "'.";
+		GuiInfoPopup* s = new GuiInfoPopup(mWindow, msg, 4000);
 		mWindow->setInfoPopup(s);
 	}
 	if (mIsEditingCustom) {
@@ -577,13 +594,40 @@ bool CollectionSystemManager::toggleGameInCollection(FileData* file)
 
 			refreshCollectionSystems(file->getSourceFileData());
 		}
+
+		std::string sysNameUpper = Utils::String::toUpper(sysName);
+
 		if (adding)
 		{
-			s = new GuiInfoPopup(mWindow, "Added '" + Utils::String::removeParenthesis(name) + "' to '" + Utils::String::toUpper(sysName) + "'", 4000);
+			std::string addedBase = LocaleES::get("ADDED_TO_COLLECTION");
+			if (addedBase == "ADDED_TO_COLLECTION")
+				addedBase = "Added";
+
+			std::string toWord = LocaleES::get("TO_COLLECTION");
+			if (toWord == "TO_COLLECTION")
+				toWord = "to";
+
+			s = new GuiInfoPopup(
+				mWindow,
+				addedBase + " '" + Utils::String::removeParenthesis(name) + "' " + toWord + " '" + sysNameUpper + "'",
+				4000
+			);
 		}
 		else
 		{
-			s = new GuiInfoPopup(mWindow, "Removed '" + Utils::String::removeParenthesis(name) + "' from '" + Utils::String::toUpper(sysName) + "'", 4000);
+			std::string removedBase = LocaleES::get("REMOVED_FROM_COLLECTION");
+			if (removedBase == "REMOVED_FROM_COLLECTION")
+				removedBase = "Removed";
+
+			std::string fromWord = LocaleES::get("FROM_COLLECTION");
+			if (fromWord == "FROM_COLLECTION")
+				fromWord = "from";
+
+			s = new GuiInfoPopup(
+				mWindow,
+				removedBase + " '" + Utils::String::removeParenthesis(name) + "' " + fromWord + " '" + sysNameUpper + "'",
+				4000
+			);
 		}
 
 		mWindow->setInfoPopup(s);
@@ -682,7 +726,10 @@ void CollectionSystemManager::updateCollectionFolderMetadata(SystemData* sys)
 {
 	FileData* rootFolder = sys->getRootFolder();
 
-	std::string desc = "This collection is empty.";
+	std::string desc = LocaleES::get("EMPTY_COLLECTION");
+	if (desc == "EMPTY_COLLECTION")
+		desc = "This collection is empty.";
+
 	std::string rating = "0";
 	std::string players = "1";
 	std::string releasedate = "N/A";
@@ -1329,8 +1376,14 @@ bool CollectionSystemManager::includeFileInAutoCollections(FileData* file)
 bool CollectionSystemManager::needDoublePress(int presscount) {
 	if (Settings::getInstance()->getBool("DoublePressRemovesFromFavs") && presscount < 2)
 	{
-		GuiInfoPopup* toast = new GuiInfoPopup(mWindow, "Press again to remove from '" + Utils::String::toUpper(mEditingCollection)
-			+ "'", DOUBLE_PRESS_DETECTION_DURATION, 100, 200);
+		std::string base = LocaleES::get("PRESS_AGAIN_TO_REMOVE");
+		if (base == "PRESS_AGAIN_TO_REMOVE")
+			base = "Press again to remove from";
+
+		std::string msg = base + " '" + Utils::String::toUpper(mEditingCollection) + "'";
+
+		GuiInfoPopup* toast = new GuiInfoPopup(mWindow, msg,
+			DOUBLE_PRESS_DETECTION_DURATION, 100, 200);
 		mWindow->setInfoPopup(toast);
 		return true;
 	}
