@@ -9,6 +9,7 @@
 #include "Settings.h"
 #include <pugixml.hpp>
 #include <algorithm>
+#include <fstream>   // ← NUEVO: para leer theme.ini
 
 std::vector<std::string> ThemeData::sSupportedViews { { "system" }, { "basic" }, { "detailed" }, { "grid" }, { "video" } };
 std::vector<std::string> ThemeData::sSupportedFeatures { { "video" }, { "carousel" }, { "z-index" }, { "visible" } };
@@ -53,7 +54,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "backgroundColor", COLOR },
 		{ "backgroundCenterColor", COLOR },
 		{ "backgroundEdgeColor", COLOR } } },
-		{ "text", {
+	{ "text", {
 		{ "pos", RESOLUTION_PAIR },
 		{ "size", RESOLUTION_PAIR },
 		{ "origin", NORMALIZED_PAIR },
@@ -208,6 +209,63 @@ unsigned int getHexColor(const char* str)
 	return val;
 }
 
+// ─────────────────────────────────────────────
+// NUEVO: carga de variables externas desde theme.ini
+// ─────────────────────────────────────────────
+namespace
+{
+	void loadExternalThemeVariables(const std::string& themeXmlPath,
+	                                std::map<std::string, std::string>& outVars)
+	{
+		// Carpeta del theme.xml
+		const std::string xmlDir   = Utils::FileSystem::getParent(themeXmlPath);
+		const std::string themeDir = Utils::FileSystem::getParent(xmlDir);
+
+		// Rutas candidatas: primero en la carpeta del sistema, después en la raíz del theme
+		std::vector<std::string> candidates;
+		candidates.push_back(xmlDir   + "/theme.ini");
+		candidates.push_back(themeDir + "/theme.ini");
+
+		for(const auto& cfgPath : candidates)
+		{
+			if(!Utils::FileSystem::exists(cfgPath))
+				continue;
+
+			std::ifstream file(cfgPath.c_str());
+			if(!file.good())
+			{
+				LOG(LogWarning) << "ThemeData: could not open theme.ini at " << cfgPath;
+				continue;
+			}
+
+			LOG(LogInfo) << "ThemeData: loading variables from " << cfgPath;
+
+			std::string line;
+			while(std::getline(file, line))
+			{
+				line = Utils::String::trim(line);
+
+				// saltar líneas vacías y comentarios
+				if(line.empty() || line[0] == '#' || line[0] == ';')
+					continue;
+
+				auto eqPos = line.find('=');
+				if(eqPos == std::string::npos)
+					continue;
+
+				std::string key   = Utils::String::trim(line.substr(0, eqPos));
+				std::string value = Utils::String::trim(line.substr(eqPos + 1));
+
+				if(!key.empty())
+					outVars[key] = value; // sobreescribe si ya existe
+			}
+
+			// Solo usamos el primer theme.ini encontrado
+			break;
+		}
+	}
+}
+
 std::string ThemeData::resolvePlaceholders(const char* in)
 {
 	std::string inStr(in);
@@ -249,7 +307,11 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 	mViews.clear();
 	mVariables.clear();
 
+	// Variables del sistema (nombre, shortName, etc.)
 	mVariables.insert(sysDataMap.cbegin(), sysDataMap.cend());
+
+	// NUEVO: variables externas desde theme.ini
+	loadExternalThemeVariables(path, mVariables);
 
 	pugi::xml_document doc;
 	pugi::xml_parse_result res = doc.load_file(path.c_str());
@@ -427,7 +489,6 @@ void ThemeData::parseView(const pugi::xml_node& root, ThemeView& view)
 		}
 	}
 }
-
 
 void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::string, ElementPropertyType>& typeMap, ThemeElement& element)
 {

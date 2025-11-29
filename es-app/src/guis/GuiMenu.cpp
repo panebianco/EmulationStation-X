@@ -18,6 +18,8 @@
 #include "VolumeControl.h"
 #include <SDL_events.h>
 #include <algorithm>
+#include <cstdlib> // system()
+
 #include "platform.h"
 #include "FileSorts.h"
 #include "views/gamelist/IGameListView.h"
@@ -26,6 +28,7 @@
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
 #include "resources/Font.h"
+#include "ThemeData.h"
 
 #include "LocaleES.h"
 
@@ -336,6 +339,16 @@ void GuiMenu::openUISettings()
 		});
 	}
 
+	// NUEVO: Theme Options (ejecuta script del tema si existe)
+	{
+		ComponentListRow theme_row;
+		theme_row.elements.clear();
+		theme_row.addElement(std::make_shared<TextComponent>(mWindow, _("THEME OPTIONS"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
+		theme_row.addElement(makeArrow(mWindow), false);
+		theme_row.makeAcceptInputHandler(std::bind(&GuiMenu::openThemeOptions, this));
+		s->addRow(theme_row);
+	}
+
 	// LANGUAGE (usando .ini en ~/.emulationstation/lang)
 	{
 		auto language_list = std::make_shared< OptionListComponent<std::string> >(mWindow, _("LANGUAGE").c_str(), false);
@@ -379,7 +392,6 @@ void GuiMenu::openUISettings()
 		s->addWithLabel(_("LANGUAGE").c_str(), language_list);
 		s->addSaveFunc([language_list] {
 			Settings::getInstance()->setString("Language", language_list->getSelected());
-			// *** AQUÍ ESTABA EL ERROR: usar . en lugar de -> ***
 			LocaleES::getInstance().loadFromSettings();
 		});
 	}
@@ -700,6 +712,66 @@ void GuiMenu::openScreensaverOptions()
 void GuiMenu::openCollectionSystemSettings()
 {
 	mWindow->pushGui(new GuiCollectionSystemsOptions(mWindow));
+}
+
+// NUEVO: lógica para ejecutar el script de opciones del tema
+void GuiMenu::openThemeOptions()
+{
+	// Nombre del set de temas actual
+	std::string themeSet = Settings::getInstance()->getString("ThemeSet");
+	if (themeSet.empty())
+	{
+		mWindow->pushGui(new GuiMsgBox(mWindow, _("No theme set selected."), _("OK").c_str(), nullptr));
+		return;
+	}
+
+	// Ruta base del tema (home/.emulationstation/themes/ThemeSet)
+	std::string themeDir = Utils::FileSystem::getHomePath() + "/.emulationstation/themes/" + themeSet;
+
+	// Candidatos de script
+	std::string scriptPath;
+
+	std::string scriptThemeOptions = themeDir + "/theme-options.sh";
+	if (Utils::FileSystem::isRegularFile(scriptThemeOptions))
+	{
+		scriptPath = scriptThemeOptions;
+	}
+	else
+	{
+		// Compatibilidad con tu script actual
+		std::string scriptPiStation = themeDir + "/PiStation_menu.sh";
+		if (Utils::FileSystem::isRegularFile(scriptPiStation))
+			scriptPath = scriptPiStation;
+	}
+
+	// Si no hay script, mostrar mensaje genérico
+	if (scriptPath.empty())
+	{
+		mWindow->pushGui(new GuiMsgBox(
+			mWindow,
+			_("THEME-SPECIFIC OPTIONS CAN BE ADDED HERE."),
+			_("BACK").c_str(),
+			nullptr));
+		return;
+	}
+
+	// Ejecutar el script
+	std::string cmd = "\"" + scriptPath + "\"";
+	int exitCode = system(cmd.c_str());
+
+	// Si falla, mostrar mensaje
+	if (exitCode != 0)
+	{
+		std::string msg = _("There was a problem while running the theme options script.");
+		msg += "\n\n";
+		msg += scriptPath;
+		mWindow->pushGui(new GuiMsgBox(mWindow, msg, _("OK").c_str(), nullptr));
+	}
+	else
+	{
+		// Si el script cambió algo del tema (theme.ini, avatar, etc.), recargar
+		ViewController::get()->reloadAll(true);
+	}
 }
 
 void GuiMenu::onSizeChanged()
