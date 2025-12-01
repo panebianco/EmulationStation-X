@@ -17,8 +17,15 @@
 
 ES-X does **not** aim to replace EmulationStation.  
 It is a **sandbox for new ideas** — testing approaches to localization, UI flexibility, theme expressiveness, and user accessibility, while maintaining compatibility with **RetroPie**.
-<img width="1366" height="768" alt="Captura de pantalla_2025-11-24_16-19-55" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" />
-<img width="1366" height="768" alt="Captura de pantalla_2025-11-24_16-20-34" src="https://github.com/user-attachments/assets/ee725018-2b51-4ab1-98b9-0750e303d0e7" />
+## 🖼 Preview
+
+| Main Menu | Language Demo |
+|-----------|---------------|
+| <img width="450" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" /> | <img width="450" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" /> |
+
+| Popup View | Main Menu |
+|------------|-----------------------|
+| <img width="450" src="https://github.com/user-attachments/assets/ee725018-2b51-4ab1-98b9-0750e303d0e7" />
 
 ---
 
