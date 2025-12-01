@@ -9,6 +9,7 @@
 #include "views/ViewController.h"
 #include "SystemData.h"
 #include "Window.h"
+#include "renderers/Renderer.h"
 
 #include <fstream>
 #include <sstream>
@@ -22,16 +23,12 @@ namespace
 
 	struct ThemeOption
 	{
-		std::string id;          // [id] de la sección, p.ej. "layout", "colorScheme"
-		std::string type;        // "select" (por ahora)
-		std::string label;       // texto a mostrar en el menú
-		std::string path;        // reservado para futuro (avatars, etc.)
-		std::string applyTo;     // p.ej. "layout" para opciones que cambian el layout
-
-		// Lista de valores posibles: first = valor interno, second = texto visible
+		std::string id;
+		std::string type;
+		std::string label;
+		std::string path;
+		std::string applyTo;
 		std::vector<std::pair<std::string, std::string>> values;
-
-		// Valor por defecto (texto interno, ej. "dark")
 		std::string defaultValue;
 	};
 
@@ -58,10 +55,7 @@ namespace
 
 			auto pos = item.find('|');
 			if(pos == std::string::npos)
-			{
-				// Si no hay '|', usamos el mismo texto para valor interno y visible
 				out.emplace_back(item, item);
-			}
 			else
 			{
 				std::string internal = trim(item.substr(0, pos));
@@ -72,9 +66,6 @@ namespace
 		}
 	}
 
-	// Lee solo las secciones del theme.ini que describen opciones de menú.
-	// Las secciones sin "type" (como [layout_smd], [layout_snes], etc.)
-	// se ignoran y quedan solo para ThemeData::loadExternalThemeVariables.
 	std::vector<ThemeOption> loadThemeOptionsFromIni(const std::string& themeDir)
 	{
 		std::vector<ThemeOption> options;
@@ -92,10 +83,6 @@ namespace
 
 		auto pushIfValid = [&options](const ThemeOption& opt)
 		{
-			// Sólo agregamos secciones que realmente definen una opción:
-			// - tienen id
-			// - tienen type (select, etc.)
-			// - y al menos un valor
 			if(!opt.id.empty() && !opt.type.empty() && !opt.values.empty())
 				options.push_back(opt);
 		};
@@ -106,47 +93,33 @@ namespace
 			if(line.empty() || line[0] == ';' || line[0] == '#')
 				continue;
 
-			// Nueva sección [id]
 			if(line.front() == '[' && line.back() == ']')
 			{
-				// Guardar la sección anterior si era una opción válida
 				pushIfValid(current);
-
 				current = ThemeOption();
 				current.id = trim(line.substr(1, line.size() - 2));
 				continue;
 			}
 
-			// clave = valor
 			auto pos = line.find('=');
 			if(pos != std::string::npos)
 			{
 				std::string key   = trim(line.substr(0, pos));
 				std::string value = trim(line.substr(pos + 1));
 
-				if(key == "label")
-					current.label = value;
-				else if(key == "type")
-					current.type = value;
-				else if(key == "path")
-					current.path = value;
-				else if(key == "apply_to" || key == "applyTo")
-					current.applyTo = value;
-				else if(key == "values")
-					parseValues(value, current.values);
-				else if(key == "default")
-					current.defaultValue = value;
+				if(key == "label") current.label = value;
+				else if(key == "type") current.type = value;
+				else if(key == "path") current.path = value;
+				else if(key == "apply_to" || key == "applyTo") current.applyTo = value;
+				else if(key == "values") parseValues(value, current.values);
+				else if(key == "default") current.defaultValue = value;
 			}
 		}
 
-		// Última sección del archivo
 		pushIfValid(current);
-
 		return options;
 	}
 
-	// Actualiza/crea una línea "key = value" en la parte superior de theme.ini
-	// (antes de la primera sección [ ... ]).
 	void updateThemeIniValue(const std::string& iniPath, const std::string& key, const std::string& value)
 	{
 		std::ifstream in(iniPath.c_str());
@@ -178,14 +151,12 @@ namespace
 					}
 				}
 			}
-
 			lines.push_back(line);
 		}
 		in.close();
 
 		if(!updated)
 		{
-			// Insertar nueva línea antes de la primera sección
 			size_t insertPos = lines.size();
 			for(size_t i = 0; i < lines.size(); ++i)
 			{
@@ -202,20 +173,15 @@ namespace
 		std::ofstream out(iniPath.c_str(), std::ios::trunc);
 		if(!out)
 			return;
-
 		for(const auto& l : lines)
 			out << l << "\n";
 	}
 
-	// Aplica una opción de tema.
-	// - Si es applyTo="layout" (o id=="layout"), guarda en Settings::ThemeLayout.
-	// - Para el resto, escribe key = value en la parte superior de theme.ini.
 	void applyThemeOption(const std::string& themeDir, const ThemeOption& opt, const std::string& value)
 	{
 		if(opt.id.empty() || value.empty())
 			return;
 
-		// Opción especial: cambia el layout del theme
 		if(opt.applyTo == "layout" || opt.id == "layout")
 		{
 			Settings::getInstance()->setString("ThemeLayout", value);
@@ -230,12 +196,10 @@ namespace
 		auto vc = ViewController::get();
 		if(vc != nullptr)
 		{
-			// Recargar todo para que se vuelvan a aplicar themes/variables
 			vc->reloadAll();
 		}
 	}
 
-	// Pequeña GUI para seleccionar entre N valores de una opción de theme.ini
 	class GuiThemeOptionSelect : public GuiComponent
 	{
 	public:
@@ -243,23 +207,24 @@ namespace
 		                     const std::string& themeDir,
 		                     const ThemeOption& opt,
 		                     const std::string& title)
-			: GuiComponent(window)
-			, mMenu(window, title.c_str())
-			, mThemeDir(themeDir)
-			, mOption(opt)
+			: GuiComponent(window), mMenu(window, title.c_str()),
+			  mThemeDir(themeDir), mOption(opt)
 		{
 			for(const auto& v : mOption.values)
 			{
 				ComponentListRow row;
-				row.addElement(
-					std::make_shared<TextComponent>(
-						mWindow,
-						v.second,
-						Font::get(FONT_SIZE_MEDIUM),
-						0xCCCCCCFF),
-					true);
 
-				// Al elegir un valor se aplica la opción, se recarga el tema y se cierra esta GUI
+				auto text = std::make_shared<TextComponent>(
+					mWindow,
+					v.second,
+					Font::get(FONT_SIZE_MEDIUM),
+					0x000000FF   // texto negro
+				);
+
+				text->setColor(0x000000FF);         // negro normal
+
+				row.addElement(text, true);
+
 				row.makeAcceptInputHandler([this, v]()
 				{
 					applyThemeOption(mThemeDir, mOption, v.first);
@@ -270,6 +235,11 @@ namespace
 			}
 
 			addChild(&mMenu);
+
+			setSize((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
+			mMenu.setPosition(
+				(mSize.x() - mMenu.getSize().x()) / 2.0f,
+				Renderer::getScreenHeight() * 0.15f);
 		}
 
 		bool input(InputConfig* config, Input input) override
@@ -307,13 +277,12 @@ namespace
 		std::string   mThemeDir;
 		ThemeOption   mOption;
 	};
-} // namespace anónimo
+}
 
 GuiThemeOptions::GuiThemeOptions(Window* window)
 	: GuiComponent(window),
 	  mMenu(window, _("THEME OPTIONS").c_str())
 {
-	// ThemeSet actual
 	std::string themeSet = Settings::getInstance()->getString("ThemeSet");
 	std::string themeDir;
 
@@ -324,7 +293,6 @@ GuiThemeOptions::GuiThemeOptions(Window* window)
 
 	if(options.empty())
 	{
-		// Si no hay opciones en theme.ini
 		ComponentListRow row;
 		row.addElement(
 			std::make_shared<TextComponent>(
@@ -337,38 +305,32 @@ GuiThemeOptions::GuiThemeOptions(Window* window)
 	}
 	else
 	{
-		// Crear una entrada por cada sección de opciones del theme.ini
 		for(const auto& opt : options)
 		{
-			std::string entryLabel = !opt.label.empty()
-				? opt.label
-				: opt.id;
+			std::string entryLabel = !opt.label.empty() ? opt.label : opt.id;
 
 			ComponentListRow row;
-			row.addElement(
-				std::make_shared<TextComponent>(
-					mWindow,
-					entryLabel,
-					Font::get(FONT_SIZE_MEDIUM),
-					0xCCCCCCFF),
-				true);
 
-			// Handler cuando se selecciona una opción del theme.ini
+			auto text = std::make_shared<TextComponent>(
+				mWindow,
+				entryLabel,
+				Font::get(FONT_SIZE_MEDIUM),
+				0x000000FF   // negro
+			);
+			text->setColor(0x000000FF);
+
+			row.addElement(text, true);
+
 			row.makeAcceptInputHandler([this, themeDir, opt, entryLabel]
 			{
 				if(opt.type == "select" && !opt.values.empty())
 				{
-					// Nuevo submenú con todas las opciones (1, 2, 3, las que haya)
 					mWindow->pushGui(
 						new GuiThemeOptionSelect(
-							mWindow,
-							themeDir,
-							opt,
-							entryLabel));
+							mWindow, themeDir, opt, entryLabel));
 				}
 				else
 				{
-					// Tipos no soportados (por ahora)
 					std::string msg = entryLabel + "\n\n" + _("(Feature not yet implemented)");
 					mWindow->pushGui(new GuiMsgBox(mWindow, msg, _("BACK")));
 				}
@@ -379,6 +341,11 @@ GuiThemeOptions::GuiThemeOptions(Window* window)
 	}
 
 	addChild(&mMenu);
+
+	setSize((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
+	mMenu.setPosition(
+		(mSize.x() - mMenu.getSize().x()) / 2.0f,
+		Renderer::getScreenHeight() * 0.15f);
 }
 
 bool GuiThemeOptions::input(InputConfig* config, Input input)
@@ -404,11 +371,8 @@ std::vector<HelpPrompt> GuiThemeOptions::getHelpPrompts()
 HelpStyle GuiThemeOptions::getHelpStyle()
 {
 	HelpStyle style;
-
-	// Copiado del patrón de otros GUI:
 	auto system = ViewController::get()->getState().getSystem();
 	if(system)
 		style.applyTheme(system->getTheme(), "system");
-
 	return style;
 }
