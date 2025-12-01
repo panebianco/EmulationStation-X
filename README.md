@@ -23,9 +23,9 @@ It is a **sandbox for new ideas** — testing approaches to localization, UI fle
 |-----------|---------------|
 | <img width="450" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" /> | <img width="450" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" /> |
 
-| Popup View | Main Menu (Dark Mode) |
+| Popup View | Main Menu |
 |------------|-----------------------|
-| <img width="450" src="https://github.com/user-attachments/assets/ee725018-2b51-4ab1-98b9-0750e303d0e7" /> | <img width="450" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" /> |
+| <img width="450" src="https://github.com/user-attachments/assets/ee725018-2b51-4ab1-98b9-0750e303d0e7" />
 
 ---
 
