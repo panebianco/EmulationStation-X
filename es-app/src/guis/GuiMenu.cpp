@@ -9,6 +9,7 @@
 #include "guis/GuiMsgBox.h"
 #include "guis/GuiScraperStart.h"
 #include "guis/GuiSettings.h"
+#include "guis/GuiThemeOptions.h"
 #include "views/UIModeController.h"
 #include "views/ViewController.h"
 #include "CollectionSystemManager.h"
@@ -20,6 +21,7 @@
 #include <algorithm>
 #include <cstdlib> // system()
 
+#include "PowerSaver.h"
 #include "platform.h"
 #include "FileSorts.h"
 #include "views/gamelist/IGameListView.h"
@@ -29,7 +31,6 @@
 #include "utils/StringUtil.h"
 #include "resources/Font.h"
 #include "ThemeData.h"
-
 #include "LocaleES.h"
 
 // Helper local para traducciones .ini
@@ -41,7 +42,10 @@ namespace
 	}
 }
 
-GuiMenu::GuiMenu(Window* window) : GuiComponent(window), mMenu(window, "MAIN MENU"), mVersion(window)
+GuiMenu::GuiMenu(Window* window)
+	: GuiComponent(window)
+	, mMenu(window, "MAIN MENU")
+	, mVersion(window)
 {
 	// Cargar idioma actual antes de crear las entradas
 	LocaleES::getInstance().loadFromSettings();
@@ -51,14 +55,17 @@ GuiMenu::GuiMenu(Window* window) : GuiComponent(window), mMenu(window, "MAIN MEN
 
 	bool isFullUI = UIModeController::getInstance()->isUIModeFull();
 
-	if (isFullUI) {
+	if (isFullUI)
+	{
 		addEntry(_("SCRAPER").c_str(), 0x777777FF, true, [this] { openScraperSettings(); });
 		addEntry(_("SOUND SETTINGS").c_str(), 0x777777FF, true, [this] { openSoundSettings(); });
 		addEntry(_("UI SETTINGS").c_str(), 0x777777FF, true, [this] { openUISettings(); });
 		addEntry(_("GAME COLLECTION SETTINGS").c_str(), 0x777777FF, true, [this] { openCollectionSystemSettings(); });
 		addEntry(_("OTHER SETTINGS").c_str(), 0x777777FF, true, [this] { openOtherSettings(); });
 		addEntry(_("CONFIGURE INPUT").c_str(), 0x777777FF, true, [this] { openConfigInput(); });
-	} else {
+	}
+	else
+	{
 		addEntry(_("SOUND SETTINGS").c_str(), 0x777777FF, true, [this] { openSoundSettings(); });
 	}
 
@@ -137,10 +144,10 @@ void GuiMenu::openSoundSettings()
 		audio_cards.push_back("hw");
 		audio_cards.push_back("plughw");
 		audio_cards.push_back("null");
-		if (Settings::getInstance()->getString("AudioCard") != "") {
-			if (std::find(audio_cards.begin(), audio_cards.end(), Settings::getInstance()->getString("AudioCard")) == audio_cards.end()) {
+		if (Settings::getInstance()->getString("AudioCard") != "")
+		{
+			if (std::find(audio_cards.begin(), audio_cards.end(), Settings::getInstance()->getString("AudioCard")) == audio_cards.end())
 				audio_cards.push_back(Settings::getInstance()->getString("AudioCard"));
-			}
 		}
 		for (auto ac = audio_cards.cbegin(); ac != audio_cards.cend(); ac++)
 			audio_card->add(*ac, *ac, Settings::getInstance()->getString("AudioCard") == *ac);
@@ -161,10 +168,10 @@ void GuiMenu::openSoundSettings()
 		transitions.push_back("Master");
 		transitions.push_back("Digital");
 		transitions.push_back("Analogue");
-		if (Settings::getInstance()->getString("AudioDevice") != "") {
-			if (std::find(transitions.begin(), transitions.end(), Settings::getInstance()->getString("AudioDevice")) == transitions.end()) {
+		if (Settings::getInstance()->getString("AudioDevice") != "")
+		{
+			if (std::find(transitions.begin(), transitions.end(), Settings::getInstance()->getString("AudioDevice")) == transitions.end())
 				transitions.push_back(Settings::getInstance()->getString("AudioDevice"));
-			}
 		}
 		for (auto it = transitions.cbegin(); it != transitions.cend(); it++)
 			vol_dev->add(*it, *it, Settings::getInstance()->getString("AudioDevice") == *it);
@@ -208,10 +215,10 @@ void GuiMenu::openSoundSettings()
 		omx_cards.push_back("alsa");
 		omx_cards.push_back("alsa:hw:0,0");
 		omx_cards.push_back("alsa:hw:1,0");
-		if (Settings::getInstance()->getString("OMXAudioDev") != "") {
-			if (std::find(omx_cards.begin(), omx_cards.end(), Settings::getInstance()->getString("OMXAudioDev")) == omx_cards.end()) {
+		if (Settings::getInstance()->getString("OMXAudioDev") != "")
+		{
+			if (std::find(omx_cards.begin(), omx_cards.end(), Settings::getInstance()->getString("OMXAudioDev")) == omx_cards.end())
 				omx_cards.push_back(Settings::getInstance()->getString("OMXAudioDev"));
-			}
 		}
 		for (auto it = omx_cards.cbegin(); it != omx_cards.cend(); it++)
 			omx_audio_dev->add(*it, *it, Settings::getInstance()->getString("OMXAudioDev") == *it);
@@ -339,7 +346,7 @@ void GuiMenu::openUISettings()
 		});
 	}
 
-	// NUEVO: Theme Options (ejecuta script del tema si existe)
+	// NUEVO: Theme Options (abre GUI interna)
 	{
 		ComponentListRow theme_row;
 		theme_row.elements.clear();
@@ -514,7 +521,8 @@ void GuiMenu::openOtherSettings()
 		power_saver->add(*it, *it, Settings::getInstance()->getString("PowerSaverMode") == *it);
 	s->addWithLabel(_("POWER SAVER MODES").c_str(), power_saver);
 	s->addSaveFunc([this, power_saver] {
-		if (Settings::getInstance()->getString("PowerSaverMode") != "instant" && power_saver->getSelected() == "instant") {
+		if (Settings::getInstance()->getString("PowerSaverMode") != "instant" && power_saver->getSelected() == "instant")
+		{
 			Settings::getInstance()->setString("TransitionStyle", "instant");
 			Settings::getInstance()->setBool("MoveCarousel", false);
 			Settings::getInstance()->setBool("EnableSounds", false);
@@ -617,16 +625,20 @@ void GuiMenu::openQuitMenu()
 	{
 		auto static restart_es_fx = []() {
 			Scripting::fireEvent("quit");
-			if (quitES(QuitMode::RESTART)) {
+			if (quitES(QuitMode::RESTART))
+			{
 				LOG(LogWarning) << "Restart terminated with non-zero result!";
 			}
 		};
 
-		if (confirm_quit) {
+		if (confirm_quit)
+		{
 			row.makeAcceptInputHandler([window] {
 				window->pushGui(new GuiMsgBox(window, _("REALLY RESTART?"), _("YES").c_str(), restart_es_fx, _("NO").c_str(), nullptr));
 			});
-		} else {
+		}
+		else
+		{
 			row.makeAcceptInputHandler(restart_es_fx);
 		}
 		row.addElement(std::make_shared<TextComponent>(window, _("RESTART EMULATIONSTATION"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
@@ -640,11 +652,14 @@ void GuiMenu::openQuitMenu()
 			};
 
 			row.elements.clear();
-			if (confirm_quit) {
+			if (confirm_quit)
+			{
 				row.makeAcceptInputHandler([window] {
 					window->pushGui(new GuiMsgBox(window, _("REALLY QUIT?"), _("YES").c_str(), quit_es_fx, _("NO").c_str(), nullptr));
 				});
-			} else {
+			}
+			else
+			{
 				row.makeAcceptInputHandler(quit_es_fx);
 			}
 			row.addElement(std::make_shared<TextComponent>(window, _("QUIT EMULATIONSTATION"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
@@ -655,17 +670,21 @@ void GuiMenu::openQuitMenu()
 	auto static reboot_sys_fx = [] {
 		Scripting::fireEvent("quit", "reboot");
 		Scripting::fireEvent("reboot");
-		if (quitES(QuitMode::REBOOT)) {
+		if (quitES(QuitMode::REBOOT))
+		{
 			LOG(LogWarning) << "Restart terminated with non-zero result!";
 		}
 	};
 
 	row.elements.clear();
-	if (confirm_quit) {
+	if (confirm_quit)
+	{
 		row.makeAcceptInputHandler([window] {
 			window->pushGui(new GuiMsgBox(window, _("REALLY RESTART?"), _("YES").c_str(), { reboot_sys_fx }, _("NO").c_str(), nullptr));
 		});
-	} else {
+	}
+	else
+	{
 		row.makeAcceptInputHandler(reboot_sys_fx);
 	}
 	row.addElement(std::make_shared<TextComponent>(window, _("RESTART SYSTEM"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
@@ -674,17 +693,21 @@ void GuiMenu::openQuitMenu()
 	auto static shutdown_sys_fx = [] {
 		Scripting::fireEvent("quit", "shutdown");
 		Scripting::fireEvent("shutdown");
-		if (quitES(QuitMode::SHUTDOWN)) {
+		if (quitES(QuitMode::SHUTDOWN))
+		{
 			LOG(LogWarning) << "Shutdown terminated with non-zero result!";
 		}
 	};
 
 	row.elements.clear();
-	if (confirm_quit) {
+	if (confirm_quit)
+	{
 		row.makeAcceptInputHandler([window] {
 			window->pushGui(new GuiMsgBox(window, _("REALLY SHUTDOWN?"), _("YES").c_str(), shutdown_sys_fx, _("NO").c_str(), nullptr));
 		});
-	} else {
+	}
+	else
+	{
 		row.makeAcceptInputHandler(shutdown_sys_fx);
 	}
 	row.addElement(std::make_shared<TextComponent>(window, _("SHUTDOWN SYSTEM"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
@@ -714,64 +737,10 @@ void GuiMenu::openCollectionSystemSettings()
 	mWindow->pushGui(new GuiCollectionSystemsOptions(mWindow));
 }
 
-// NUEVO: lógica para ejecutar el script de opciones del tema
+// NUEVO: lógica para abrir la GUI de opciones de tema
 void GuiMenu::openThemeOptions()
 {
-	// Nombre del set de temas actual
-	std::string themeSet = Settings::getInstance()->getString("ThemeSet");
-	if (themeSet.empty())
-	{
-		mWindow->pushGui(new GuiMsgBox(mWindow, _("No theme set selected."), _("OK").c_str(), nullptr));
-		return;
-	}
-
-	// Ruta base del tema (home/.emulationstation/themes/ThemeSet)
-	std::string themeDir = Utils::FileSystem::getHomePath() + "/.emulationstation/themes/" + themeSet;
-
-	// Candidatos de script
-	std::string scriptPath;
-
-	std::string scriptThemeOptions = themeDir + "/theme-options.sh";
-	if (Utils::FileSystem::isRegularFile(scriptThemeOptions))
-	{
-		scriptPath = scriptThemeOptions;
-	}
-	else
-	{
-		// Compatibilidad con tu script actual
-		std::string scriptPiStation = themeDir + "/PiStation_menu.sh";
-		if (Utils::FileSystem::isRegularFile(scriptPiStation))
-			scriptPath = scriptPiStation;
-	}
-
-	// Si no hay script, mostrar mensaje genérico
-	if (scriptPath.empty())
-	{
-		mWindow->pushGui(new GuiMsgBox(
-			mWindow,
-			_("THEME-SPECIFIC OPTIONS CAN BE ADDED HERE."),
-			_("BACK").c_str(),
-			nullptr));
-		return;
-	}
-
-	// Ejecutar el script
-	std::string cmd = "\"" + scriptPath + "\"";
-	int exitCode = system(cmd.c_str());
-
-	// Si falla, mostrar mensaje
-	if (exitCode != 0)
-	{
-		std::string msg = _("There was a problem while running the theme options script.");
-		msg += "\n\n";
-		msg += scriptPath;
-		mWindow->pushGui(new GuiMsgBox(mWindow, msg, _("OK").c_str(), nullptr));
-	}
-	else
-	{
-		// Si el script cambió algo del tema (theme.ini, avatar, etc.), recargar
-		ViewController::get()->reloadAll(true);
-	}
+	mWindow->pushGui(new GuiThemeOptions(mWindow));
 }
 
 void GuiMenu::onSizeChanged()

@@ -14,6 +14,9 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SystemScreenSaver.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CollectionSystemManager.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LocaleES.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ThemeOptions.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.h
+
 
     # GuiComponents
     ${CMAKE_CURRENT_SOURCE_DIR}/src/components/AsyncReqComponent.h
@@ -75,6 +78,10 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/SystemScreenSaver.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/CollectionSystemManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LocaleES.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ThemeOptions.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.h
+
 
     # GuiComponents
     ${CMAKE_CURRENT_SOURCE_DIR}/src/components/AsyncReqComponent.cpp

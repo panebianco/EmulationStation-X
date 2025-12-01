@@ -2,6 +2,7 @@
 
 #include "components/ImageComponent.h"
 #include "components/TextComponent.h"
+#include "resources/ResourceManager.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
 #include "Log.h"
@@ -9,11 +10,16 @@
 #include "Settings.h"
 #include <pugixml.hpp>
 #include <algorithm>
-#include <fstream>   // ← NUEVO: para leer theme.ini
+#include <fstream>
+#include <cstring>
 
+// Vistas soportadas
 std::vector<std::string> ThemeData::sSupportedViews { { "system" }, { "basic" }, { "detailed" }, { "grid" }, { "video" } };
+
+// Features soportados
 std::vector<std::string> ThemeData::sSupportedFeatures { { "video" }, { "carousel" }, { "z-index" }, { "visible" } };
 
+// Mapa de elementos y propiedades
 std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> ThemeData::sElementMap {
 	{ "image", {
 		{ "pos", RESOLUTION_PAIR },
@@ -187,8 +193,10 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 #define MINIMUM_THEME_FORMAT_VERSION 3
 #define CURRENT_THEME_FORMAT_VERSION 6
 
-// helper
-unsigned int getHexColor(const char* str)
+// ------------------------------------------------------
+// helper: conversión de color "RRGGBB" o "RRGGBBAA" a int
+// ------------------------------------------------------
+static unsigned int getHexColor(const char* str)
 {
 	ThemeException error;
 	if(!str)
@@ -211,20 +219,28 @@ unsigned int getHexColor(const char* str)
 
 // ─────────────────────────────────────────────
 // NUEVO: carga de variables externas desde theme.ini
+//        con soporte de secciones y layouts
 // ─────────────────────────────────────────────
 namespace
 {
 	void loadExternalThemeVariables(const std::string& themeXmlPath,
 	                                std::map<std::string, std::string>& outVars)
 	{
-		// Carpeta del theme.xml
-		const std::string xmlDir   = Utils::FileSystem::getParent(themeXmlPath);
-		const std::string themeDir = Utils::FileSystem::getParent(xmlDir);
+		// Layout activo elegido por el usuario (ej: "smd", "layout_smd", etc.)
+		const std::string activeLayoutSetting = Settings::getInstance()->getString("ThemeLayout");
+		const bool hasActiveLayout = !activeLayoutSetting.empty();
+		const std::string activeLower = Utils::String::toLower(activeLayoutSetting);
 
-		// Rutas candidatas: primero en la carpeta del sistema, después en la raíz del theme
+		// Carpeta del theme.xml y sus padres
+		const std::string xmlDir   = Utils::FileSystem::getParent(themeXmlPath);
+		const std::string parent1  = Utils::FileSystem::getParent(xmlDir);
+		const std::string parent2  = Utils::FileSystem::getParent(parent1);
+
+		// Rutas candidatas para theme.ini
 		std::vector<std::string> candidates;
 		candidates.push_back(xmlDir   + "/theme.ini");
-		candidates.push_back(themeDir + "/theme.ini");
+		candidates.push_back(parent1  + "/theme.ini");
+		candidates.push_back(parent2  + "/theme.ini");
 
 		for(const auto& cfgPath : candidates)
 		{
@@ -241,6 +257,11 @@ namespace
 			LOG(LogInfo) << "ThemeData: loading variables from " << cfgPath;
 
 			std::string line;
+			std::string currentSection; // "", "global", "layout_smd", etc.
+
+			// Si NO hay ThemeLayout definido, usaremos SOLO la primera sección "layout_..."
+			bool layoutAlreadyChosen = false;
+
 			while(std::getline(file, line))
 			{
 				line = Utils::String::trim(line);
@@ -249,6 +270,14 @@ namespace
 				if(line.empty() || line[0] == '#' || line[0] == ';')
 					continue;
 
+				// Sección INI: [nombre]
+				if(line.front() == '[' && line.back() == ']' && line.size() >= 2)
+				{
+					currentSection = Utils::String::trim(line.substr(1, line.size() - 2));
+					continue;
+				}
+
+				// Clave = valor
 				auto eqPos = line.find('=');
 				if(eqPos == std::string::npos)
 					continue;
@@ -256,8 +285,73 @@ namespace
 				std::string key   = Utils::String::trim(line.substr(0, eqPos));
 				std::string value = Utils::String::trim(line.substr(eqPos + 1));
 
-				if(!key.empty())
-					outVars[key] = value; // sobreescribe si ya existe
+				if(key.empty())
+					continue;
+
+				// ¿Aplicamos esta línea?
+				// - sin sección              -> siempre
+				// - [global] / [default]     -> siempre
+				// - [layout_xyz] con layout  -> si coincide con ThemeLayout (flexible)
+				// - [layout_xyz] sin layout  -> solo la PRIMER sección "layout_..." del archivo
+				bool isGlobalSection =
+					currentSection.empty()
+					|| Utils::String::toLower(currentSection) == "global"
+					|| Utils::String::toLower(currentSection) == "default";
+
+				bool matchesLayout = false;
+
+				if(!currentSection.empty())
+				{
+					std::string sectionLower = Utils::String::toLower(currentSection);
+
+					bool isLayoutSection =
+						sectionLower.size() >= 7 &&
+						sectionLower.substr(0, 7) == "layout_";
+
+					if(hasActiveLayout)
+					{
+						// Modo flexible:
+						// ThemeLayout = "smd"         con sección "[layout_smd]"
+						// ThemeLayout = "layout_smd"  con sección "[layout_smd]"
+						if(sectionLower == activeLower)
+						{
+							matchesLayout = true;
+						}
+						else if(isLayoutSection)
+						{
+							// sección "layout_xxx", layout "xxx"
+							std::string withoutPrefix = sectionLower.substr(7);
+							if(activeLower == withoutPrefix)
+								matchesLayout = true;
+							// sección "xxx", layout "layout_xxx"
+							if(!matchesLayout && activeLower.size() > 7 &&
+							   activeLower.substr(0,7) == "layout_" &&
+							   sectionLower == activeLower.substr(7))
+							{
+								matchesLayout = true;
+							}
+						}
+					}
+					else
+					{
+						// No hay ThemeLayout: tomamos SOLO la primera sección "layout_..."
+						bool isLayoutSectionNoSetting =
+							sectionLower.size() >= 7 &&
+							sectionLower.substr(0, 7) == "layout_";
+
+						if(isLayoutSectionNoSetting && !layoutAlreadyChosen)
+						{
+							matchesLayout = true;
+							layoutAlreadyChosen = true;
+						}
+					}
+				}
+
+				if(isGlobalSection || matchesLayout)
+				{
+					// sobreescribe si ya existe (layout por encima de global)
+					outVars[key] = value;
+				}
 			}
 
 			// Solo usamos el primer theme.ini encontrado
@@ -283,7 +377,13 @@ std::string ThemeData::resolvePlaceholders(const char* in)
 	std::string replace = inStr.substr(variableBegin + 2, variableEnd - (variableBegin + 2));
 	std::string suffix  = resolvePlaceholders(inStr.substr(variableEnd + 1).c_str());
 
-	return prefix + mVariables[replace] + suffix;
+	// Si la variable existe, la reemplazamos, si no, la dejamos en blanco
+	auto varIt = mVariables.find(replace);
+	std::string value;
+	if(varIt != mVariables.cend())
+		value = varIt->second;
+
+	return prefix + value + suffix;
 }
 
 ThemeData::ThemeData()
@@ -310,7 +410,7 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 	// Variables del sistema (nombre, shortName, etc.)
 	mVariables.insert(sysDataMap.cbegin(), sysDataMap.cend());
 
-	// NUEVO: variables externas desde theme.ini
+	// NUEVO: variables externas desde theme.ini (global + layout activo)
 	loadExternalThemeVariables(path, mVariables);
 
 	pugi::xml_document doc;
@@ -589,7 +689,7 @@ void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::str
 			if(!ResourceManager::getInstance()->fileExists(path))
 			{
 				std::stringstream ss;
-				ss << "  Warning " << error.msg; // "from theme yadda yadda, included file yadda yadda
+				ss << "  Warning " << error.msg;
 				ss << "could not find file \"" << node.text().get() << "\" ";
 				if(node.text().get() != path)
 					ss << "(which resolved to \"" << path << "\") ";
@@ -743,7 +843,10 @@ std::string ThemeData::getThemeFromCurrentSet(const std::string& system)
 		return "";
 	}
 
-	std::map<std::string, ThemeSet>::const_iterator set = themeSets.find(Settings::getInstance()->getString("ThemeSet"));
+	// usar siempre const_iterator para evitar el error de asignación
+	std::map<std::string, ThemeSet>::const_iterator set =
+		themeSets.find(Settings::getInstance()->getString("ThemeSet"));
+
 	if(set == themeSets.cend())
 	{
 		// currently selected theme set is missing, so just pick the first available set
