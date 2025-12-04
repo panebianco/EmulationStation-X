@@ -22,6 +22,20 @@ std::vector<SystemData*> SystemData::sSystemVector;
 std::vector<SystemData*> SystemData::sSystemVectorShuffled;
 std::ranlux48 SystemData::sURNG = std::ranlux48(std::random_device()());
 
+namespace
+{
+    // Trunca el nombre a maxLen caracteres, agregando "..." si hace falta
+    std::string truncateMostPlayedName(const std::string& name, size_t maxLen)
+    {
+        if (name.size() <= maxLen)
+            return name;
+
+        if (maxLen <= 3)
+            return name.substr(0, maxLen);
+
+        return name.substr(0, maxLen - 3) + "...";
+    }
+}
 
 SystemData::SystemData(const std::string& name, const std::string& fullName, SystemEnvironmentData* envData, const std::string& themeFolder, bool CollectionSystem) :
 	mName(name), mFullName(fullName), mEnvData(envData), mThemeFolder(themeFolder), mIsCollectionSystem(CollectionSystem), mIsGameSystem(true)
@@ -580,6 +594,77 @@ unsigned int SystemData::getDisplayedGameCount() const
 	return (unsigned int)mRootFolder->getFilesRecursive(GAME, true).size();
 }
 
+unsigned int SystemData::getFavoriteCount() const
+{
+	unsigned int fav = 0;
+
+	auto games = mRootFolder->getFilesRecursive(GAME, true);
+	for (auto game : games)
+	{
+		const std::string& favStr = game->metadata.get("favorite");
+		if (favStr == "true" || favStr == "1")
+			++fav;
+	}
+
+	return fav;
+}
+
+unsigned int SystemData::getMostPlayedCount() const
+{
+	unsigned int maxcount = 0;
+
+	auto games = mRootFolder->getFilesRecursive(GAME, true);
+	for (auto game : games)
+	{
+		int pc = game->metadata.getInt("playcount");
+		if (pc > (int)maxcount)
+			maxcount = (unsigned int)pc;
+	}
+
+	return maxcount;
+}
+
+std::string SystemData::getMostPlayedName() const
+{
+	std::string bestName;
+	int maxcount = -1;
+
+	auto games = mRootFolder->getFilesRecursive(GAME, true);
+	for (auto game : games)
+	{
+		int pc = game->metadata.getInt("playcount");
+		if (pc > maxcount)
+		{
+			maxcount = pc;
+
+			bestName = game->metadata.get("name");
+			if (bestName.empty())
+				bestName = Utils::FileSystem::getStem(game->getPath());
+		}
+	}
+
+	// Sin juegos o nadie jugado → mostramos "N/A"
+	if (maxcount <= 0 || bestName.empty())
+		return "N/A";
+
+	// Límite de 22 caracteres como acordamos
+	return truncateMostPlayedName(bestName, 22);
+}
+
+std::string SystemData::getMostPlayedFull() const
+{
+	std::string name = getMostPlayedName();
+
+	if (name == "N/A")
+		return "N/A";
+
+	unsigned int count = getMostPlayedCount();
+	if (count == 0)
+		return name;
+
+	return name + " (" + std::to_string(count) + ")";
+}
+
 void SystemData::loadTheme()
 {
 	mTheme = std::make_shared<ThemeData>();
@@ -593,12 +678,21 @@ void SystemData::loadTheme()
 	{
 		// build map with system variables for theme to use,
 		std::map<std::string, std::string> sysData;
-		sysData.insert(std::pair<std::string, std::string>("system.name", getName()));
-		sysData.insert(std::pair<std::string, std::string>("system.theme", getThemeFolder()));
-		sysData.insert(std::pair<std::string, std::string>("system.fullName", getFullName()));
+		sysData.insert(std::make_pair("system.name", getName()));
+		sysData.insert(std::make_pair("system.theme", getThemeFolder()));
+		sysData.insert(std::make_pair("system.fullName", getFullName()));
+
+		// Extras para temas (contadores y "más jugado")
+		sysData.insert(std::make_pair("system.gameCount", std::to_string(getGameCount())));
+		sysData.insert(std::make_pair("system.displayedGameCount", std::to_string(getDisplayedGameCount())));
+		sysData.insert(std::make_pair("system.favoriteCount", std::to_string(getFavoriteCount())));
+		sysData.insert(std::make_pair("system.mostPlayedCount", std::to_string(getMostPlayedCount())));
+		sysData.insert(std::make_pair("system.mostPlayedName", getMostPlayedName()));
+		sysData.insert(std::make_pair("system.mostPlayedFull", getMostPlayedFull()));
 
 		mTheme->loadFile(sysData, path);
-	} catch(ThemeException& e)
+	}
+	catch(ThemeException& e)
 	{
 		LOG(LogError) << e.what();
 		mTheme = std::make_shared<ThemeData>(); // reset to empty

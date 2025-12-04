@@ -263,7 +263,7 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 	float target = (float)mCursor;
 
 	// shortest way to target
-	float endPos = target; // directly
+	float endPos = target; // directamente
 	float dist   = abs(endPos - startPos);
 
 	if (abs(target + posMax - startPos) < dist)
@@ -271,7 +271,7 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 	if (abs(target - posMax - startPos) < dist)
 		endPos = target - posMax; // loop around the start (max - 1 -> -1)
 
-	// animate mSystemInfo's opacity (fade out, wait, fade back in)
+	// animar opacidad de mSystemInfo (fade out, espera, fade in)
 
 	cancelAnimation(1);
 	cancelAnimation(2);
@@ -292,7 +292,7 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 	// Localización
 	LocaleES& loc = LocaleES::getInstance();
 
-	// also change the text after we've fully faded out
+	// cambiar el texto después del fade out
 	setAnimation(
 		infoFadeOut,
 		0,
@@ -326,10 +326,10 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 		},
 		goFast ? 10 : 300);
 
-	// wait 600ms to fade in
+	// esperar para el fade in
 	setAnimation(infoFadeIn, goFast ? 0 : 2000, nullptr, false, 2);
 
-	// no need to animate transition, we're not going anywhere (probably mEntries.size() == 1)
+	// si no hay movimiento, no animar
 	if (endPos == mCamOffset && endPos == mExtrasCamOffset)
 		return;
 
