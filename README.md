@@ -1,22 +1,21 @@
 # EmulationStation-X (ES-X)
 <img width="1280" height="720" alt="LOGO" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" />
 
-**ES-X** is a personal and experimental fork of **EmulationStation**, focused on:
+**ES-X** is a personal and experimental fork of **EmulationStation**. It focuses on:
 
-🎨 Enhancing theme capabilities (alignment, spacing, zIndex behavior, carousel layout)  
-🌎 Adding runtime language localization using simple `.ini` files (no recompilation)  
-🧩 Exploring optional theme attributes inspired by ES-DE and Batocera  
-🔊 Experimental work toward sound hooks (not yet functional)  
+* 🎨 Extending theme capabilities (alignment, spacing, z-index behavior, carousel layout)
+* 🌎 Adding runtime language localization through `.ini` files (no recompilation required)
+* 🧩 Trying optional theme attributes inspired by ES-DE and Batocera
+* 🔊 Prototyping sound hooks (currently experimental)
 
-> ⚠️ ES-X does **not** include avatar systems, usernames, or profile management.  
-> Those features belong to custom themes (like Pi-Station-X), not to the ES-X core.
+> ⚠️ ES-X does **not** include avatar systems, usernames, or profile management. Those belong to custom themes (such as Pi-Station-X), not the ES-X core.
 
 ---
 
 ## 🎯 Purpose
 
-ES-X does **not** aim to replace EmulationStation.  
-It is a **sandbox for new ideas** — testing approaches to localization, UI flexibility, theme expressiveness, and user accessibility, while maintaining compatibility with **RetroPie**.
+ES-X does **not** aim to replace EmulationStation. It is a **sandbox for new ideas**—testing localization, UI flexibility, theme expressiveness, and user accessibility while maintaining compatibility with **RetroPie**.
+
 ## 🖼 Preview
 
 | Main Menu | Language Demo |
@@ -24,8 +23,8 @@ It is a **sandbox for new ideas** — testing approaches to localization, UI fle
 | <img width="450" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" /> | <img width="450" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" /> |
 
 | Popup View | Main Menu |
-|------------|-----------------------|
-| <img width="450" src="https://github.com/user-attachments/assets/ee725018-2b51-4ab1-98b9-0750e303d0e7" />
+|------------|-----------|
+| <img width="450" src="https://github.com/user-attachments/assets/ee725018-2b51-4ab1-98b9-0750e303d0e7" /> | <img width="450" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" /> |
 
 ---
 
@@ -46,11 +45,11 @@ It is a **sandbox for new ideas** — testing approaches to localization, UI fle
 
 ## 🗂️ Language System
 
-Languages are stored in:
+Languages are stored at:
 
+```
 ~/.emulationstation/lang/
-
-
+```
 
 Example `.ini` file:
 
@@ -60,29 +59,39 @@ MAIN MENU=MENÚ PRINCIPAL
 YES=SÍ
 BACK=VOLVER
 CANCEL=CANCELAR
-✔ No need to recompile
-✔ Anyone can edit or add new languages
+```
+
+✔ No need to recompile  
+✔ Anyone can edit or add new languages  
 ✔ Text is loaded dynamically at runtime
+
 ---
-🎨 Theme Extensions (Engine-Level)
+
+## 🎨 Theme Extensions (Engine-Level)
+
 Supported or partially tested theme tags:
 
-
+```
 <logoScale>1.1</logoScale>
 <scaledLogoSpacing>0.20</scaledLogoSpacing>
 <minLogoOpacity>0.25</minLogoOpacity>
+```
+
 Concept / planned (not active yet):
 
-
+```
 <centerLogoOffsetY>
 <zIndexOffset>
 <centerLogoPos>
-⚠️ Avatar, username, WiFi icon, or floating system information
-are theme-specific additions and not part of ES-X core.
+```
+
+⚠️ Avatar, username, WiFi icon, or floating system information are theme-specific additions and not part of the ES-X core.
+
 ---
 
-🚀 Build Instructions (Linux / Raspberry Pi / Orange Pi)
+## 🚀 Build Instructions (Linux / Raspberry Pi / Orange Pi)
 
+```
 sudo apt update
 sudo apt install cmake libsdl2-dev libboost-dev libfreeimage-dev \
 libfreetype6-dev libcurl4-openssl-dev libvlc-dev libvlccore-dev \
@@ -94,34 +103,48 @@ mkdir build && cd build
 cmake ..
 make -j4
 sudo make install
----
-📂 Suggested User Folder Structure
+```
 
+---
+
+## 📂 Suggested User Folder Structure
+
+```
 ~/.emulationstation/
  ├── lang/              # Language files (.ini)
  ├── themes/
- │   └── Pi-Station-X/   # Example theme using ES-X features
+ │   └── Pi-Station-X/  # Example theme using ES-X features
  │       ├── _inc/
  │       ├── sounds/
  │       ├── layout/
  │       └── ...
+```
+
 ---
-🛣️ Roadmap
-Priority	Feature
-🔄	Complete language coverage for all GUIs
-🧪	Experiment with theme flexibility (spacing, alignment)
-🚧	Build test branch for basic sound hooks
-📘	Document new theme attributes
-💭	Keep ES-X experimental — fork, not replacement
+
+## 🛣️ Roadmap
+
+Priority | Feature
+---------|--------
+🔄 | Complete language coverage for all GUIs
+🧪 | Experiment with theme flexibility (spacing, alignment)
+🚧 | Build test branch for basic sound hooks
+📘 | Document new theme attributes
+💭 | Keep ES-X experimental — fork, not replacement
+
 ---
-👤 Author
-Dino René Caballero Marquez — Renetrox
-Educator • RetroPie Enthusiast • Theme Developer
-Paraguay
+
+## 👤 Author
+
+Dino René Caballero Marquez — Renetrox  \
+Educator • RetroPie Enthusiast • Theme Developer  \
+Paraguay  \
 GitHub: @Renetrox
 
-📜 License
-Same license as original EmulationStation (MIT License).
-Experimental features may change, evolve, or be removed at any time.
+---
 
-"Accessibility means not just using it — but reading it, hearing it, and shaping it your way."
+## 📜 License
+
+Same license as the original EmulationStation (MIT License). Experimental features may change, evolve, or be removed at any time.
+
+> "Accessibility means not just using it — but reading it, hearing it, and shaping it your way."
