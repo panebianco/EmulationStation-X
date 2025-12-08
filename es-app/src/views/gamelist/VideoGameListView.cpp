@@ -12,6 +12,11 @@
 #endif
 #include "LocaleES.h" // ← NUEVO: soporte de idioma
 
+// --- NUEVO: soporte de sonido launch ---
+#include "Sound.h"
+#include "SystemData.h"
+// --- FIN NUEVO ---
+
 VideoGameListView::VideoGameListView(Window* window, FileData* root) :
 	BasicGameListView(window, root),
 	mDescContainer(window, DESCRIPTION_SCROLL_DELAY), mDescription(window),
@@ -332,6 +337,34 @@ void VideoGameListView::updateInfoPanel()
 
 void VideoGameListView::launch(FileData* game)
 {
+	// --- NUEVO: sonido de "launch" compatible con Batocera ---
+	if (game != nullptr)
+	{
+		SystemData* sys = game->getSystem();
+		if (sys != nullptr)
+		{
+			const std::shared_ptr<ThemeData>& theme = sys->getTheme();
+			if (theme)
+			{
+				// Prioridad: <feature supported="navigationsounds"><view name="all"><sound name="launch">
+				const ThemeData::ThemeElement* launchElem =
+					theme->getElement("all", "launch", "sound");
+
+				// Fallback opcional: por si alguien lo pone en la vista "system"
+				if (!launchElem)
+					launchElem = theme->getElement("system", "launch", "sound");
+
+				if (launchElem && launchElem->has("path"))
+				{
+					std::string path = launchElem->get<std::string>("path");
+					if (!path.empty())
+						Sound::get(path)->play();
+				}
+			}
+		}
+	}
+	// --- FIN NUEVO ---
+
 	float screenWidth = (float)Renderer::getScreenWidth();
 	float screenHeight = (float)Renderer::getScreenHeight();
 

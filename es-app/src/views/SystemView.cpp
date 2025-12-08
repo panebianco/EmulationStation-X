@@ -10,7 +10,8 @@
 #include "SystemData.h"
 #include "Window.h"
 #include "LocaleES.h"
-#include "Sound.h"   // necesario para Sound::get
+#include "Sound.h"           // necesario para Sound::get (scroll directo de <carousel>)
+#include "NavigationSounds.h" // NUEVO: helper central de sonidos
 
 // buffer values for scrolling velocity (left, stopped, right)
 const int logoBuffersLeft[]  = { -5, -2, -1 };
@@ -182,6 +183,36 @@ void SystemView::goToSystem(SystemData* system, bool animate)
 		finishAnimation(0);
 }
 
+// helper local para reproducir scroll de sistema
+inline void playSystemScrollSound(SystemData* sys,
+                                  const std::shared_ptr<Sound>& scrollFromCarousel)
+{
+	// 1) prioridad: sonido definido en <carousel scrollSound="...">
+	if (scrollFromCarousel)
+	{
+		scrollFromCarousel->play();
+		return;
+	}
+
+	if (!sys)
+		return;
+
+	const std::shared_ptr<ThemeData>& theme = sys->getTheme();
+	if (!theme)
+		return;
+
+	// 2) Intentar esquema tipo Batocera: "systembrowse" → scroll de carrusel
+	auto snd = NavigationSounds::getFromTheme(theme, "systembrowse");
+	if (!snd)
+	{
+		// 3) fallback genérico "scroll"
+		snd = NavigationSounds::getFromTheme(theme, "scroll");
+	}
+
+	if (snd)
+		snd->play();
+}
+
 bool SystemView::input(InputConfig* config, Input input)
 {
 	if(input.value != 0)
@@ -204,15 +235,15 @@ bool SystemView::input(InputConfig* config, Input input)
 			if(config->isMappedLike("up", input))
 			{
 				moved = listInput(-1);
-				if(moved && mScrollSnd)
-					mScrollSnd->play();
+				if (moved)
+					playSystemScrollSound(getSelected(), mScrollSnd);
 				return true;
 			}
 			if(config->isMappedLike("down", input))
 			{
 				moved = listInput(1);
-				if(moved && mScrollSnd)
-					mScrollSnd->play();
+				if (moved)
+					playSystemScrollSound(getSelected(), mScrollSnd);
 				return true;
 			}
 			break;
@@ -223,15 +254,15 @@ bool SystemView::input(InputConfig* config, Input input)
 			if(config->isMappedLike("left", input))
 			{
 				moved = listInput(-1);
-				if(moved && mScrollSnd)
-					mScrollSnd->play();
+				if (moved)
+					playSystemScrollSound(getSelected(), mScrollSnd);
 				return true;
 			}
 			if(config->isMappedLike("right", input))
 			{
 				moved = listInput(1);
-				if(moved && mScrollSnd)
-					mScrollSnd->play();
+				if (moved)
+					playSystemScrollSound(getSelected(), mScrollSnd);
 				return true;
 			}
 			break;
@@ -239,24 +270,30 @@ bool SystemView::input(InputConfig* config, Input input)
 
 		if(config->isMappedTo("a", input))
 		{
-			// --- NUEVO: sonido de "select" leído desde <sound name="selectSound"> ---
+			// --- SONIDO DE SELECT COMPATIBLE CON ESQUEMA BATOCERA ---
 			std::shared_ptr<Sound> selectSnd;
 
 			SystemData* sys = getSelected();
 			if(sys != nullptr)
 			{
 				const std::shared_ptr<ThemeData>& theme = sys->getTheme();
-				if(theme && theme->hasView("system"))
+				if (theme)
 				{
-					// buscamos un componente sound llamado "selectSound"
-					const ThemeData::ThemeElement* selectElem =
-						theme->getElement("system", "selectSound", "sound");
+					// 1) esquema nuevo: buscar "select" (navigationsounds)
+					selectSnd = NavigationSounds::getFromTheme(theme, "select");
 
-					if(selectElem && selectElem->has("path"))
+					// 2) fallback: comportamiento viejo, elemento "selectSound"
+					if (!selectSnd && theme->hasView("system"))
 					{
-						std::string path = selectElem->get<std::string>("path");
-						if(!path.empty())
-							selectSnd = Sound::get(path);
+						const ThemeData::ThemeElement* selectElem =
+							theme->getElement("system", "selectSound", "sound");
+
+						if(selectElem && selectElem->has("path"))
+						{
+							std::string path = selectElem->get<std::string>("path");
+							if(!path.empty())
+								selectSnd = Sound::get(path);
+						}
 					}
 				}
 			}
@@ -847,7 +884,7 @@ void SystemView::getDefaultElements(void)
 	mCarousel.minLogoOpacity    = 0.5f; // equivalente a 0x80 de antes
 	mCarousel.scaledLogoSpacing = 0.0f; // 0 = comportamiento clásico
 
-	// sonido por defecto: ninguno
+	// sonido por defecto: ninguno (se rellena desde <carousel scrollSound="..."> o NavigationSounds)
 	mScrollSnd.reset();
 
 	// System Info Bar

@@ -33,8 +33,9 @@
 #include "ThemeData.h"
 #include "LocaleES.h"
 
-// *** NUEVO SONIDO BACK ***
+// Navegación por sonido
 #include "Sound.h"
+#include "NavigationSounds.h"
 #include <memory>
 
 // Helper local para traducciones .ini y colores de menú
@@ -57,21 +58,28 @@ namespace
 		return Settings::getInstance()->getBool("MenuDark") ? 0xB0B0B0FF : 0x5E5E5EFF;
 	}
 
-	// *** NUEVO SONIDO BACK ***
-	// Usamos un shared_ptr estático en este .cpp para no tocar GuiMenu.h
-	std::shared_ptr<Sound> gMenuBackSound;
+	// === SONIDOS DE NAVEGACIÓN PARA MENÚ (BACK, ETC.) ===
+
+	inline std::shared_ptr<Sound> getNavSound(const std::string& logicalName)
+	{
+		auto vcState = ViewController::get()->getState();
+		SystemData* sys = vcState.getSystem();
+		if (!sys)
+			return nullptr;
+
+		const std::shared_ptr<ThemeData>& theme = sys->getTheme();
+		if (!theme)
+			return nullptr;
+
+		return NavigationSounds::getFromTheme(theme, logicalName);
+	}
 
 	inline void playMenuBackSound()
 	{
-		// Cargamos una sola vez
-		if (!gMenuBackSound)
-		{
-			gMenuBackSound = Sound::get(
-				"/home/Reneto/.emulationstation/themes/Pi-Station-X/_inc/audio/menu_back.wav");
-		}
-
-		if (gMenuBackSound)
-			gMenuBackSound->play();
+		// esquema tipo Batocera: "back"
+		auto snd = getNavSound("back");
+		if (snd)
+			snd->play();
 	}
 }
 
@@ -818,7 +826,7 @@ bool GuiMenu::input(InputConfig* config, Input input)
 
 	if ((config->isMappedTo("b", input) || config->isMappedTo("start", input)) && input.value != 0)
 	{
-		// *** NUEVO SONIDO BACK ***
+		// Sonido de BACK vía NavigationSounds ("back")
 		playMenuBackSound();
 
 		delete this;
