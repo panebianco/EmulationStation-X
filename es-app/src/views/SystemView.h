@@ -6,8 +6,9 @@
 #include "components/TextComponent.h"
 #include "resources/Font.h"
 #include "GuiComponent.h"
+#include "Sound.h"          // ← para std::shared_ptr<Sound>
 #include <memory>
-#include <string>  // <-- añadido para std::string
+#include <string>
 
 class AnimatedImageComponent;
 class SystemData;
@@ -94,7 +95,8 @@ private:
 	bool mShowing;
 
 	// NUEVO: sonido opcional al mover el carrusel
-	std::string mScrollSound;
+	// Se carga desde scrollSound del <carousel>.
+	std::shared_ptr<Sound> mScrollSnd;
 };
 
 #endif // ES_APP_VIEWS_SYSTEM_VIEW_H

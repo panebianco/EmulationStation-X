@@ -33,6 +33,10 @@
 #include "ThemeData.h"
 #include "LocaleES.h"
 
+// *** NUEVO SONIDO BACK ***
+#include "Sound.h"
+#include <memory>
+
 // Helper local para traducciones .ini y colores de menú
 namespace
 {
@@ -51,6 +55,23 @@ namespace
 	{
 		// Versión un poco más clara en modo oscuro
 		return Settings::getInstance()->getBool("MenuDark") ? 0xB0B0B0FF : 0x5E5E5EFF;
+	}
+
+	// *** NUEVO SONIDO BACK ***
+	// Usamos un shared_ptr estático en este .cpp para no tocar GuiMenu.h
+	std::shared_ptr<Sound> gMenuBackSound;
+
+	inline void playMenuBackSound()
+	{
+		// Cargamos una sola vez
+		if (!gMenuBackSound)
+		{
+			gMenuBackSound = Sound::get(
+				"/home/Reneto/.emulationstation/themes/Pi-Station-X/_inc/audio/menu_back.wav");
+		}
+
+		if (gMenuBackSound)
+			gMenuBackSound->play();
 	}
 }
 
@@ -227,6 +248,7 @@ void GuiMenu::openSoundSettings()
 		omx_cards.push_back("both");
 		omx_cards.push_back("alsa");
 		omx_cards.push_back("alsa:hw:0,0");
+		omx_cards.push_back("alsa:hw:1,0");
 		omx_cards.push_back("alsa:hw:1,0");
 		if (Settings::getInstance()->getString("OMXAudioDev") != "")
 		{
@@ -796,6 +818,9 @@ bool GuiMenu::input(InputConfig* config, Input input)
 
 	if ((config->isMappedTo("b", input) || config->isMappedTo("start", input)) && input.value != 0)
 	{
+		// *** NUEVO SONIDO BACK ***
+		playMenuBackSound();
+
 		delete this;
 		return true;
 	}

@@ -17,6 +17,7 @@
 #include "Settings.h"
 #include "SystemData.h"
 #include "Window.h"
+#include "Sound.h"
 
 ViewController* ViewController::sInstance = NULL;
 
@@ -94,6 +95,15 @@ void ViewController::goToSystemView(SystemData* system)
 	if (mCurrentView)
 	{
 		mCurrentView->onHide();
+	}
+
+	// 🔊 SONIDO DE BACK:
+	// Solo reproducir si venimos de una gamelist (volver al carrusel)
+	if (mState.viewing == GAME_LIST)
+	{
+		auto backSound = Sound::getFromTheme(system->getTheme(), "system", "backSound");
+		if (backSound)
+			backSound->play();
 	}
 
 	mState.viewing = SYSTEM_SELECT;
