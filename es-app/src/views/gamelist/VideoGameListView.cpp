@@ -77,7 +77,7 @@ VideoGameListView::VideoGameListView(Window* window, FileData* root) :
 	mMarquee.setPosition(2.0f, 2.0f);
 	mMarquee.setMaxSize(mSize.x(), mSize.y());
 	mMarquee.setDefaultZIndex(35);
-	mImage.setVisible(false);
+	mMarquee.setVisible(false); // ← FIX: antes estaba mImage.setVisible(false);
 	addChild(&mMarquee);
 
 	// --- LOCALIZACIÓN DE ETIQUETAS ---

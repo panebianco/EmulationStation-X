@@ -218,10 +218,10 @@ namespace
 					mWindow,
 					v.second,
 					Font::get(FONT_SIZE_MEDIUM),
-					0x000000FF   // texto negro
+					0x777777FF   // texto gris (como el resto de menús)
 				);
 
-				text->setColor(0x000000FF);         // negro normal
+				text->setColor(0x777777FF);
 
 				row.addElement(text, true);
 
@@ -315,9 +315,9 @@ GuiThemeOptions::GuiThemeOptions(Window* window)
 				mWindow,
 				entryLabel,
 				Font::get(FONT_SIZE_MEDIUM),
-				0x000000FF   // negro
+				0x777777FF   // gris
 			);
-			text->setColor(0x000000FF);
+			text->setColor(0x777777FF);
 
 			row.addElement(text, true);
 

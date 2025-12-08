@@ -33,12 +33,24 @@
 #include "ThemeData.h"
 #include "LocaleES.h"
 
-// Helper local para traducciones .ini
+// Helper local para traducciones .ini y colores de menú
 namespace
 {
 	inline std::string _(const std::string& key)
 	{
 		return LocaleES::getInstance().translate(key);
+	}
+
+	inline unsigned int getMenuTextColor()
+	{
+		// Si MenuDark = true → texto claro; si no → gris clásico
+		return Settings::getInstance()->getBool("MenuDark") ? 0xFFFFFFFF : 0x777777FF;
+	}
+
+	inline unsigned int getVersionTextColor()
+	{
+		// Versión un poco más clara en modo oscuro
+		return Settings::getInstance()->getBool("MenuDark") ? 0xB0B0B0FF : 0x5E5E5EFF;
 	}
 }
 
@@ -54,22 +66,23 @@ GuiMenu::GuiMenu(Window* window)
 	mMenu.setTitle(_("MAIN MENU").c_str(), Font::get(FONT_SIZE_LARGE));
 
 	bool isFullUI = UIModeController::getInstance()->isUIModeFull();
+	unsigned int menuColor = getMenuTextColor();
 
 	if (isFullUI)
 	{
-		addEntry(_("SCRAPER").c_str(), 0x777777FF, true, [this] { openScraperSettings(); });
-		addEntry(_("SOUND SETTINGS").c_str(), 0x777777FF, true, [this] { openSoundSettings(); });
-		addEntry(_("UI SETTINGS").c_str(), 0x777777FF, true, [this] { openUISettings(); });
-		addEntry(_("GAME COLLECTION SETTINGS").c_str(), 0x777777FF, true, [this] { openCollectionSystemSettings(); });
-		addEntry(_("OTHER SETTINGS").c_str(), 0x777777FF, true, [this] { openOtherSettings(); });
-		addEntry(_("CONFIGURE INPUT").c_str(), 0x777777FF, true, [this] { openConfigInput(); });
+		addEntry(_("SCRAPER").c_str(), menuColor, true, [this] { openScraperSettings(); });
+		addEntry(_("SOUND SETTINGS").c_str(), menuColor, true, [this] { openSoundSettings(); });
+		addEntry(_("UI SETTINGS").c_str(), menuColor, true, [this] { openUISettings(); });
+		addEntry(_("GAME COLLECTION SETTINGS").c_str(), menuColor, true, [this] { openCollectionSystemSettings(); });
+		addEntry(_("OTHER SETTINGS").c_str(), menuColor, true, [this] { openOtherSettings(); });
+		addEntry(_("CONFIGURE INPUT").c_str(), menuColor, true, [this] { openConfigInput(); });
 	}
 	else
 	{
-		addEntry(_("SOUND SETTINGS").c_str(), 0x777777FF, true, [this] { openSoundSettings(); });
+		addEntry(_("SOUND SETTINGS").c_str(), menuColor, true, [this] { openSoundSettings(); });
 	}
 
-	addEntry(_("QUIT").c_str(), 0x777777FF, true, [this] { openQuitMenu(); });
+	addEntry(_("QUIT").c_str(), menuColor, true, [this] { openQuitMenu(); });
 
 	addChild(&mMenu);
 	addVersionInfo();
@@ -111,7 +124,7 @@ void GuiMenu::openScraperSettings()
 	};
 	row.makeAcceptInputHandler(openAndSave);
 
-	auto scrape_now = std::make_shared<TextComponent>(mWindow, _("SCRAPE NOW"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF);
+	auto scrape_now = std::make_shared<TextComponent>(mWindow, _("SCRAPE NOW"), Font::get(FONT_SIZE_MEDIUM), getMenuTextColor());
 	auto bracket = makeArrow(mWindow);
 	row.addElement(scrape_now, true);
 	row.addElement(bracket, false);
@@ -265,7 +278,7 @@ void GuiMenu::openUISettings()
 	// screensaver
 	ComponentListRow screensaver_row;
 	screensaver_row.elements.clear();
-	screensaver_row.addElement(std::make_shared<TextComponent>(mWindow, _("SCREENSAVER SETTINGS"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
+	screensaver_row.addElement(std::make_shared<TextComponent>(mWindow, _("SCREENSAVER SETTINGS"), Font::get(FONT_SIZE_MEDIUM), getMenuTextColor()), true);
 	screensaver_row.addElement(makeArrow(mWindow), false);
 	screensaver_row.makeAcceptInputHandler(std::bind(&GuiMenu::openScreensaverOptions, this));
 	s->addRow(screensaver_row);
@@ -313,6 +326,16 @@ void GuiMenu::openUISettings()
 		Settings::getInstance()->setString("TransitionStyle", transition_style->getSelected());
 	});
 
+	// DARK MENU (modo oscuro para menús)
+	{
+		auto menu_dark = std::make_shared<SwitchComponent>(mWindow);
+		menu_dark->setState(Settings::getInstance()->getBool("MenuDark"));
+		s->addWithLabel(_("DARK MENU").c_str(), menu_dark);
+		s->addSaveFunc([menu_dark] {
+			Settings::getInstance()->setBool("MenuDark", menu_dark->getState());
+		});
+	}
+
 	// theme set
 	auto themeSets = ThemeData::getThemeSets();
 
@@ -350,7 +373,7 @@ void GuiMenu::openUISettings()
 	{
 		ComponentListRow theme_row;
 		theme_row.elements.clear();
-		theme_row.addElement(std::make_shared<TextComponent>(mWindow, _("THEME OPTIONS"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
+		theme_row.addElement(std::make_shared<TextComponent>(mWindow, _("THEME OPTIONS"), Font::get(FONT_SIZE_MEDIUM), getMenuTextColor()), true);
 		theme_row.addElement(makeArrow(mWindow), false);
 		theme_row.makeAcceptInputHandler(std::bind(&GuiMenu::openThemeOptions, this));
 		s->addRow(theme_row);
@@ -641,7 +664,7 @@ void GuiMenu::openQuitMenu()
 		{
 			row.makeAcceptInputHandler(restart_es_fx);
 		}
-		row.addElement(std::make_shared<TextComponent>(window, _("RESTART EMULATIONSTATION"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
+		row.addElement(std::make_shared<TextComponent>(window, _("RESTART EMULATIONSTATION"), Font::get(FONT_SIZE_MEDIUM), getMenuTextColor()), true);
 		s->addRow(row);
 
 		if (Settings::getInstance()->getBool("ShowExit"))
@@ -662,7 +685,7 @@ void GuiMenu::openQuitMenu()
 			{
 				row.makeAcceptInputHandler(quit_es_fx);
 			}
-			row.addElement(std::make_shared<TextComponent>(window, _("QUIT EMULATIONSTATION"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
+			row.addElement(std::make_shared<TextComponent>(window, _("QUIT EMULATIONSTATION"), Font::get(FONT_SIZE_MEDIUM), getMenuTextColor()), true);
 			s->addRow(row);
 		}
 	}
@@ -687,7 +710,7 @@ void GuiMenu::openQuitMenu()
 	{
 		row.makeAcceptInputHandler(reboot_sys_fx);
 	}
-	row.addElement(std::make_shared<TextComponent>(window, _("RESTART SYSTEM"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
+	row.addElement(std::make_shared<TextComponent>(window, _("RESTART SYSTEM"), Font::get(FONT_SIZE_MEDIUM), getMenuTextColor()), true);
 	s->addRow(row);
 
 	auto static shutdown_sys_fx = [] {
@@ -710,7 +733,7 @@ void GuiMenu::openQuitMenu()
 	{
 		row.makeAcceptInputHandler(shutdown_sys_fx);
 	}
-	row.addElement(std::make_shared<TextComponent>(window, _("SHUTDOWN SYSTEM"), Font::get(FONT_SIZE_MEDIUM), 0x777777FF), true);
+	row.addElement(std::make_shared<TextComponent>(window, _("SHUTDOWN SYSTEM"), Font::get(FONT_SIZE_MEDIUM), getMenuTextColor()), true);
 	s->addRow(row);
 
 	mWindow->pushGui(s);
@@ -721,7 +744,7 @@ void GuiMenu::addVersionInfo()
 	std::string  buildDate = (Settings::getInstance()->getBool("Debug") ? std::string("   (" + Utils::String::toUpper(PROGRAM_BUILT_STRING) + ")") : (""));
 
 	mVersion.setFont(Font::get(FONT_SIZE_SMALL));
-	mVersion.setColor(0x5E5E5EFF);
+	mVersion.setColor(getVersionTextColor());
 	mVersion.setText("EMULATIONSTATION V" + Utils::String::toUpper(PROGRAM_VERSION_STRING) + buildDate);
 	mVersion.setHorizontalAlignment(ALIGN_CENTER);
 	addChild(&mVersion);

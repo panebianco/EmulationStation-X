@@ -79,6 +79,9 @@ void Settings::setDefaults()
 	mBoolMap["QuickSystemSelect"] = true;
 	mBoolMap["MoveCarousel"] = true;
 
+	// Modo oscuro de menús (ES-X)
+	mBoolMap["MenuDark"] = false;
+
 	mBoolMap["ThreadedLoading"] = false;
 
 	mBoolMap["Debug"] = false;
@@ -187,6 +190,9 @@ void Settings::setDefaults()
 	//No spaces!  Order is important!
 	//"The A Squad" given [a,an,the] will sort as "A Squad", but given [the,a,an] will sort as "Squad"
 	mStringMap["LeadingArticles"] = "a,an,the";
+
+	// Idioma por defecto para LocaleES / GuiMenu
+	mStringMap["Language"] = "en";
 }
 
 template <typename K, typename V>
