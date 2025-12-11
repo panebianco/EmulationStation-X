@@ -1,36 +1,45 @@
 #pragma once
+#ifndef ES_APP_GUIS_GUI_MENU_H
+#define ES_APP_GUIS_GUI_MENU_H
 
 #include "GuiComponent.h"
 #include "components/MenuComponent.h"
 #include "components/TextComponent.h"
+#include "HelpStyle.h"
+#include "HelpPrompt.h"
 
 class GuiMenu : public GuiComponent
 {
 public:
-    GuiMenu(Window* window);
+	GuiMenu(Window* window);
+	virtual ~GuiMenu() {}
 
-    bool input(InputConfig* config, Input input) override;
-    void onSizeChanged() override;
-
-    HelpStyle getHelpStyle() override;
-    std::vector<HelpPrompt> getHelpPrompts() override;
+	bool input(InputConfig* config, Input input) override;
+	std::vector<HelpPrompt> getHelpPrompts() override;
+	HelpStyle getHelpStyle() override;
 
 private:
-    void openScraperSettings();
-    void openSoundSettings();
-    void openUISettings();
-    void openOtherSettings();
-    void openConfigInput();
-    void openQuitMenu();
-    void openScreensaverOptions();
-    void openCollectionSystemSettings();
+	MenuComponent mMenu;
+	TextComponent mVersion;
 
-    // NUEVO: menú para opciones del tema
-    void openThemeOptions();
+	// Bloques del menú principal
+	void openScraperSettings();
+	void openSoundSettings();
+	void openUISettings();
+	void openOtherSettings();
+	void openConfigInput();
+	void openQuitMenu();
+	void openCollectionSystemSettings();
+	void openScreensaverOptions();
 
-    void addEntry(const char* name, unsigned int color, bool add_arrow, const std::function<void()>& func);
-    void addVersionInfo();
+	// NUEVO: opciones de tema internas (GuiThemeOptions)
+	void openThemeOptions();
 
-    MenuComponent mMenu;
-    TextComponent mVersion;
+	// Helpers internos
+	void addEntry(const char* name, unsigned int color, bool add_arrow, const std::function<void()>& func);
+	void addVersionInfo();
+
+	void onSizeChanged() override;
 };
+
+#endif // ES_APP_GUIS_GUI_MENU_H

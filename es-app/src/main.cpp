@@ -31,6 +31,9 @@
 // NUEVO: sistema de localización ES-X
 #include "LocaleES.h"
 
+// NUEVO: música de fondo ES-X
+#include "audio/BackgroundMusicManager.h"
+
 bool scrape_cmdline = false;
 
 bool parseArgs(int argc, char* argv[])
@@ -415,6 +418,9 @@ int main(int argc, char* argv[])
 
 	InputManager::getInstance()->init();
 
+	// 🔊 NUEVO: inicializar música de fondo ES-X (si está habilitada)
+	BackgroundMusicManager::getInstance().init();
+
 	//choose which GUI to open depending on if an input configuration already exists
 	if(errorMsg == NULL)
 	{
@@ -487,6 +493,10 @@ int main(int argc, char* argv[])
 		delete window.peekGui();
 
 	InputManager::getInstance()->deinit();
+
+	// 🔊 NUEVO: apagar música antes de cerrar ventana / audio
+	BackgroundMusicManager::getInstance().shutdown();
+
 	window.deinit();
 
 	MameNames::deinit();

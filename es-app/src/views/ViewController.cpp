@@ -19,6 +19,9 @@
 #include "Window.h"
 #include "Sound.h"
 
+// 🔊 NUEVO: música de fondo ES-X
+#include "audio/BackgroundMusicManager.h"
+
 ViewController* ViewController::sInstance = NULL;
 
 ViewController* ViewController::get()
@@ -284,6 +287,9 @@ void ViewController::launch(FileData* game, Vector3f center)
 	mWindow->stopInfoPopup(); // make sure we disable any existing info popup
 	mLockInput = true;
 
+	// 🔊 NUEVO: avisar que se lanza un juego (detener música de fondo)
+	BackgroundMusicManager::getInstance().onGameLaunched();
+
 	std::string transition_style = Settings::getInstance()->getString("TransitionStyle");
 	if(transition_style == "fade")
 	{
@@ -294,6 +300,10 @@ void ViewController::launch(FileData* game, Vector3f center)
 		setAnimation(new LambdaAnimation(fadeFunc, 800), 0, [this, game, fadeFunc]
 		{
 			game->launchGame(mWindow);
+
+			// 🔊 NUEVO: al volver del juego → reanudar música si corresponde
+			BackgroundMusicManager::getInstance().onGameEnded();
+
 			setAnimation(new LambdaAnimation(fadeFunc, 800), 0, [this, game] { mLockInput = false; }, true);
 			this->onFileChanged(game, FILE_METADATA_CHANGED);
 			if (mCurrentView) {
@@ -306,6 +316,10 @@ void ViewController::launch(FileData* game, Vector3f center)
 		setAnimation(new LaunchAnimation(mCamera, mFadeOpacity, center, 1500), 0, [this, origCamera, center, game]
 		{
 			game->launchGame(mWindow);
+
+			// 🔊 NUEVO: al volver del juego
+			BackgroundMusicManager::getInstance().onGameEnded();
+
 			mCamera = origCamera;
 			setAnimation(new LaunchAnimation(mCamera, mFadeOpacity, center, 600), 0, [this, game] { mLockInput = false; }, true);
 			this->onFileChanged(game, FILE_METADATA_CHANGED);
@@ -318,6 +332,10 @@ void ViewController::launch(FileData* game, Vector3f center)
 		setAnimation(new LaunchAnimation(mCamera, mFadeOpacity, center, 10), 0, [this, origCamera, center, game]
 		{
 			game->launchGame(mWindow);
+
+			// 🔊 NUEVO: al volver del juego
+			BackgroundMusicManager::getInstance().onGameEnded();
+
 			mCamera = origCamera;
 			setAnimation(new LaunchAnimation(mCamera, mFadeOpacity, center, 10), 0, [this, game] { mLockInput = false; }, true);
 			this->onFileChanged(game, FILE_METADATA_CHANGED);

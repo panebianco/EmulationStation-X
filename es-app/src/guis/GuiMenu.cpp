@@ -38,6 +38,9 @@
 #include "NavigationSounds.h"
 #include <memory>
 
+// Música de fondo ES-X (gestor central)
+#include "audio/BackgroundMusicManager.h"
+
 // Helper local para traducciones .ini y colores de menú
 namespace
 {
@@ -176,6 +179,16 @@ void GuiMenu::openSoundSettings()
 
 	if (UIModeController::getInstance()->isUIModeFull())
 	{
+		// 🎵 MÚSICA DE FONDO (ES-X) – usa BackgroundMusicManager
+		{
+			auto bgm_switch = std::make_shared<SwitchComponent>(mWindow);
+			bgm_switch->setState(Settings::getInstance()->getBool("EnableBGM"));
+			s->addWithLabel(_("BACKGROUND MUSIC").c_str(), bgm_switch);
+			s->addSaveFunc([bgm_switch] {
+				BackgroundMusicManager::getInstance().setEnabled(bgm_switch->getState());
+			});
+		}
+
 #if defined(__linux__)
 		// audio card
 		auto audio_card = std::make_shared< OptionListComponent<std::string> >(mWindow, _("AUDIO CARD").c_str(), false);
@@ -399,7 +412,7 @@ void GuiMenu::openUISettings()
 		});
 	}
 
-	// NUEVO: Theme Options (abre GUI interna)
+	// THEME OPTIONS (GUI interna de ES-X)
 	{
 		ComponentListRow theme_row;
 		theme_row.elements.clear();
