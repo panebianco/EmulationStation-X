@@ -179,13 +179,19 @@ void GuiMenu::openSoundSettings()
 
 	if (UIModeController::getInstance()->isUIModeFull())
 	{
-		// 🎵 MÚSICA DE FONDO (ES-X) – usa BackgroundMusicManager
+		// 🎵 MÚSICA DE FONDO (ES-X) – usar estado REAL del BackgroundMusicManager
 		{
 			auto bgm_switch = std::make_shared<SwitchComponent>(mWindow);
-			bgm_switch->setState(Settings::getInstance()->getBool("EnableBGM"));
+
+			// Estado inicial: lo que dice el manager (no Settings suelto)
+			bgm_switch->setState(BackgroundMusicManager::getInstance().isEnabled());
+
 			s->addWithLabel(_("BACKGROUND MUSIC").c_str(), bgm_switch);
 			s->addSaveFunc([bgm_switch] {
 				BackgroundMusicManager::getInstance().setEnabled(bgm_switch->getState());
+
+				// (Opcional) mantener compatibilidad con una key vieja si la usaste antes:
+				Settings::getInstance()->setBool("EnableBGM", bgm_switch->getState());
 			});
 		}
 
