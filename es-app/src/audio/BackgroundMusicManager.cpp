@@ -6,6 +6,7 @@
 #include "utils/StringUtil.h"
 
 #include <SDL.h>
+#include <SDL_mixer.h>
 
 // =============================
 //  Singleton
@@ -29,11 +30,11 @@ BackgroundMusicManager::BackgroundMusicManager()
     : mInitialized(false)
     , mEnabled(true)      // por defecto ON, luego se lee de Settings
     , mGameRunning(false)
-    , mWasPlayingBeforeGame(false)
     , mCurrentIndex(-1)
     , mCurrentMusic(nullptr)
 {
-    // Estado inicial según Settings
+    // Estado inicial según Settings (si la clave no existe,
+    // normalmente será false hasta que se guarde algo)
     mEnabled = Settings::getInstance()->getBool("BackgroundMusic");
 }
 
@@ -112,7 +113,7 @@ void BackgroundMusicManager::setEnabled(bool enabled)
     LOG(LogInfo) << "BackgroundMusicManager - setEnabled("
                  << (enabled ? "true" : "false") << ")";
 
-    // Si todavía no está inicializado, lo hacemos ahora si se habilita
+    // Si se habilita y aún no está inicializado → inicializar
     if (!mInitialized)
     {
         if (mEnabled)
@@ -120,10 +121,9 @@ void BackgroundMusicManager::setEnabled(bool enabled)
         return;
     }
 
-    // Si se desactiva → fade out y no recordamos estado previo
+    // Si se desactiva → fade out y listo
     if (!mEnabled)
     {
-        mWasPlayingBeforeGame = false;
         stopMusicInternal(true);
         return;
     }
@@ -146,43 +146,35 @@ void BackgroundMusicManager::onGameLaunched()
         return;
 
     mGameRunning = true;
-
-    // Recordamos si había música sonando antes del juego
-    mWasPlayingBeforeGame = (Mix_PlayingMusic() != 0);
-
-    LOG(LogInfo) << "BackgroundMusicManager - onGameLaunched() → deteniendo música "
-                 << (mWasPlayingBeforeGame ? "(estaba sonando)" : "(no había música)");
-
-    // Detenemos con fade
+    LOG(LogInfo) << "BackgroundMusicManager - onGameLaunched() → deteniendo música";
     stopMusicInternal(true);
 }
 
 void BackgroundMusicManager::onGameEnded()
 {
-    if (!mInitialized)
-        return;
-
-    mGameRunning = false;
+    // Ojo: al volver del juego, ES suele re-crear la ventana/SDL.
+    // Para evitar quedar colgados a un dispositivo de audio viejo,
+    // cerramos SDL_mixer y lo reabrimos limpio.
 
     LOG(LogInfo) << "BackgroundMusicManager - onGameEnded()";
 
-    // Si el usuario apagó la música desde el menú, no hacemos nada
+    mGameRunning = false;
+
     if (!mEnabled)
-        return;
-
-    // Si antes del juego no había música, tampoco reanudamos
-    if (!mWasPlayingBeforeGame)
-        return;
-
-    // Nos aseguramos de tener playlist
-    if (mPlaylist.empty())
-        buildPlaylist();
-
-    if (!mPlaylist.empty())
     {
-        LOG(LogInfo) << "BackgroundMusicManager - onGameEnded() → reanudando música";
-        playCurrent();
+        LOG(LogInfo) << "BackgroundMusicManager - Música deshabilitada, no reanudamos.";
+        return;
     }
+
+    // Si veníamos inicializados, cerramos y reabrimos para sincronizarnos con SDL.
+    if (mInitialized)
+        shutdown();
+
+    // init() vuelve a:
+    //  - abrir Mix_OpenAudio
+    //  - reconstruir playlist
+    //  - y, si BackgroundMusic está ON y hay pistas, llama a playCurrent()
+    init();
 }
 
 // =============================
@@ -236,6 +228,7 @@ bool BackgroundMusicManager::isValidAudioFile(const std::string& path) const
     const std::string ext = Utils::String::toLower(
         Utils::FileSystem::getExtension(path));
 
+    // Podés ampliar esta lista si querés otros formatos
     if (ext == ".mp3" || ext == ".ogg" || ext == ".flac" ||
         ext == ".wav" || ext == ".mod")
         return true;
@@ -333,7 +326,7 @@ void BackgroundMusicManager::musicFinishedCallbackStatic()
 
 void BackgroundMusicManager::musicFinishedCallback()
 {
-    // Si hay juego corriendo, no avanzar playlist
+    // Si hay juego corriendo, no reanudar ni cambiar tema
     if (mGameRunning)
         return;
 
