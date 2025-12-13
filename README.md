@@ -109,7 +109,7 @@ Stable base, advanced behaviors still evolving. Audio is intentionally kept simp
 
 ES-X uses git submodules (e.g. pugixml).
 
-When building manually, the repository must be cloned recursively.
+When building manually, clone the repository recursively (or update submodules before configuring) so dependencies such as pugixml are available to CMake.
 
 ## 🚀 Installation
 
@@ -127,9 +127,9 @@ For RetroPie users, use the official module:
 
 ```
 sudo apt update
-sudo apt install cmake libsdl2-dev libboost-dev libfreeimage-dev \
-libfreetype6-dev libcurl4-openssl-dev libvlc-dev libvlccore-dev \
-libasound2-dev
+sudo apt install build-essential cmake libsdl2-dev libsdl2-mixer-dev \
+libboost-dev libfreeimage-dev libfreetype6-dev libcurl4-openssl-dev \
+libvlc-dev libvlccore-dev libasound2-dev
 
 git clone --recursive https://github.com/Renetrox/EmulationStation-X.git
 cd EmulationStation-X
