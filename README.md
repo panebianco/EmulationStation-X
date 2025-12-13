@@ -1,20 +1,29 @@
 # EmulationStation-X (ES-X)
 <img width="1280" height="720" alt="LOGO" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" />
 
-**ES-X** is a personal and experimental fork of **EmulationStation**. It focuses on:
+ES-X is a personal fork of EmulationStation focused on extending the theming engine, accessibility, and UI flexibility, while remaining compatible with RetroPie and inspired by modern frontends like ES-DE and Batocera.
 
-* 🎨 Extending theme capabilities (alignment, spacing, z-index behavior, carousel layout)
-* 🌎 Adding runtime language localization through `.ini` files (no recompilation required)
-* 🧩 Trying optional theme attributes inspired by ES-DE and Batocera
-* 🔊 Prototyping sound hooks (currently experimental)
-
-> ⚠️ ES-X does **not** include avatar systems, usernames, or profile management. Those belong to custom themes (such as Pi-Station-X), not the ES-X core.
-
----
+ES-X is experimental as a project, not unstable as a platform. Core features are usable today, while new capabilities continue to evolve.
 
 ## 🎯 Purpose
 
-ES-X does **not** aim to replace EmulationStation. It is a **sandbox for new ideas**—testing localization, UI flexibility, theme expressiveness, and user accessibility while maintaining compatibility with **RetroPie**.
+ES-X does not aim to replace EmulationStation. It exists as a sandbox for innovation:
+
+- Improving theme expressiveness
+- Adding runtime localization
+- Giving creators more control without breaking compatibility
+- Exploring modern UI/audio ideas in a controlled way
+
+## ✨ Highlights
+
+- 🌍 Runtime language system (.ini, no recompilation)
+- 🎨 Advanced theme variables (logo spacing, scale, opacity)
+- 🖌️ Text borders & shadows (engine-level)
+- 🎶 Background music & navigation sounds (menu-controlled)
+- 🌙 Dark menu support
+- 🔊 Sound tags compatible with ES-DE / Batocera (partial)
+- 🧩 Theme options driven by variables
+- 🛠️ Designed for theme creators first
 
 ## 🖼 Preview
 
@@ -22,36 +31,31 @@ ES-X does **not** aim to replace EmulationStation. It is a **sandbox for new ide
 |-----------|---------------|
 | <img width="450" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" /> | <img width="450" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" /> |
 
-| Popup View | Main Menu |
-|------------|-----------|
-| <img width="450" src="https://github.com/user-attachments/assets/ee725018-2b51-4ab1-98b9-0750e303d0e7" /> | <img width="450" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" /> |
-
----
-
-## 🔑 Current Features
+## 🔑 Current Feature Status
 
 | Feature | Status |
 |---------|--------|
-| `.ini` language system (runtime) | ✔ Implemented |
-| Translation in main menus, popups, scraper start | ✔ Implemented |
-| Extendable to other GUI components | 🔄 In progress |
-| Theme enhancements (logoScale, scaledLogoSpacing, minLogoOpacity) | ✔ Working |
-| Text color and shadow improvements | ✔ Working / experimental |
-| Proposed tags for theme flexibility (`centerLogoOffsetY`, `zIndexOffset`) | 🧪 Design / planned |
-| Sound engine hooks | 🚧 Very early / not functional |
-| Username, avatar, dynamic profile | ✖ Not part of ES-X (theme only) |
+| .ini language system (runtime) | ✅ Stable |
+| Translation in menus, popups, scraper | ✅ Stable |
+| Theme variables (logoScale, spacing, opacity) | ✅ Available |
+| Text borders & shadow support | ✅ Available |
+| Variable-driven theme options | ✅ Available |
+| Dark menu mode | ✅ Available |
+| Background music (SDL_mixer) | 🟡 Available / evolving |
+| Menu sounds (scroll, select, back) | 🟡 Available / evolving |
+| ES-DE / Batocera sound tags | 🟡 Partially supported |
+| Advanced audio mixing / ducking | 🔄 In progress |
+| User profiles / avatars | ❌ Not part of ES-X |
 
----
+## 🌍 Language System (Runtime)
 
-## 🗂️ Language System
-
-Languages are stored at:
+Languages are stored in:
 
 ```
 ~/.emulationstation/lang/
 ```
 
-Example `.ini` file:
+Example .ini:
 
 ```ini
 [MAIN]
@@ -61,35 +65,62 @@ BACK=VOLVER
 CANCEL=CANCELAR
 ```
 
-✔ No need to recompile  
-✔ Anyone can edit or add new languages  
-✔ Text is loaded dynamically at runtime
+✔ No recompilation  
+✔ Editable by users  
+✔ Loaded dynamically at runtime
 
----
+## 🎨 Theme Engine Extensions
 
-## 🎨 Theme Extensions (Engine-Level)
-
-Supported or partially tested theme tags:
+**Supported / Available**
 
 ```
 <logoScale>1.1</logoScale>
 <scaledLogoSpacing>0.20</scaledLogoSpacing>
 <minLogoOpacity>0.25</minLogoOpacity>
+
+<textBorderColor>#000000</textBorderColor>
+<textShadowColor>#000000</textShadowColor>
+<textShadowOffset>2 2</textShadowOffset>
 ```
 
-Concept / planned (not active yet):
+These extensions are engine-level, not hacks, and are designed to remain compatible with existing themes.
+
+**Planned / Proposed**
 
 ```
 <centerLogoOffsetY>
-<zIndexOffset>
 <centerLogoPos>
+<zIndexOffset>
 ```
 
-⚠️ Avatar, username, WiFi icon, or floating system information are theme-specific additions and not part of the ES-X core.
+## 🔊 Audio & Music System
 
----
+- SDL_mixer-based background music
+- Music control directly from the menu
+- Navigation sounds (scroll / select / back)
+- Sound tag structure inspired by Batocera / ES-DE
 
-## 🚀 Build Instructions (Linux / Raspberry Pi / Orange Pi)
+Stable base, advanced behaviors still evolving. Audio is intentionally kept simple and robust before adding complexity.
+
+## 🧩 Installation Notes (Important)
+
+ES-X uses git submodules (e.g. pugixml).
+
+When building manually, the repository must be cloned recursively.
+
+## 🚀 Installation
+
+### ✅ Option A — Recommended (RetroPie)
+
+For RetroPie users, use the official module:
+
+- https://github.com/Renetrox/EmulationStation-X-Module-for-retropie
+
+✔ Handles dependencies  
+✔ Correct build flags  
+✔ Clean RetroPie integration
+
+### ⚙️ Option B — Manual Build (Advanced)
 
 ```
 sudo apt update
@@ -97,7 +128,7 @@ sudo apt install cmake libsdl2-dev libboost-dev libfreeimage-dev \
 libfreetype6-dev libcurl4-openssl-dev libvlc-dev libvlccore-dev \
 libasound2-dev
 
-git clone https://github.com/Renetrox/EmulationStation-X.git
+git clone --recursive https://github.com/Renetrox/EmulationStation-X.git
 cd EmulationStation-X
 mkdir build && cd build
 cmake ..
@@ -105,46 +136,44 @@ make -j4
 sudo make install
 ```
 
----
+If already cloned without submodules:
 
-## 📂 Suggested User Folder Structure
+```
+git submodule update --init --recursive
+```
+
+## 📂 Suggested Folder Structure
 
 ```
 ~/.emulationstation/
- ├── lang/              # Language files (.ini)
+ ├── lang/
  ├── themes/
- │   └── Pi-Station-X/  # Example theme using ES-X features
+ │   └── Pi-Station-X/
  │       ├── _inc/
  │       ├── sounds/
  │       ├── layout/
  │       └── ...
 ```
 
----
+## 🧭 Roadmap
 
-## 🛣️ Roadmap
-
-Priority | Feature
----------|--------
-🔄 | Complete language coverage for all GUIs
-🧪 | Experiment with theme flexibility (spacing, alignment)
-🚧 | Build test branch for basic sound hooks
-📘 | Document new theme attributes
-💭 | Keep ES-X experimental — fork, not replacement
-
----
+| Priority | Focus |
+|----------|-------|
+| 🔄 | Full language coverage |
+| 🎨 | More theme-driven layout control |
+| 🔊 | Audio refinement & mixing |
+| 📘 | Theme creator documentation |
+| 🧪 | Careful experimentation without breaking stability |
 
 ## 👤 Author
 
-Dino René Caballero Marquez — Renetrox  \
-Educator • RetroPie Enthusiast • Theme Developer  \
-Paraguay  \
+Dino René Caballero Márquez (Renetrox)  
+Educator • RetroPie Enthusiast • Theme Developer  
+Paraguay  
 GitHub: @Renetrox
-
----
 
 ## 📜 License
 
-Same license as the original EmulationStation (MIT License). Experimental features may change, evolve, or be removed at any time.
+Same license as the original EmulationStation (MIT).
 
-> "Accessibility means not just using it — but reading it, hearing it, and shaping it your way."
+> Accessibility means not just using it — but reading it, hearing it, and shaping it your way.
