@@ -27,9 +27,12 @@ ES-X does not aim to replace EmulationStation. It exists as a sandbox for innova
 
 ## 🖼 Preview
 
-| Main Menu | Language Demo |
+| Theme Options | Language Demo |
 |-----------|---------------|
-| <img width="450" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" /> | <img width="450" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" /> |
+| <img width="450" height="768" alt="Captura de pantalla_2025-12-01_12-11-25" src="https://github.com/user-attachments/assets/7de22896-7b6b-43fb-910e-700d56ddb11d" />
+| <img width="450" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" /> |<img width="1366" height="768" alt="Captura de pantalla_2025-12-01_12-24-53" src="https://github.com/user-attachments/assets/f4912b70-b738-46d7-8767-1d36995bdb6c" /><img width="1366" height="768" alt="Captura de pantalla_2025-12-05_07-08-05" src="https://github.com/user-attachments/assets/4d9add99-955b-4b05-9b1f-37597fda2f1b" />
+
+
 
 ## 🔑 Current Feature Status
 
