@@ -10,42 +10,21 @@ typedef struct _Mix_Music Mix_Music;
 class BackgroundMusicManager
 {
 public:
-    // =============================
-    // Singleton
-    // =============================
     static BackgroundMusicManager& getInstance();
 
-    // =============================
-    // Ciclo de vida
-    // =============================
     void init();
     void shutdown();
 
-    // =============================
-    // Enable / Disable (GuiMenu)
-    // =============================
     void setEnabled(bool enabled);
-    bool isEnabled() const { return mEnabled; }   // ✅ NECESARIO para GuiMenu.cpp
+    bool isEnabled() const { return mEnabled; }
 
-    // =============================
-    // Hooks del flujo de juegos
-    // =============================
     void onGameLaunched();
     void onGameEnded();
 
-    // =============================
-    // Loop principal (delay seguro)
-    // =============================
     void update(int deltaTimeMs);
 
-    // =============================
-    // Control manual
-    // =============================
     void playNext();
 
-    // =============================
-    // Popup helpers
-    // =============================
     bool songNameChanged();
     void resetSongNameChangedFlag();
     std::string getCurrentSongDisplayName() const;
@@ -54,81 +33,54 @@ private:
     BackgroundMusicManager();
     ~BackgroundMusicManager();
 
-    // =============================
-    // Mixer open / close
-    // =============================
     bool openMixer();
     void closeMixer();
 
-    // =============================
-    // Playlist
-    // =============================
+    // ✅ nuevo: reabrir audio “limpio” (estilo antiguo shutdown()+init())
+    bool reopenMixer();
+
     void buildPlaylist();
     void buildPlaylistFromPath(const std::string& path);
     bool isValidAudioFile(const std::string& path) const;
 
-    // =============================
-    // Shuffle inteligente
-    // =============================
     void addLastPlayed(const std::string& song);
     bool wasPlayedRecently(const std::string& song) const;
     int pickNextIndex();
 
-    // =============================
-    // Playback interno
-    // =============================
     void playCurrent();
     void stopMusicInternal(bool fadeOut);
 
-    // =============================
-    // Now playing
-    // =============================
     void setNowPlaying(const std::string& fullPath);
 
-    // =============================
-    // Callback SDL_mixer
-    // =============================
     static void musicFinishedCallbackStatic();
     void musicFinishedCallback();
 
 private:
-    // =============================
-    // Singleton
-    // =============================
     static BackgroundMusicManager* sInstance;
 
-    // =============================
-    // Estado
-    // =============================
     bool mInitialized;
     bool mEnabled;
     bool mGameRunning;
     bool mMixerOpenedByUs;
 
-    // =============================
-    // Playlist
-    // =============================
     std::vector<std::string> mPlaylist;
     std::deque<std::string>  mLastPlayed;
     int mCurrentIndex;
 
-    // =============================
-    // SDL_mixer
-    // =============================
     Mix_Music* mCurrentMusic;
 
-    // =============================
-    // Popup
-    // =============================
     std::string mNowPlayingText;
     bool mSongNameChanged;
 
-    // =============================
-    // ✅ FIX CRÍTICO
-    // Reanudar música con delay al volver del juego
-    // =============================
+    // Delay al volver del juego
     bool mPendingResume;
-    int  mResumeDelayMs;   // ej: 600–900 ms
+    int  mResumeDelayMs;
     int  mResumeTimerMs;
     int  mPendingIndex;
+
+    // ✅ pedir “reopen audio” al volver (como el antiguo)
+    bool mPendingReopenOnResume;
+
+    // Next track desde callback (main thread)
+    bool mPendingNextFromCallback;
 };

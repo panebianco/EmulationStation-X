@@ -38,11 +38,12 @@ BackgroundMusicManager::BackgroundMusicManager()
     , mCurrentMusic(nullptr)
     , mNowPlayingText("")
     , mSongNameChanged(false)
-    // ✅ delay resume
     , mPendingResume(false)
-    , mResumeDelayMs(600)   // recomendado: 600ms (si hace falta, subimos a 900)
+    , mResumeDelayMs(600)
     , mResumeTimerMs(0)
     , mPendingIndex(-1)
+    , mPendingReopenOnResume(false)
+    , mPendingNextFromCallback(false)
 {
     mEnabled = Settings::getInstance()->getBool("BackgroundMusic");
 }
@@ -53,7 +54,7 @@ BackgroundMusicManager::~BackgroundMusicManager()
 }
 
 // =============================
-//  Public popup helpers
+//  Popup helpers
 // =============================
 
 bool BackgroundMusicManager::songNameChanged()
@@ -73,18 +74,16 @@ std::string BackgroundMusicManager::getCurrentSongDisplayName() const
 
 void BackgroundMusicManager::setNowPlaying(const std::string& fullPath)
 {
-    // Mostramos nombre amigable: stem del archivo (sin extensión)
     std::string stem = Utils::FileSystem::getStem(fullPath);
     if (stem.empty())
         stem = fullPath;
 
-    // Texto final tipo Batocera
     mNowPlayingText = std::string("🎵 Now playing: ") + stem;
     mSongNameChanged = true;
 }
 
 // =============================
-//  Mixer open/close
+//  Mixer open/close/reopen
 // =============================
 
 bool BackgroundMusicManager::openMixer()
@@ -112,10 +111,11 @@ void BackgroundMusicManager::closeMixer()
     if (!mMixerOpenedByUs)
         return;
 
-    // cancelar cualquier resume pendiente
     mPendingResume = false;
     mResumeTimerMs = 0;
     mPendingIndex  = -1;
+    mPendingReopenOnResume = false;
+    mPendingNextFromCallback = false;
 
     stopMusicInternal(false);
     Mix_HookMusicFinished(nullptr);
@@ -124,6 +124,23 @@ void BackgroundMusicManager::closeMixer()
 
     mMixerOpenedByUs = false;
     LOG(LogInfo) << "BGM - Mixer CLOSED";
+}
+
+// ✅ Reopen estilo “antiguo”: cerrar y reabrir audio para sincronizar al volver del juego
+bool BackgroundMusicManager::reopenMixer()
+{
+    if (mMixerOpenedByUs)
+    {
+        // cerrar sin limpiar playlist/estado general
+        stopMusicInternal(false);
+        Mix_HookMusicFinished(nullptr);
+        Mix_HaltMusic();
+        Mix_CloseAudio();
+        mMixerOpenedByUs = false;
+        LOG(LogInfo) << "BGM - Mixer REOPEN (close)";
+    }
+
+    return openMixer();
 }
 
 // =============================
@@ -176,13 +193,13 @@ void BackgroundMusicManager::setEnabled(bool enabled)
 
     if (!mEnabled)
     {
-        // cancelar cualquier resume pendiente
         mPendingResume = false;
         mResumeTimerMs = 0;
         mPendingIndex  = -1;
+        mPendingReopenOnResume = false;
+        mPendingNextFromCallback = false;
 
         stopMusicInternal(true);
-        closeMixer();
         return;
     }
 
@@ -203,7 +220,7 @@ void BackgroundMusicManager::setEnabled(bool enabled)
 }
 
 // =============================
-//  Game hooks
+//  Game hooks (estilo antiguo)
 // =============================
 
 void BackgroundMusicManager::onGameLaunched()
@@ -213,12 +230,15 @@ void BackgroundMusicManager::onGameLaunched()
 
     mGameRunning = true;
 
-    // ✅ al lanzar juego: cancelar pending y cerrar mixer (tu comportamiento estable)
     mPendingResume = false;
     mResumeTimerMs = 0;
     mPendingIndex  = -1;
+    mPendingNextFromCallback = false;
 
-    closeMixer();
+    // ✅ CLAVE: NO cerramos el mixer (como tu código antiguo)
+    // Solo paramos la música (fade)
+    LOG(LogInfo) << "BGM - onGameLaunched() -> stop music (no close mixer)";
+    stopMusicInternal(true);
 }
 
 void BackgroundMusicManager::onGameEnded()
@@ -228,11 +248,10 @@ void BackgroundMusicManager::onGameEnded()
     if (!mEnabled || !mInitialized)
         return;
 
-    // ✅ FIX: NO abrir mixer ni reproducir acá.
-    // Solo calculamos el próximo índice y programamos un “respiro”.
+    // Programar reanudo con delay
     if (!mPlaylist.empty())
     {
-        mPendingIndex = pickNextIndex(); // shuffle a otra pista
+        mPendingIndex = pickNextIndex();
         LOG(LogInfo) << "BGM - onGameEnded(): pending next (shuffle) index=" << mPendingIndex;
     }
     else
@@ -240,13 +259,16 @@ void BackgroundMusicManager::onGameEnded()
         mPendingIndex = -1;
     }
 
+    // ✅ Al volver del juego, reabrimos audio limpio (como antiguo shutdown()+init())
+    mPendingReopenOnResume = true;
+
     mPendingResume = true;
     mResumeTimerMs = mResumeDelayMs;
     LOG(LogInfo) << "BGM - onGameEnded(): pending resume in " << mResumeDelayMs << "ms";
 }
 
 // =============================
-//  Update (loop principal)
+//  Update (main thread)
 // =============================
 
 void BackgroundMusicManager::update(int deltaTimeMs)
@@ -254,15 +276,23 @@ void BackgroundMusicManager::update(int deltaTimeMs)
     if (!mInitialized)
         return;
 
+    // Next track desde callback (main thread)
+    if (mPendingNextFromCallback)
+    {
+        mPendingNextFromCallback = false;
+        if (!mGameRunning && mEnabled)
+            playNext();
+    }
+
     if (!mPendingResume)
         return;
 
-    // Si por cualquier razón se relanza juego o se deshabilita música:
     if (mGameRunning || !mEnabled)
     {
         mPendingResume = false;
         mResumeTimerMs = 0;
         mPendingIndex  = -1;
+        mPendingReopenOnResume = false;
         return;
     }
 
@@ -280,11 +310,19 @@ void BackgroundMusicManager::update(int deltaTimeMs)
     if (mPlaylist.empty())
         return;
 
-    // Abrir mixer ahora (ya pasó el “respiro”)
-    if (!openMixer())
-        return;
+    // ✅ Reopen limpio del audio justo antes de reproducir
+    if (mPendingReopenOnResume)
+    {
+        mPendingReopenOnResume = false;
+        if (!reopenMixer())
+            return;
+    }
+    else
+    {
+        if (!openMixer())
+            return;
+    }
 
-    // Usar el índice pre-calculado si es válido
     if (mPendingIndex >= 0 && mPendingIndex < (int)mPlaylist.size())
         mCurrentIndex = mPendingIndex;
     else
@@ -368,7 +406,7 @@ int BackgroundMusicManager::pickNextIndex()
     do {
         idx = dist(rng);
         tries++;
-    } while (tries < 20 && wasPlayedRecently(mPlaylist[idx]));
+    } while (tries < 20 && wasPlayedRecently(mLastPlayed.empty() ? "" : mPlaylist[idx]));
 
     return idx;
 }
@@ -407,8 +445,6 @@ void BackgroundMusicManager::playCurrent()
     }
 
     LOG(LogInfo) << "BGM - Playing: " << song;
-
-    // 👇 acá “anunciamos” la canción para el popup
     setNowPlaying(song);
 
     Mix_PlayMusic(mCurrentMusic, 0);
@@ -456,5 +492,6 @@ void BackgroundMusicManager::musicFinishedCallback()
     if (mGameRunning || !mEnabled)
         return;
 
-    playNext();
+    // No tocar SDL_mixer acá (hilo audio). Pedir next al main thread.
+    mPendingNextFromCallback = true;
 }
