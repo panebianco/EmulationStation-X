@@ -38,6 +38,11 @@ BackgroundMusicManager::BackgroundMusicManager()
     , mCurrentMusic(nullptr)
     , mNowPlayingText("")
     , mSongNameChanged(false)
+    // ✅ delay resume
+    , mPendingResume(false)
+    , mResumeDelayMs(600)   // recomendado: 600ms (si hace falta, subimos a 900)
+    , mResumeTimerMs(0)
+    , mPendingIndex(-1)
 {
     mEnabled = Settings::getInstance()->getBool("BackgroundMusic");
 }
@@ -107,6 +112,11 @@ void BackgroundMusicManager::closeMixer()
     if (!mMixerOpenedByUs)
         return;
 
+    // cancelar cualquier resume pendiente
+    mPendingResume = false;
+    mResumeTimerMs = 0;
+    mPendingIndex  = -1;
+
     stopMusicInternal(false);
     Mix_HookMusicFinished(nullptr);
     Mix_HaltMusic();
@@ -166,6 +176,11 @@ void BackgroundMusicManager::setEnabled(bool enabled)
 
     if (!mEnabled)
     {
+        // cancelar cualquier resume pendiente
+        mPendingResume = false;
+        mResumeTimerMs = 0;
+        mPendingIndex  = -1;
+
         stopMusicInternal(true);
         closeMixer();
         return;
@@ -197,6 +212,12 @@ void BackgroundMusicManager::onGameLaunched()
         return;
 
     mGameRunning = true;
+
+    // ✅ al lanzar juego: cancelar pending y cerrar mixer (tu comportamiento estable)
+    mPendingResume = false;
+    mResumeTimerMs = 0;
+    mPendingIndex  = -1;
+
     closeMixer();
 }
 
@@ -207,16 +228,71 @@ void BackgroundMusicManager::onGameEnded()
     if (!mEnabled || !mInitialized)
         return;
 
+    // ✅ FIX: NO abrir mixer ni reproducir acá.
+    // Solo calculamos el próximo índice y programamos un “respiro”.
+    if (!mPlaylist.empty())
+    {
+        mPendingIndex = pickNextIndex(); // shuffle a otra pista
+        LOG(LogInfo) << "BGM - onGameEnded(): pending next (shuffle) index=" << mPendingIndex;
+    }
+    else
+    {
+        mPendingIndex = -1;
+    }
+
+    mPendingResume = true;
+    mResumeTimerMs = mResumeDelayMs;
+    LOG(LogInfo) << "BGM - onGameEnded(): pending resume in " << mResumeDelayMs << "ms";
+}
+
+// =============================
+//  Update (loop principal)
+// =============================
+
+void BackgroundMusicManager::update(int deltaTimeMs)
+{
+    if (!mInitialized)
+        return;
+
+    if (!mPendingResume)
+        return;
+
+    // Si por cualquier razón se relanza juego o se deshabilita música:
+    if (mGameRunning || !mEnabled)
+    {
+        mPendingResume = false;
+        mResumeTimerMs = 0;
+        mPendingIndex  = -1;
+        return;
+    }
+
+    mResumeTimerMs -= deltaTimeMs;
+    if (mResumeTimerMs > 0)
+        return;
+
+    // tiempo cumplido
+    mPendingResume = false;
+    mResumeTimerMs = 0;
+
+    if (mPlaylist.empty())
+        buildPlaylist();
+
+    if (mPlaylist.empty())
+        return;
+
+    // Abrir mixer ahora (ya pasó el “respiro”)
     if (!openMixer())
         return;
 
-    // al volver: shuffle a otra pista
-    if (!mPlaylist.empty())
-    {
+    // Usar el índice pre-calculado si es válido
+    if (mPendingIndex >= 0 && mPendingIndex < (int)mPlaylist.size())
+        mCurrentIndex = mPendingIndex;
+    else
         mCurrentIndex = pickNextIndex();
-        LOG(LogInfo) << "BGM - onGameEnded(): next (shuffle) index=" << mCurrentIndex;
-    }
 
+    mPendingIndex = -1;
+
+    LOG(LogInfo) << "BGM - resume after delay -> playCurrent() index=" << mCurrentIndex;
     playCurrent();
 }
 
