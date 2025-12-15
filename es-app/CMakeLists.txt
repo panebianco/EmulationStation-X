@@ -83,9 +83,11 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ThemeOptions.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.h
+    
 
     # 🔊 Background music
     ${CMAKE_CURRENT_SOURCE_DIR}/src/audio/BackgroundMusicManager.cpp
+
 
     # GuiComponents
     ${CMAKE_CURRENT_SOURCE_DIR}/src/components/AsyncReqComponent.cpp

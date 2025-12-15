@@ -19,6 +19,9 @@
 #include "Window.h"
 #include "Sound.h"
 
+// ✅ Popup concreto (implementa Window::InfoPopup)
+#include "guis/GuiInfoPopup.h"
+
 // 🔊 NUEVO: música de fondo ES-X
 #include "audio/BackgroundMusicManager.h"
 
@@ -452,7 +455,6 @@ std::shared_ptr<SystemView> ViewController::getSystemListView()
 	return mSystemListView;
 }
 
-
 bool ViewController::input(InputConfig* config, Input input)
 {
 	if(mLockInput)
@@ -482,6 +484,20 @@ void ViewController::update(int deltaTime)
 	if(mCurrentView)
 	{
 		mCurrentView->update(deltaTime);
+	}
+
+	// ==========================
+	// 🎵 Popup “Now playing”
+	// ==========================
+	auto& bgm = BackgroundMusicManager::getInstance();
+	if (bgm.songNameChanged())
+	{
+		mWindow->stopInfoPopup();
+
+		// ✅ GuiInfoPopup implementa Window::InfoPopup en tu fork
+		mWindow->setInfoPopup(new GuiInfoPopup(mWindow, "♪♪" + bgm.getCurrentSongDisplayName(), 4000));
+
+		bgm.resetSongNameChangedFlag();
 	}
 
 	updateSelf(deltaTime);
@@ -580,7 +596,6 @@ void ViewController::reloadGameListView(IGameListView* view, bool reloadTheme)
 	// Redisplay the current view
 	if (mCurrentView)
 		mCurrentView->onShow();
-
 }
 
 void ViewController::reloadAll(bool themeChanged)
