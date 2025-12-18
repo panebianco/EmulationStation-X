@@ -385,6 +385,19 @@ void GuiMenu::openUISettings()
 		});
 	}
 
+	// ============================================================
+	// CLOCK (reloj global overlay) - ON/OFF
+	// key: ShowClock
+	// ============================================================
+	{
+		auto show_clock = std::make_shared<SwitchComponent>(mWindow);
+		show_clock->setState(Settings::getInstance()->getBool("ShowClock"));
+		s->addWithLabel(_("CLOCK").c_str(), show_clock);
+		s->addSaveFunc([show_clock] {
+			Settings::getInstance()->setBool("ShowClock", show_clock->getState());
+		});
+	}
+
 	// theme set
 	auto themeSets = ThemeData::getThemeSets();
 
