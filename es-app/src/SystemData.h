@@ -65,12 +65,12 @@ public:
 	std::string  getMostPlayedName() const;
 	std::string  getMostPlayedFull() const;
 
+	// NUEVO: imagen del juego más jugado (para usar en el tema)
+	std::string  getMostPlayedImage() const;
+
 	static void deleteSystems();
-	// Load the system config file at getConfigPath(). Returns true if no errors were encountered.
-	// An example will be written if the file doesn't exist.
 	static bool loadConfig(Window* window);
 	static void writeExampleConfig(const std::string& path);
-	// if forWrite, will only return ~/.emulationstation/es_systems.cfg, never /etc/emulationstation/es_systems.cfg
 	static std::string getConfigPath(bool forWrite);
 
 	static std::vector<SystemData*> sSystemVector;
@@ -96,7 +96,6 @@ public:
 	static SystemData* getRandomSystem();
 	FileData* getRandomGame();
 
-	// Load or re-load theme.
 	void loadTheme();
 
 	FileFilterIndex* getIndex() { return mFilterIndex; };
@@ -122,7 +121,6 @@ private:
 	FileFilterIndex* mFilterIndex;
 
 	FileData* mRootFolder;
-	// for getRandomGame()
 	std::vector<FileData*> mGamesShuffled;
 };
 
