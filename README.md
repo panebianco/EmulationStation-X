@@ -187,17 +187,18 @@ Use the official RetroPie module:
 ✔ Clean RetroPie integration
 
 ⚙️ Option B — Manual Build (Advanced)
+
 sudo apt update
 sudo apt install build-essential cmake libsdl2-dev libsdl2-mixer-dev \
 libboost-dev libfreeimage-dev libfreetype6-dev libcurl4-openssl-dev \
 libvlc-dev libvlccore-dev libasound2-dev
 
 git clone --recursive https://github.com/Renetrox/EmulationStation-X.git
+
 cd EmulationStation-X
 mkdir build && cd build
 cmake ..
 make -j4
-sudo make install
 
 
 If already cloned without submodules:
