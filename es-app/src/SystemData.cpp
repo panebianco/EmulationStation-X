@@ -668,7 +668,7 @@ std::string SystemData::getMostPlayedFull() const
 	return name + " (" + std::to_string(count) + ")";
 }
 
-// ✅ NUEVO: imagen del más jugado con fallback a tus 2 rutas
+// ✅ NUEVO: imagen del más jugado con fallback pulido (boxart → image → thumbnail → titleshot → marquee)
 std::string SystemData::getMostPlayedImage() const
 {
 	FileData* best = nullptr;
@@ -688,10 +688,11 @@ std::string SystemData::getMostPlayedImage() const
 	if (!best || maxcount <= 0)
 		return "";
 
-	std::string raw = best->metadata.get("image");
+	// Orden pulido (lo que acordamos): boxart → image → thumbnail → (titleshot opcional) → marquee
+	std::string raw = best->metadata.get("boxart");
+	if (raw.empty()) raw = best->metadata.get("image");
 	if (raw.empty()) raw = best->metadata.get("thumbnail");
-	if (raw.empty()) raw = best->metadata.get("boxart");
-	if (raw.empty()) raw = best->metadata.get("titleshot");
+	if (raw.empty()) raw = best->metadata.get("titleshot"); // opcional, lo dejamos porque ya lo usabas
 	if (raw.empty()) raw = best->metadata.get("marquee");
 	if (raw.empty())
 		return "";
