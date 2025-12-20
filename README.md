@@ -72,18 +72,31 @@ Think of ES-X as:
 </table>
 
 🔑 Current Feature Status
+
 Feature	Status
+
 Runtime language system (.ini)	✅ Stable
+
 Menu, popup & scraper translation	✅ Stable
+
 Theme variables (scale, spacing, opacity)	✅ Available
+
 Theme Options (INI-driven)	✅ Available
+
 Text borders & shadows	✅ Available
+
 Dark menu mode	✅ Available
+
 Background music (SDL_mixer)	🟡 Available / evolving
+
 Menu sounds (scroll / select / back)	🟡 Available / evolving
+
 ES-DE / Batocera sound tags	🟡 Partial
+
 Advanced audio mixing / ducking	🔄 In progress
+
 User profiles / avatars	❌ Not part of ES-X
+
 🧩 Theme Options (Core Concept)
 
 Theme Options are the heart of ES-X.
@@ -125,9 +138,13 @@ Languages are stored in:
 Example:
 
 [MAIN]
+
 MAIN MENU=MAIN MENU
+
 YES=YES
+
 BACK=BACK
+
 CANCEL=CANCEL
 
 
