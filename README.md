@@ -1,131 +1,171 @@
 # EmulationStation-X (ES-X)
 <img width="1280" height="720" alt="LOGO" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" />
 
-ES-X is a personal fork of EmulationStation focused on extending the theming engine, accessibility, and UI flexibility, while remaining compatible with RetroPie and inspired by modern frontends like ES-DE and Batocera.
+EmulationStation-X (ES-X) is a personal fork of EmulationStation focused on modern theming, runtime customization, and creator-driven UI control, while remaining compatible with RetroPie.
 
-ES-X is experimental as a project, not unstable as a platform. Core features are usable today, while new capabilities continue to evolve.
+ES-X is inspired by modern frontends such as ES-DE, Batocera, and Recalbox, but follows a different philosophy:
+👉 extend the engine, not replace it.
 
-## 🎯 Purpose
+ES-X is experimental as a project, but stable as a platform.
+Core features are usable today, while new capabilities evolve carefully to avoid breaking compatibility.
 
-ES-X does not aim to replace EmulationStation. It exists as a sandbox for innovation:
+🎯 Purpose
 
-- Improving theme expressiveness
-- Adding runtime localization
-- Giving creators more control without breaking compatibility
-- Exploring modern UI/audio ideas in a controlled way
+ES-X does not aim to replace EmulationStation.
 
-## ✨ Highlights
+It exists as a sandbox for innovation, focused on:
 
-- 🌍 Runtime language system (.ini, no recompilation)
-- 🎨 Advanced theme variables (logo spacing, scale, opacity)
-- 🖌️ Text borders & shadows (engine-level)
-- 🎶 Background music & navigation sounds (menu-controlled)
-- 🌙 Dark menu support
-- 🔊 Sound tags compatible with ES-DE / Batocera (partial)
-- 🧩 Theme options driven by variables
-- 🛠️ Designed for theme creators first
+Extending the theming engine without hacks
 
-## 🖼 Preview
+Giving theme creators real control through variables
 
-| Theme Options | Language Demo |
-|-----------|---------------|
-| <img width="450" height="768" alt="Theme options screenshot" src="https://github.com/user-attachments/assets/7de22896-7b6b-43fb-910e-700d56ddb11d" /> | <img width="450" alt="Language menu screenshot" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" /> |
-| <img width="450" height="252" alt="Language list screenshot" src="https://github.com/user-attachments/assets/f4912b70-b738-46d7-8767-1d36995bdb6c" /> | <img width="450" height="252" alt="Language settings screenshot" src="https://github.com/user-attachments/assets/4d9add99-955b-4b05-9b1f-37597fda2f1b" /> |
+Adding runtime localization (no recompilation)
 
+Exploring modern UI & audio ideas safely
 
+Staying RetroPie-friendly by design
 
-## 🔑 Current Feature Status
+Think of ES-X as:
 
-| Feature | Status |
-|---------|--------|
-| .ini language system (runtime) | ✅ Stable |
-| Translation in menus, popups, scraper | ✅ Stable |
-| Theme variables (logoScale, spacing, opacity) | ✅ Available |
-| Text borders & shadow support | ✅ Available |
-| Variable-driven theme options | ✅ Available |
-| Dark menu mode | ✅ Available |
-| Background music (SDL_mixer) | 🟡 Available / evolving |
-| Menu sounds (scroll, select, back) | 🟡 Available / evolving |
-| ES-DE / Batocera sound tags | 🟡 Partially supported |
-| Advanced audio mixing / ducking | 🔄 In progress |
-| User profiles / avatars | ❌ Not part of ES-X |
+“What EmulationStation could do if themes were systems, not skins.”
 
-## 🌍 Language System (Runtime)
+✨ Highlights
+
+🌍 Runtime language system (.ini, no recompilation)
+
+🎨 Theme Options (variable-driven layouts & styles)
+
+🧩 Advanced theme variables (scale, spacing, opacity, layout logic)
+
+🖌️ Text borders & shadows (engine-level)
+
+🎶 Background music & navigation sounds (menu-controlled)
+
+🌙 Dark menu mode
+
+🔊 Sound tags compatible with ES-DE / Batocera (partial)
+
+🛠️ Designed for theme creators first
+
+🖼 Preview
+Theme Options	Language Demo
+<img width="450" height="768" src="https://github.com/user-attachments/assets/7de22896-7b6b-43fb-910e-700d56ddb11d" />	<img width="450" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" />
+<img width="450" height="252" src="https://github.com/user-attachments/assets/f4912b70-b738-46d7-8767-1d36995bdb6c" />	<img width="450" height="252" src="https://github.com/user-attachments/assets/4d9add99-955b-4b05-9b1f-37597fda2f1b" />
+🔑 Current Feature Status
+Feature	Status
+Runtime language system (.ini)	✅ Stable
+Menu, popup & scraper translation	✅ Stable
+Theme variables (scale, spacing, opacity)	✅ Available
+Theme Options (INI-driven)	✅ Available
+Text borders & shadows	✅ Available
+Dark menu mode	✅ Available
+Background music (SDL_mixer)	🟡 Available / evolving
+Menu sounds (scroll / select / back)	🟡 Available / evolving
+ES-DE / Batocera sound tags	🟡 Partial
+Advanced audio mixing / ducking	🔄 In progress
+User profiles / avatars	❌ Not part of ES-X
+🧩 Theme Options (Core Concept)
+
+Theme Options are the heart of ES-X.
+
+A modern ES-X theme is not a fixed skin, but a configurable system.
+
+Key idea
+
+theme.xml → draws the UI
+
+theme.ini → defines options & decisions
+
+ES-X → connects both at runtime
+
+The XML does not decide.
+The INI does not draw.
+ES-X binds them together.
+
+This allows:
+
+multiple layouts with one XML
+
+performance-friendly variants
+
+console-like UX customization
+
+zero duplication
+
+📘 See: THEME_OPTIONS.md for full documentation and real examples
+(Mini, ArtBook, Alekfull).
+
+🌍 Language System (Runtime)
 
 Languages are stored in:
 
-```
 ~/.emulationstation/lang/
-```
 
-Example .ini:
 
-```ini
+Example:
+
 [MAIN]
-MAIN MENU=MENÚ PRINCIPAL
-YES=SÍ
-BACK=VOLVER
-CANCEL=CANCELAR
-```
+MAIN MENU=MAIN MENU
+YES=YES
+BACK=BACK
+CANCEL=CANCEL
 
-✔ No recompilation  
-✔ Editable by users  
+
+✔ No recompilation
+✔ Editable by users
 ✔ Loaded dynamically at runtime
 
-## 🎨 Theme Engine Extensions
+🎨 Theme Engine Extensions
 
-**Supported / Available**
+Available
 
-```
 <logoScale>1.1</logoScale>
 <scaledLogoSpacing>0.20</scaledLogoSpacing>
 <minLogoOpacity>0.25</minLogoOpacity>
 
-<textBorderColor>#000000</textBorderColor>
-<textShadowColor>#000000</textShadowColor>
+<textBorderColor>000000</textBorderColor>
+<textShadowColor>000000</textShadowColor>
 <textShadowOffset>2 2</textShadowOffset>
-```
 
-These extensions are engine-level, not hacks, and are designed to remain compatible with existing themes.
 
-**Planned / Proposed**
+Engine-level features — not hacks — designed to stay compatible with existing themes.
 
-```
+Planned / Proposed
+
 <centerLogoOffsetY>
 <centerLogoPos>
 <zIndexOffset>
-```
 
-## 🔊 Audio & Music System
+🔊 Audio & Music System
 
-- SDL_mixer-based background music
-- Music control directly from the menu
-- Navigation sounds (scroll / select / back)
-- Sound tag structure inspired by Batocera / ES-DE
+SDL_mixer-based background music
 
-Stable base, advanced behaviors still evolving. Audio is intentionally kept simple and robust before adding complexity.
+Menu-controlled playback
 
-## 🧩 Installation Notes (Important)
+Navigation sounds (scroll / select / back)
+
+Tag structure inspired by Batocera / ES-DE
+
+The base is stable; advanced behavior is added carefully to preserve reliability.
+
+🧩 Installation Notes (Important)
 
 ES-X uses git submodules (e.g. pugixml).
 
-When building manually, clone the repository recursively (or update submodules before configuring) so dependencies such as pugixml are available to CMake.
+When building manually, clone recursively or initialize submodules before running CMake.
 
-## 🚀 Installation
+🚀 Installation
+✅ Option A — Recommended (RetroPie)
 
-### ✅ Option A — Recommended (RetroPie)
+Use the official RetroPie module:
 
-For RetroPie users, use the official module:
+👉 https://github.com/Renetrox/EmulationStation-X-Module-for-retropie
 
-- https://github.com/Renetrox/EmulationStation-X-Module-for-retropie
-
-✔ Handles dependencies  
-✔ Correct build flags  
+✔ Handles dependencies
+✔ Correct build flags
 ✔ Clean RetroPie integration
 
-### ⚙️ Option B — Manual Build (Advanced)
-
-```
+⚙️ Option B — Manual Build (Advanced)
 sudo apt update
 sudo apt install build-essential cmake libsdl2-dev libsdl2-mixer-dev \
 libboost-dev libfreeimage-dev libfreetype6-dev libcurl4-openssl-dev \
@@ -137,46 +177,29 @@ mkdir build && cd build
 cmake ..
 make -j4
 sudo make install
-```
+
 
 If already cloned without submodules:
 
-```
 git submodule update --init --recursive
-```
 
-## 📂 Suggested Folder Structure
+🧭 Roadmap
+Focus
+Full language coverage
+More theme-driven layout control
+Audio refinement & mixing
+Theme creator documentation
+Careful experimentation without breaking stability
+👤 Author
 
-```
-~/.emulationstation/
- ├── lang/
- ├── themes/
- │   └── Pi-Station-X/
- │       ├── _inc/
- │       ├── sounds/
- │       ├── layout/
- │       └── ...
-```
-
-## 🧭 Roadmap
-
-| Priority | Focus |
-|----------|-------|
-| 🔄 | Full language coverage |
-| 🎨 | More theme-driven layout control |
-| 🔊 | Audio refinement & mixing |
-| 📘 | Theme creator documentation |
-| 🧪 | Careful experimentation without breaking stability |
-
-## 👤 Author
-
-Dino René Caballero Márquez (Renetrox)  
-Educator • RetroPie Enthusiast • Theme Developer  
-Paraguay  
+Dino René Caballero Márquez (Renetrox)
+Educator • RetroPie Enthusiast • Theme Developer
+Paraguay
 GitHub: @Renetrox
 
-## 📜 License
+📜 License
 
 Same license as the original EmulationStation (MIT).
 
-> Accessibility means not just using it — but reading it, hearing it, and shaping it your way.
+Accessibility is not just using it —
+it’s reading it, hearing it, and shaping it your way.
