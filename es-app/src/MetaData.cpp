@@ -134,7 +134,14 @@ void MetaDataList::set(const std::string& key, const std::string& value)
 
 const std::string& MetaDataList::get(const std::string& key) const
 {
-	return mMap.at(key);
+	// FIX: avoid std::out_of_range when key does not exist (e.g. "boxart")
+	auto it = mMap.find(key);
+	if (it == mMap.end())
+	{
+		static const std::string empty;
+		return empty;
+	}
+	return it->second;
 }
 
 int MetaDataList::getInt(const std::string& key) const
