@@ -213,7 +213,6 @@ Audio refinement & mixing
 Theme creator documentation
 Careful experimentation without breaking stability
 
----
 👤 Author
 
 - Dino René Caballero Márquez (Renetrox)
