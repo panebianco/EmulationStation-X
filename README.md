@@ -48,9 +48,29 @@ Think of ES-X as:
 🛠️ Designed for theme creators first
 
 🖼 Preview
-Theme Options	Language Demo
-<img width="450" height="768" src="https://github.com/user-attachments/assets/7de22896-7b6b-43fb-910e-700d56ddb11d" />	<img width="450" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" />
-<img width="450" height="252" src="https://github.com/user-attachments/assets/f4912b70-b738-46d7-8767-1d36995bdb6c" />	<img width="450" height="252" src="https://github.com/user-attachments/assets/4d9add99-955b-4b05-9b1f-37597fda2f1b" />
+<table>
+  <tr>
+    <td align="center">
+      <strong>Theme Options</strong><br/>
+      <img width="450" height="768" src="https://github.com/user-attachments/assets/7de22896-7b6b-43fb-910e-700d56ddb11d" alt="Theme options preview" />
+    </td>
+    <td align="center">
+      <strong>Language Demo</strong><br/>
+      <img width="450" height="768" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" alt="Language demo preview" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <strong>Variable Grid</strong><br/>
+      <img width="450" height="252" src="https://github.com/user-attachments/assets/f4912b70-b738-46d7-8767-1d36995bdb6c" alt="Grid layout preview" />
+    </td>
+    <td align="center">
+      <strong>Menu Styling</strong><br/>
+      <img width="450" height="252" src="https://github.com/user-attachments/assets/4d9add99-955b-4b05-9b1f-37597fda2f1b" alt="Menu styling preview" />
+    </td>
+  </tr>
+</table>
+
 🔑 Current Feature Status
 Feature	Status
 Runtime language system (.ini)	✅ Stable
@@ -148,6 +168,7 @@ Tag structure inspired by Batocera / ES-DE
 
 The base is stable; advanced behavior is added carefully to preserve reliability.
 
+---
 🧩 Installation Notes (Important)
 
 ES-X uses git submodules (e.g. pugixml).
@@ -183,6 +204,7 @@ If already cloned without submodules:
 
 git submodule update --init --recursive
 
+---
 🧭 Roadmap
 Focus
 Full language coverage
@@ -193,11 +215,12 @@ Careful experimentation without breaking stability
 
 👤 Author
 
-Dino René Caballero Márquez (Renetrox)
-Educator • RetroPie Enthusiast • Theme Developer
-Paraguay
-GitHub: @Renetrox
+- Dino René Caballero Márquez (Renetrox)
+- Educator • RetroPie Enthusiast • Theme Developer
+- Paraguay
+- GitHub: @Renetrox
 
+---
 📜 License
 
 Same license as the original EmulationStation (MIT).
