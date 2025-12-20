@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <deque>
+#include <atomic>
 
 struct _Mix_Music;
 typedef struct _Mix_Music Mix_Music;
@@ -35,8 +36,6 @@ private:
 
     bool openMixer();
     void closeMixer();
-
-    // ✅ nuevo: reabrir audio “limpio” (estilo antiguo shutdown()+init())
     bool reopenMixer();
 
     void buildPlaylist();
@@ -45,7 +44,7 @@ private:
 
     void addLastPlayed(const std::string& song);
     bool wasPlayedRecently(const std::string& song) const;
-    int pickNextIndex();
+    int  pickNextIndex();
 
     void playCurrent();
     void stopMusicInternal(bool fadeOut);
@@ -72,15 +71,13 @@ private:
     std::string mNowPlayingText;
     bool mSongNameChanged;
 
-    // Delay al volver del juego
     bool mPendingResume;
     int  mResumeDelayMs;
     int  mResumeTimerMs;
     int  mPendingIndex;
 
-    // ✅ pedir “reopen audio” al volver (como el antiguo)
     bool mPendingReopenOnResume;
 
-    // Next track desde callback (main thread)
-    bool mPendingNextFromCallback;
+    // ⚠️ cruzado entre audio thread y main thread
+    std::atomic<bool> mPendingNextFromCallback;
 };
