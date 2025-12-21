@@ -213,8 +213,11 @@ libvlc-dev libvlccore-dev libasound2-dev
 git clone --recursive https://github.com/Renetrox/EmulationStation-X.git
 
 cd EmulationStation-X
+
 mkdir build && cd build
+
 cmake ..
+
 make -j4
 
 
