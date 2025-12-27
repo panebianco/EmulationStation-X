@@ -13,6 +13,8 @@
 
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <map>
 
 namespace
 {
@@ -32,7 +34,10 @@ namespace
 		std::string defaultValue;
 	};
 
-	std::string trim(const std::string& s)
+	// -----------------------------
+	// Small helpers (ES-X compatible)
+	// -----------------------------
+	static std::string trim(const std::string& s)
 	{
 		size_t start = s.find_first_not_of(" \t\r\n");
 		if(start == std::string::npos)
@@ -41,7 +46,58 @@ namespace
 		return s.substr(start, end - start + 1);
 	}
 
-	void parseValues(const std::string& str, std::vector<std::pair<std::string, std::string>>& out)
+	static bool isAbsolutePathSimple(const std::string& p)
+	{
+		// Linux/Unix absolute
+		return !p.empty() && p[0] == '/';
+	}
+
+	static std::string joinPathSimple(const std::string& a, const std::string& b)
+	{
+		if(a.empty()) return b;
+		if(b.empty()) return a;
+
+		if(a.back() == '/' && b.front() == '/')
+			return a + b.substr(1);
+		if(a.back() != '/' && b.front() != '/')
+			return a + "/" + b;
+		return a + b;
+	}
+
+	static std::string normalizeRelative(const std::string& p)
+	{
+		// remove leading "./"
+		if(p.rfind("./", 0) == 0)
+			return p.substr(2);
+		return p;
+	}
+
+	static std::string resolveThemePath(const std::string& themeDir, const std::string& maybeRelative)
+	{
+		if(maybeRelative.empty())
+			return "";
+
+		if(isAbsolutePathSimple(maybeRelative))
+			return maybeRelative;
+
+		return joinPathSimple(themeDir, normalizeRelative(maybeRelative));
+	}
+
+	static bool copyFileForce(const std::string& src, const std::string& dst)
+	{
+		std::ifstream in(src.c_str(), std::ios::binary);
+		if(!in)
+			return false;
+
+		std::ofstream out(dst.c_str(), std::ios::binary | std::ios::trunc);
+		if(!out)
+			return false;
+
+		out << in.rdbuf();
+		return out.good();
+	}
+
+	static void parseValues(const std::string& str, std::vector<std::pair<std::string, std::string>>& out)
 	{
 		out.clear();
 		std::stringstream ss(str);
@@ -66,26 +122,20 @@ namespace
 		}
 	}
 
-	std::vector<ThemeOption> loadThemeOptionsFromIni(const std::string& themeDir)
+	// ------------------------------------------------------------
+	// Read INI sections into a map: section -> (key->value)
+	// ------------------------------------------------------------
+	static std::map<std::string, std::map<std::string, std::string>>
+	loadIniSections(const std::string& iniPath)
 	{
-		std::vector<ThemeOption> options;
-		std::string iniPath = themeDir + "/theme.ini";
-
-		if(!Utils::FileSystem::isRegularFile(iniPath))
-			return options;
+		std::map<std::string, std::map<std::string, std::string>> data;
 
 		std::ifstream file(iniPath.c_str());
 		if(!file)
-			return options;
+			return data;
 
-		ThemeOption current;
 		std::string line;
-
-		auto pushIfValid = [&options](const ThemeOption& opt)
-		{
-			if(!opt.id.empty() && !opt.type.empty() && !opt.values.empty())
-				options.push_back(opt);
-		};
+		std::string currentSection;
 
 		while(std::getline(file, line))
 		{
@@ -95,32 +145,128 @@ namespace
 
 			if(line.front() == '[' && line.back() == ']')
 			{
-				pushIfValid(current);
-				current = ThemeOption();
-				current.id = trim(line.substr(1, line.size() - 2));
+				currentSection = trim(line.substr(1, line.size() - 2));
 				continue;
 			}
 
 			auto pos = line.find('=');
-			if(pos != std::string::npos)
-			{
-				std::string key   = trim(line.substr(0, pos));
-				std::string value = trim(line.substr(pos + 1));
+			if(pos == std::string::npos)
+				continue;
 
-				if(key == "label") current.label = value;
-				else if(key == "type") current.type = value;
-				else if(key == "path") current.path = value;
-				else if(key == "apply_to" || key == "applyTo") current.applyTo = value;
-				else if(key == "values") parseValues(value, current.values);
-				else if(key == "default") current.defaultValue = value;
+			std::string key = trim(line.substr(0, pos));
+			std::string val = trim(line.substr(pos + 1));
+
+			if(!currentSection.empty() && !key.empty())
+				data[currentSection][key] = val;
+		}
+
+		return data;
+	}
+
+	// ------------------------------------------------------------
+	// Auto-detect /layout subfolders and add [layout] option if missing
+	// ------------------------------------------------------------
+	static void ensureLayoutOptionIfLayoutFolderExists(const std::string& themeDir, std::vector<ThemeOption>& options)
+	{
+		const std::string layoutDir = themeDir + "/layout";
+		if(!Utils::FileSystem::isDirectory(layoutDir))
+			return;
+
+		for(const auto& o : options)
+			if(o.id == "layout")
+				return;
+
+		Utils::FileSystem::stringList lst = Utils::FileSystem::getDirContent(layoutDir);
+		std::vector<std::string> dirs(lst.begin(), lst.end());
+
+		std::vector<std::string> layouts;
+		for(const auto& name : dirs)
+		{
+			if(name.empty() || name[0] == '.')
+				continue;
+
+			const std::string full = layoutDir + "/" + name;
+			if(Utils::FileSystem::isDirectory(full))
+				layouts.push_back(name);
+		}
+
+		if(layouts.empty())
+			return;
+
+		std::sort(layouts.begin(), layouts.end());
+
+		ThemeOption layoutOpt;
+		layoutOpt.id = "layout";
+		layoutOpt.type = "select";
+		layoutOpt.applyTo = "layout";
+		layoutOpt.label = _("THEME LAYOUT");
+
+		for(const auto& l : layouts)
+			layoutOpt.values.emplace_back(l, l);
+
+		const std::string current = Settings::getInstance()->getString("ThemeLayout");
+		layoutOpt.defaultValue = !current.empty() ? current : layouts.front();
+
+		options.insert(options.begin(), layoutOpt);
+	}
+
+	static std::vector<ThemeOption> loadThemeOptionsFromIni(const std::string& themeDir)
+	{
+		std::vector<ThemeOption> options;
+		const std::string iniPath = themeDir + "/theme.ini";
+
+		if(Utils::FileSystem::isRegularFile(iniPath))
+		{
+			std::ifstream file(iniPath.c_str());
+			if(file)
+			{
+				ThemeOption current;
+				std::string line;
+
+				auto pushIfValid = [&options](const ThemeOption& opt)
+				{
+					if(!opt.id.empty() && !opt.type.empty() && !opt.values.empty())
+						options.push_back(opt);
+				};
+
+				while(std::getline(file, line))
+				{
+					line = trim(line);
+					if(line.empty() || line[0] == ';' || line[0] == '#')
+						continue;
+
+					if(line.front() == '[' && line.back() == ']')
+					{
+						pushIfValid(current);
+						current = ThemeOption();
+						current.id = trim(line.substr(1, line.size() - 2));
+						continue;
+					}
+
+					auto pos = line.find('=');
+					if(pos != std::string::npos)
+					{
+						std::string key   = trim(line.substr(0, pos));
+						std::string value = trim(line.substr(pos + 1));
+
+						if(key == "label") current.label = value;
+						else if(key == "type") current.type = value;
+						else if(key == "path") current.path = value;
+						else if(key == "apply_to" || key == "applyTo") current.applyTo = value;
+						else if(key == "values") parseValues(value, current.values);
+						else if(key == "default") current.defaultValue = value;
+					}
+				}
+
+				pushIfValid(current);
 			}
 		}
 
-		pushIfValid(current);
+		ensureLayoutOptionIfLayoutFolderExists(themeDir, options);
 		return options;
 	}
 
-	void updateThemeIniValue(const std::string& iniPath, const std::string& key, const std::string& value)
+	static void updateThemeIniValue(const std::string& iniPath, const std::string& key, const std::string& value)
 	{
 		std::ifstream in(iniPath.c_str());
 		if(!in)
@@ -177,7 +323,96 @@ namespace
 			out << l << "\n";
 	}
 
-	void applyThemeOption(const std::string& themeDir, const ThemeOption& opt, const std::string& value)
+	// ------------------------------------------------------------
+	// Apply layout by COPYING layout files to theme root (dialog-style)
+	// ------------------------------------------------------------
+	static bool applyLayoutByCopy(Window* win, const std::string& themeDir, const std::string& layoutId)
+	{
+		const std::string iniPath = themeDir + "/theme.ini";
+		std::map<std::string, std::map<std::string, std::string>> ini;
+		if(Utils::FileSystem::isRegularFile(iniPath))
+			ini = loadIniSections(iniPath);
+
+		// Defaults: ./layout/<layoutId>/<file>.xml
+		auto defPath = [&](const std::string& fileName) -> std::string
+		{
+			return "./layout/" + layoutId + "/" + fileName;
+		};
+
+		const std::string section = "layout_" + layoutId;
+
+		std::string srcTheme  = defPath("theme.xml");
+		std::string srcSwatch = defPath("Swatch.xml");
+		std::string srcAvatar = defPath("avatar.xml");
+		std::string srcUser   = defPath("user.xml");
+		std::string srcStart  = defPath("start.xml");
+
+		// If mapping exists in ini, override
+		if(!ini.empty() && ini.count(section))
+		{
+			auto& s = ini[section];
+			if(s.count("theme"))  srcTheme  = s["theme"];
+			if(s.count("swatch")) srcSwatch = s["swatch"];
+			if(s.count("avatar")) srcAvatar = s["avatar"];
+			if(s.count("user"))   srcUser   = s["user"];
+			if(s.count("start"))  srcStart  = s["start"];
+		}
+
+		// Resolve paths
+		const std::string absTheme  = resolveThemePath(themeDir, srcTheme);
+		const std::string absSwatch = resolveThemePath(themeDir, srcSwatch);
+		const std::string absAvatar = resolveThemePath(themeDir, srcAvatar);
+		const std::string absUser   = resolveThemePath(themeDir, srcUser);
+		const std::string absStart  = resolveThemePath(themeDir, srcStart);
+
+		bool okAny = false;
+		bool okAll = true;
+
+		auto doCopy = [&](const std::string& srcAbs, const std::string& dstName)
+		{
+			if(srcAbs.empty())
+				return;
+
+			if(!Utils::FileSystem::isRegularFile(srcAbs))
+			{
+				// Not fatal; just skip
+				return;
+			}
+
+			const std::string dstAbs = themeDir + "/" + dstName;
+			if(!copyFileForce(srcAbs, dstAbs))
+			{
+				okAll = false;
+			}
+			else
+			{
+				okAny = true;
+			}
+		};
+
+		doCopy(absTheme,  "theme.xml");
+		doCopy(absSwatch, "Swatch.xml");
+		doCopy(absAvatar, "avatar.xml");
+		doCopy(absUser,   "user.xml");
+		doCopy(absStart,  "start.xml");
+
+		if(!okAny)
+		{
+			if(win)
+				win->pushGui(new GuiMsgBox(win, _("No se encontró ningún XML para copiar en este layout."), _("BACK")));
+			return false;
+		}
+
+		if(!okAll)
+		{
+			if(win)
+				win->pushGui(new GuiMsgBox(win, _("Algunos archivos no se pudieron copiar (revisá permisos/rutas)."), _("BACK")));
+		}
+
+		return true;
+	}
+
+	static void applyThemeOption(Window* win, const std::string& themeDir, const ThemeOption& opt, const std::string& value)
 	{
 		if(opt.id.empty() || value.empty())
 			return;
@@ -186,6 +421,9 @@ namespace
 		{
 			Settings::getInstance()->setString("ThemeLayout", value);
 			Settings::getInstance()->saveFile();
+
+			// IMPORTANT: copy layout files to theme root (dialog behavior)
+			applyLayoutByCopy(win, themeDir, value);
 		}
 		else
 		{
@@ -195,9 +433,7 @@ namespace
 
 		auto vc = ViewController::get();
 		if(vc != nullptr)
-		{
 			vc->reloadAll();
-		}
 	}
 
 	class GuiThemeOptionSelect : public GuiComponent
@@ -207,8 +443,10 @@ namespace
 		                     const std::string& themeDir,
 		                     const ThemeOption& opt,
 		                     const std::string& title)
-			: GuiComponent(window), mMenu(window, title.c_str()),
-			  mThemeDir(themeDir), mOption(opt)
+			: GuiComponent(window)
+			, mMenu(window, title.c_str())
+			, mThemeDir(themeDir)
+			, mOption(opt)
 		{
 			for(const auto& v : mOption.values)
 			{
@@ -218,16 +456,15 @@ namespace
 					mWindow,
 					v.second,
 					Font::get(FONT_SIZE_MEDIUM),
-					0x777777FF   // texto gris (como el resto de menús)
+					0x777777FF
 				);
 
 				text->setColor(0x777777FF);
-
 				row.addElement(text, true);
 
 				row.makeAcceptInputHandler([this, v]()
 				{
-					applyThemeOption(mThemeDir, mOption, v.first);
+					applyThemeOption(mWindow, mThemeDir, mOption, v.first);
 					delete this;
 				});
 
@@ -266,9 +503,13 @@ namespace
 		HelpStyle getHelpStyle() override
 		{
 			HelpStyle style;
-			auto system = ViewController::get()->getState().getSystem();
-			if(system)
-				style.applyTheme(system->getTheme(), "system");
+			auto vc = ViewController::get();
+			if(vc)
+			{
+				auto system = vc->getState().getSystem();
+				if(system)
+					style.applyTheme(system->getTheme(), "system");
+			}
 			return style;
 		}
 
@@ -280,8 +521,8 @@ namespace
 }
 
 GuiThemeOptions::GuiThemeOptions(Window* window)
-	: GuiComponent(window),
-	  mMenu(window, _("THEME OPTIONS").c_str())
+	: GuiComponent(window)
+	, mMenu(window, _("THEME OPTIONS").c_str())
 {
 	std::string themeSet = Settings::getInstance()->getString("ThemeSet");
 	std::string themeDir;
@@ -315,7 +556,7 @@ GuiThemeOptions::GuiThemeOptions(Window* window)
 				mWindow,
 				entryLabel,
 				Font::get(FONT_SIZE_MEDIUM),
-				0x777777FF   // gris
+				0x777777FF
 			);
 			text->setColor(0x777777FF);
 
@@ -371,8 +612,12 @@ std::vector<HelpPrompt> GuiThemeOptions::getHelpPrompts()
 HelpStyle GuiThemeOptions::getHelpStyle()
 {
 	HelpStyle style;
-	auto system = ViewController::get()->getState().getSystem();
-	if(system)
-		style.applyTheme(system->getTheme(), "system");
+	auto vc = ViewController::get();
+	if(vc)
+	{
+		auto system = vc->getState().getSystem();
+		if(system)
+			style.applyTheme(system->getTheme(), "system");
+	}
 	return style;
 }
