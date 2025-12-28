@@ -2,6 +2,7 @@
 
 #include "guis/GuiThemeOptions.h"
 #include "guis/GuiMsgBox.h"
+#include "guis/GuiTextEditPopup.h" // <-- input popup (ES-X)
 #include "LocaleES.h"
 #include "Settings.h"
 #include "utils/FileSystemUtil.h"
@@ -30,6 +31,10 @@ namespace
 		std::string label;
 		std::string path;
 		std::string applyTo;
+
+		// NEW: optional output key for theme.ini (e.g. key=USER_NAME)
+		std::string key;
+
 		std::vector<std::pair<std::string, std::string>> values;
 		std::string defaultValue;
 	};
@@ -48,7 +53,6 @@ namespace
 
 	static bool isAbsolutePathSimple(const std::string& p)
 	{
-		// Linux/Unix absolute
 		return !p.empty() && p[0] == '/';
 	}
 
@@ -66,7 +70,6 @@ namespace
 
 	static std::string normalizeRelative(const std::string& p)
 	{
-		// remove leading "./"
 		if(p.rfind("./", 0) == 0)
 			return p.substr(2);
 		return p;
@@ -164,6 +167,40 @@ namespace
 	}
 
 	// ------------------------------------------------------------
+	// Read top-level key=value (before first [section])
+	// ------------------------------------------------------------
+	static std::string readTopIniValue(const std::string& iniPath, const std::string& key)
+	{
+		std::ifstream in(iniPath.c_str());
+		if(!in)
+			return "";
+
+		std::string line;
+		bool inTop = true;
+
+		while(std::getline(in, line))
+		{
+			std::string t = trim(line);
+
+			if(inTop && !t.empty() && t.front() == '[')
+				break;
+
+			if(t.empty() || t[0] == ';' || t[0] == '#')
+				continue;
+
+			auto posEq = t.find('=');
+			if(posEq == std::string::npos)
+				continue;
+
+			std::string thisKey = trim(t.substr(0, posEq));
+			if(thisKey == key)
+				return trim(t.substr(posEq + 1));
+		}
+
+		return "";
+	}
+
+	// ------------------------------------------------------------
 	// Auto-detect /layout subfolders and add [layout] option if missing
 	// ------------------------------------------------------------
 	static void ensureLayoutOptionIfLayoutFolderExists(const std::string& themeDir, std::vector<ThemeOption>& options)
@@ -225,8 +262,22 @@ namespace
 
 				auto pushIfValid = [&options](const ThemeOption& opt)
 				{
-					if(!opt.id.empty() && !opt.type.empty() && !opt.values.empty())
+					if(opt.id.empty() || opt.type.empty())
+						return;
+
+					std::string t = opt.type;
+					std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+
+					// select requires values, input does not
+					if(t == "select")
+					{
+						if(!opt.values.empty())
+							options.push_back(opt);
+					}
+					else if(t == "input")
+					{
 						options.push_back(opt);
+					}
 				};
 
 				while(std::getline(file, line))
@@ -255,6 +306,7 @@ namespace
 						else if(key == "apply_to" || key == "applyTo") current.applyTo = value;
 						else if(key == "values") parseValues(value, current.values);
 						else if(key == "default") current.defaultValue = value;
+						else if(key == "key") current.key = value; // NEW
 					}
 				}
 
@@ -333,7 +385,6 @@ namespace
 		if(Utils::FileSystem::isRegularFile(iniPath))
 			ini = loadIniSections(iniPath);
 
-		// Defaults: ./layout/<layoutId>/<file>.xml
 		auto defPath = [&](const std::string& fileName) -> std::string
 		{
 			return "./layout/" + layoutId + "/" + fileName;
@@ -374,20 +425,13 @@ namespace
 				return;
 
 			if(!Utils::FileSystem::isRegularFile(srcAbs))
-			{
-				// Not fatal; just skip
-				return;
-			}
+				return; // optional
 
 			const std::string dstAbs = themeDir + "/" + dstName;
 			if(!copyFileForce(srcAbs, dstAbs))
-			{
 				okAll = false;
-			}
 			else
-			{
 				okAny = true;
-			}
 		};
 
 		doCopy(absTheme,  "theme.xml");
@@ -422,13 +466,13 @@ namespace
 			Settings::getInstance()->setString("ThemeLayout", value);
 			Settings::getInstance()->saveFile();
 
-			// IMPORTANT: copy layout files to theme root (dialog behavior)
 			applyLayoutByCopy(win, themeDir, value);
 		}
 		else
 		{
 			const std::string iniPath = themeDir + "/theme.ini";
-			updateThemeIniValue(iniPath, opt.id, value);
+			const std::string outKey  = !opt.key.empty() ? opt.key : opt.id;
+			updateThemeIniValue(iniPath, outKey, value);
 		}
 
 		auto vc = ViewController::get();
@@ -518,6 +562,35 @@ namespace
 		std::string   mThemeDir;
 		ThemeOption   mOption;
 	};
+
+	static void openThemeInput(Window* win, const std::string& themeDir, const ThemeOption& opt, const std::string& title)
+	{
+		if(win == nullptr)
+			return;
+
+		const std::string iniPath = themeDir + "/theme.ini";
+		const std::string outKey  = !opt.key.empty() ? opt.key : opt.id;
+
+		std::string current = readTopIniValue(iniPath, outKey);
+		if(current.empty())
+			current = opt.defaultValue;
+
+		// ES-X constructor expects 6 args
+		win->pushGui(new GuiTextEditPopup(
+			win,
+			title,
+			current,
+			[win, themeDir, opt](const std::string& newValue)
+			{
+				if(newValue.empty())
+					return;
+
+				applyThemeOption(win, themeDir, opt, newValue);
+			},
+			false,  // multiline
+			"OK"    // accept label (safe lifetime)
+		));
+	}
 }
 
 GuiThemeOptions::GuiThemeOptions(Window* window)
@@ -564,11 +637,16 @@ GuiThemeOptions::GuiThemeOptions(Window* window)
 
 			row.makeAcceptInputHandler([this, themeDir, opt, entryLabel]
 			{
-				if(opt.type == "select" && !opt.values.empty())
+				std::string t = opt.type;
+				std::transform(t.begin(), t.end(), t.begin(), ::tolower);
+
+				if(t == "select" && !opt.values.empty())
 				{
-					mWindow->pushGui(
-						new GuiThemeOptionSelect(
-							mWindow, themeDir, opt, entryLabel));
+					mWindow->pushGui(new GuiThemeOptionSelect(mWindow, themeDir, opt, entryLabel));
+				}
+				else if(t == "input")
+				{
+					openThemeInput(mWindow, themeDir, opt, entryLabel);
 				}
 				else
 				{
