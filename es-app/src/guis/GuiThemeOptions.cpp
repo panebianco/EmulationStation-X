@@ -2,7 +2,8 @@
 
 #include "guis/GuiThemeOptions.h"
 #include "guis/GuiMsgBox.h"
-#include "guis/GuiTextEditPopup.h" // <-- input popup (ES-X)
+#include "guis/GuiTextEditPopup.h"
+
 #include "LocaleES.h"
 #include "Settings.h"
 #include "utils/FileSystemUtil.h"
@@ -32,7 +33,7 @@ namespace
 		std::string path;
 		std::string applyTo;
 
-		// NEW: optional output key for theme.ini (e.g. key=USER_NAME)
+		// Optional output key for theme.ini (e.g. key=USER_NAME)
 		std::string key;
 
 		std::vector<std::pair<std::string, std::string>> values;
@@ -53,6 +54,7 @@ namespace
 
 	static bool isAbsolutePathSimple(const std::string& p)
 	{
+		// Linux/Unix absolute
 		return !p.empty() && p[0] == '/';
 	}
 
@@ -70,6 +72,7 @@ namespace
 
 	static std::string normalizeRelative(const std::string& p)
 	{
+		// remove leading "./"
 		if(p.rfind("./", 0) == 0)
 			return p.substr(2);
 		return p;
@@ -200,6 +203,63 @@ namespace
 		return "";
 	}
 
+	static void updateThemeIniValue(const std::string& iniPath, const std::string& key, const std::string& value)
+	{
+		std::ifstream in(iniPath.c_str());
+		if(!in)
+			return;
+
+		std::vector<std::string> lines;
+		std::string line;
+		bool updated = false;
+		bool inTop   = true;
+
+		while(std::getline(in, line))
+		{
+			std::string t = trim(line);
+
+			if(inTop && !t.empty() && t.front() == '[')
+				inTop = false;
+
+			if(inTop)
+			{
+				auto posEq = t.find('=');
+				if(posEq != std::string::npos)
+				{
+					std::string thisKey = trim(t.substr(0, posEq));
+					if(thisKey == key)
+					{
+						line    = key + " = " + value;
+						updated = true;
+					}
+				}
+			}
+			lines.push_back(line);
+		}
+		in.close();
+
+		if(!updated)
+		{
+			size_t insertPos = lines.size();
+			for(size_t i = 0; i < lines.size(); ++i)
+			{
+				std::string t = trim(lines[i]);
+				if(!t.empty() && t.front() == '[')
+				{
+					insertPos = i;
+					break;
+				}
+			}
+			lines.insert(lines.begin() + insertPos, key + " = " + value);
+		}
+
+		std::ofstream out(iniPath.c_str(), std::ios::trunc);
+		if(!out)
+			return;
+		for(const auto& l : lines)
+			out << l << "\n";
+	}
+
 	// ------------------------------------------------------------
 	// Auto-detect /layout subfolders and add [layout] option if missing
 	// ------------------------------------------------------------
@@ -247,6 +307,83 @@ namespace
 		options.insert(options.begin(), layoutOpt);
 	}
 
+	// ------------------------------------------------------------
+	// Auto-detect /_inc/avatars images and add [avatar] option if missing
+	// ------------------------------------------------------------
+	static bool hasImageExt(const std::string& f)
+	{
+		auto lower = f;
+		std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+
+		return (lower.size() >= 4 && lower.rfind(".png") == lower.size() - 4) ||
+		       (lower.size() >= 4 && lower.rfind(".jpg") == lower.size() - 4) ||
+		       (lower.size() >= 5 && lower.rfind(".jpeg") == lower.size() - 5);
+	}
+
+	static std::string stripExt(const std::string& f)
+	{
+		auto pos = f.find_last_of('.');
+		if(pos == std::string::npos) return f;
+		return f.substr(0, pos);
+	}
+
+	static void ensureAvatarOptionIfAvatarFolderExists(const std::string& themeDir, std::vector<ThemeOption>& options)
+	{
+		// If theme.ini already declared [avatar], do nothing.
+		for(const auto& o : options)
+			if(o.id == "avatar")
+				return;
+
+		const std::string avatarDir = themeDir + "/_inc/avatars";
+		if(!Utils::FileSystem::isDirectory(avatarDir))
+			return;
+
+		Utils::FileSystem::stringList lst = Utils::FileSystem::getDirContent(avatarDir);
+		std::vector<std::string> files(lst.begin(), lst.end());
+
+		std::vector<std::string> imgs;
+		for(const auto& name : files)
+		{
+			if(name.empty() || name[0] == '.')
+				continue;
+
+			const std::string full = avatarDir + "/" + name;
+			if(Utils::FileSystem::isRegularFile(full) && hasImageExt(name))
+				imgs.push_back(name);
+		}
+
+		if(imgs.empty())
+			return;
+
+		std::sort(imgs.begin(), imgs.end());
+
+		ThemeOption opt;
+		opt.id = "avatar";
+		opt.type = "select";
+		opt.applyTo = "theme_ini";
+		opt.key = "AVATAR_PATH";
+		opt.label = _("AVATAR");
+
+		for(const auto& f : imgs)
+		{
+			const std::string relPath = "./_inc/avatars/" + f;
+			const std::string nice    = stripExt(f);
+			opt.values.emplace_back(relPath, nice);
+		}
+
+		const std::string iniPath = themeDir + "/theme.ini";
+		std::string current = readTopIniValue(iniPath, opt.key);
+		if(!current.empty())
+			opt.defaultValue = current;
+		else
+			opt.defaultValue = opt.values.front().first;
+
+		options.push_back(opt);
+	}
+
+	// ------------------------------------------------------------
+	// Load theme.ini options
+	// ------------------------------------------------------------
 	static std::vector<ThemeOption> loadThemeOptionsFromIni(const std::string& themeDir)
 	{
 		std::vector<ThemeOption> options;
@@ -306,7 +443,7 @@ namespace
 						else if(key == "apply_to" || key == "applyTo") current.applyTo = value;
 						else if(key == "values") parseValues(value, current.values);
 						else if(key == "default") current.defaultValue = value;
-						else if(key == "key") current.key = value; // NEW
+						else if(key == "key") current.key = value;
 					}
 				}
 
@@ -315,64 +452,8 @@ namespace
 		}
 
 		ensureLayoutOptionIfLayoutFolderExists(themeDir, options);
+		ensureAvatarOptionIfAvatarFolderExists(themeDir, options);
 		return options;
-	}
-
-	static void updateThemeIniValue(const std::string& iniPath, const std::string& key, const std::string& value)
-	{
-		std::ifstream in(iniPath.c_str());
-		if(!in)
-			return;
-
-		std::vector<std::string> lines;
-		std::string line;
-		bool updated = false;
-		bool inTop   = true;
-
-		while(std::getline(in, line))
-		{
-			std::string t = trim(line);
-
-			if(inTop && !t.empty() && t.front() == '[')
-				inTop = false;
-
-			if(inTop)
-			{
-				auto posEq = t.find('=');
-				if(posEq != std::string::npos)
-				{
-					std::string thisKey = trim(t.substr(0, posEq));
-					if(thisKey == key)
-					{
-						line    = key + " = " + value;
-						updated = true;
-					}
-				}
-			}
-			lines.push_back(line);
-		}
-		in.close();
-
-		if(!updated)
-		{
-			size_t insertPos = lines.size();
-			for(size_t i = 0; i < lines.size(); ++i)
-			{
-				std::string t = trim(lines[i]);
-				if(!t.empty() && t.front() == '[')
-				{
-					insertPos = i;
-					break;
-				}
-			}
-			lines.insert(lines.begin() + insertPos, key + " = " + value);
-		}
-
-		std::ofstream out(iniPath.c_str(), std::ios::trunc);
-		if(!out)
-			return;
-		for(const auto& l : lines)
-			out << l << "\n";
 	}
 
 	// ------------------------------------------------------------
@@ -385,6 +466,7 @@ namespace
 		if(Utils::FileSystem::isRegularFile(iniPath))
 			ini = loadIniSections(iniPath);
 
+		// Defaults: ./layout/<layoutId>/<file>.xml
 		auto defPath = [&](const std::string& fileName) -> std::string
 		{
 			return "./layout/" + layoutId + "/" + fileName;
@@ -425,7 +507,10 @@ namespace
 				return;
 
 			if(!Utils::FileSystem::isRegularFile(srcAbs))
-				return; // optional
+			{
+				// Not fatal; just skip
+				return;
+			}
 
 			const std::string dstAbs = themeDir + "/" + dstName;
 			if(!copyFileForce(srcAbs, dstAbs))
@@ -466,6 +551,7 @@ namespace
 			Settings::getInstance()->setString("ThemeLayout", value);
 			Settings::getInstance()->saveFile();
 
+			// IMPORTANT: copy layout files to theme root (dialog behavior)
 			applyLayoutByCopy(win, themeDir, value);
 		}
 		else
@@ -575,7 +661,10 @@ namespace
 		if(current.empty())
 			current = opt.defaultValue;
 
-		// ES-X constructor expects 6 args
+		// NOTE: acceptBtnText is const char* and may be stored as pointer.
+		// Use static std::string to guarantee lifetime and allow translation.
+		static std::string okLabel = _("OK");
+
 		win->pushGui(new GuiTextEditPopup(
 			win,
 			title,
@@ -587,8 +676,8 @@ namespace
 
 				applyThemeOption(win, themeDir, opt, newValue);
 			},
-			false,  // multiline
-			"OK"    // accept label (safe lifetime)
+			false,              // multiline
+			okLabel.c_str()     // safe lifetime
 		));
 	}
 }
