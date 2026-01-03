@@ -1,6 +1,6 @@
 # EmulationStation-X (ES-X)
 <img width="1280" height="720" alt="LOGO" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" />
-https://www.youtube.com/watch?v=E0kRlrkbLo0&embeds_referring_euri=https%3A%2F%2Fretropie.org.uk%2F
+[YouTube demo](https://www.youtube.com/watch?v=E0kRlrkbLo0)
 
 EmulationStation-X (ES-X) is a personal fork of EmulationStation focused on modern theming, runtime customization, and creator-driven UI control, while remaining compatible with RetroPie.
 
