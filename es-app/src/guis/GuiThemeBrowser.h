@@ -20,7 +20,7 @@ public:
 	void update(int deltaTime) override;
 	void render(const Transform4x4f& parentTrans) override;
 
-	// Help prompts (barra inferior del sistema) - SIN override
+	// Help prompts (barra inferior del sistema)
 	std::vector<HelpPrompt> getHelpPrompts();
 	void updateHelpPrompts();
 
@@ -53,12 +53,8 @@ private:
 	NinePatchComponent mFrame;
 
 	ComponentList  mList;
-
-	// Panel derecho
 	ImageComponent mPreview;
-	TextComponent  mRepoLabel;   // <-- repo debajo de la imagen
-
-	// Header y footer
+	TextComponent  mRepoLabel;
 	TextComponent  mHeader;
 	TextComponent  mFooter;
 

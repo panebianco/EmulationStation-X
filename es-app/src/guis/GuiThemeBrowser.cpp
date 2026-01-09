@@ -113,13 +113,17 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	mPreview.setResize(rightW, rightH * 0.82f);
 	mPreview.setOrigin(0.0f, 0.0f);
 
-	// Repo debajo de la imagen (tipo “detalle”)
+	// Repo debajo de la imagen
 	const float repoY = rightY + (rightH * 0.82f) + 8.0f;
 	mRepoLabel.setPosition(rightX, repoY);
 	mRepoLabel.setSize(rightW, rightH * 0.16f);
 
 	loadThemes();
 	rebuildList();
+
+	// 🔑 CLAVE: este menú “maneja” la lista manualmente, así que le damos foco nosotros
+	mList.onFocusGained();
+
 	updatePreview();
 	updateFooter();
 	updateHelpPrompts();
@@ -216,7 +220,9 @@ void GuiThemeBrowser::rebuildList()
 			mWindow, "No themes found (themes.ini empty?)",
 			Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_LEFT
 		);
-		row.addElement(txt, true);
+
+		// 🔑 invert_when_selected=false -> si hay selector bar, el texto se dibuja encima
+		row.addElement(txt, false);
 		mList.addRow(row, true);
 		mLastSelectedIndex = 0;
 		return;
@@ -229,7 +235,6 @@ void GuiThemeBrowser::rebuildList()
 
 		ComponentListRow row;
 
-		// Lista limpia: SOLO el título (repo va al panel derecho)
 		std::string label = (e.title.empty() ? e.id : e.title);
 		if (installed)
 			label += "  [INSTALLED]";
@@ -238,7 +243,9 @@ void GuiThemeBrowser::rebuildList()
 			mWindow, label,
 			Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_LEFT
 		);
-		row.addElement(title, true);
+
+		// 🔑 CLAVE: esto hace que el texto NO sea tapado por la barra (y solo afecta a este menú)
+		row.addElement(title, false);
 
 		row.makeAcceptInputHandler([this, i]()
 		{
@@ -287,14 +294,11 @@ void GuiThemeBrowser::updatePreview()
 
 	const ThemeEntry& e = mThemes[mLastSelectedIndex];
 
-	// Header: solo título
 	mHeader.setText(e.title.empty() ? e.id : e.title);
 
-	// Imagen preview
 	const std::string preview = getPreviewPath(e);
 	mPreview.setImage(preview.empty() ? "" : preview);
 
-	// Repo debajo de la imagen (SMALL + tenue + recortado)
 	if (!e.repo.empty())
 		mRepoLabel.setText(ellipsize(e.repo, 70));
 	else
@@ -393,9 +397,9 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 	if (input.value == 0)
 		return false;
 
-	// B / Back
 	if (config->isMappedTo("b", input) || config->isMappedTo("back", input))
 	{
+		// opcional: mList.onFocusLost();
 		mWindow->removeGui(this);
 		return true;
 	}
@@ -419,7 +423,6 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 		return true;
 	}
 
-	// A / Start = download/update
 	if (config->isMappedTo("a", input) || config->isMappedTo("start", input))
 	{
 		const ThemeEntry& cur = mThemes[mLastSelectedIndex];
@@ -428,7 +431,6 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 		return true;
 	}
 
-	// X / Delete = uninstall
 	if (config->isMappedTo("x", input) || config->isMappedTo("delete", input))
 	{
 		const ThemeEntry& cur = mThemes[mLastSelectedIndex];
