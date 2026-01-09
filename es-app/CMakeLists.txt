@@ -16,6 +16,7 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/LocaleES.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ThemeOptions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeBrowser.h
 
     # 🔊 Background music
     ${CMAKE_CURRENT_SOURCE_DIR}/src/audio/BackgroundMusicManager.h
@@ -83,6 +84,7 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ThemeOptions.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeBrowser.cpp
     
 
     # 🔊 Background music

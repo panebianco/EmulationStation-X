@@ -10,6 +10,7 @@
 #include "guis/GuiScraperStart.h"
 #include "guis/GuiSettings.h"
 #include "guis/GuiThemeOptions.h"
+#include "guis/GuiThemeBrowser.h" // ✅ Theme Downloader (ES-X)
 #include "views/UIModeController.h"
 #include "views/ViewController.h"
 #include "CollectionSystemManager.h"
@@ -62,7 +63,6 @@ namespace
 	}
 
 	// === SONIDOS DE NAVEGACIÓN PARA MENÚ (BACK, ETC.) ===
-
 	inline std::shared_ptr<Sound> getNavSound(const std::string& logicalName)
 	{
 		auto vcState = ViewController::get()->getState();
@@ -431,6 +431,8 @@ void GuiMenu::openUISettings()
 		});
 	}
 
+	// ✅ ORDEN LÓGICO: primero opciones del tema, luego downloader
+
 	// THEME OPTIONS (GUI interna de ES-X)
 	{
 		ComponentListRow theme_row;
@@ -439,6 +441,18 @@ void GuiMenu::openUISettings()
 		theme_row.addElement(makeArrow(mWindow), false);
 		theme_row.makeAcceptInputHandler(std::bind(&GuiMenu::openThemeOptions, this));
 		s->addRow(theme_row);
+	}
+
+	// THEME DOWNLOADER (ES-X)
+	{
+		ComponentListRow theme_dl_row;
+		theme_dl_row.elements.clear();
+		theme_dl_row.addElement(std::make_shared<TextComponent>(mWindow, _("THEME DOWNLOADER"), Font::get(FONT_SIZE_MEDIUM), getMenuTextColor()), true);
+		theme_dl_row.addElement(makeArrow(mWindow), false);
+		theme_dl_row.makeAcceptInputHandler([this] {
+			mWindow->pushGui(new GuiThemeBrowser(mWindow));
+		});
+		s->addRow(theme_dl_row);
 	}
 
 	// LANGUAGE (usando .ini en ~/.emulationstation/lang)
@@ -822,7 +836,7 @@ void GuiMenu::openCollectionSystemSettings()
 	mWindow->pushGui(new GuiCollectionSystemsOptions(mWindow));
 }
 
-// NUEVO: lógica para abrir la GUI de opciones de tema
+// lógica para abrir la GUI de opciones de tema
 void GuiMenu::openThemeOptions()
 {
 	mWindow->pushGui(new GuiThemeOptions(mWindow));
