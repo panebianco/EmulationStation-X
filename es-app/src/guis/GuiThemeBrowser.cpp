@@ -1,3 +1,4 @@
+// es-app/src/guis/GuiThemeBrowser.cpp
 #include "guis/GuiThemeBrowser.h"
 
 #include "Log.h"
@@ -5,15 +6,14 @@
 #include "resources/Font.h"
 #include "utils/FileSystemUtil.h"
 #include "renderers/Renderer.h"
+
+// Popup concreto (implementa Window::InfoPopup)
 #include "guis/GuiInfoPopup.h"
 
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
 
-// ------------------------------------------------------------
-// helpers
-// ------------------------------------------------------------
 static inline std::string trim(const std::string& s)
 {
 	size_t b = s.find_first_not_of(" \t\r\n");
@@ -32,18 +32,20 @@ static inline std::string quote(const std::string& s)
 	return std::string("\"") + s + "\"";
 }
 
-// ------------------------------------------------------------
-// ctor
-// ------------------------------------------------------------
 GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	: GuiComponent(window)
 	, mFrame(window)
 	, mList(window)
 	, mPreview(window)
 	, mHeader(window, "Theme Downloader", Font::get(FONT_SIZE_LARGE), 0xFFFFFFFF, ALIGN_CENTER)
+	, mFooter(window, "", Font::get(FONT_SIZE_SMALL), 0xFFFFFFFF, ALIGN_CENTER)
 	, mPreviewDir("")
 	, mThemesDir("")
 	, mLastSelectedIndex(0)
+	, mInnerX(0.0f)
+	, mInnerY(0.0f)
+	, mInnerW(0.0f)
+	, mInnerH(0.0f)
 {
 	const std::string home = Utils::FileSystem::getHomePath();
 	mPreviewDir = home + "/.emulationstation/esx/theme-previews";
@@ -52,51 +54,67 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	const float sw = (float)Renderer::getScreenWidth();
 	const float sh = (float)Renderer::getScreenHeight();
 
-	// ---------------- frame ----------------
+	// ============================================================
+	// Frame general (ventana)
+	// ============================================================
 	mFrame.setImagePath(":/frame_dark.png");
 
 	const float marginX = sw * 0.05f;
 	const float marginY = sh * 0.06f;
 
 	mFrame.setPosition(Vector3f(marginX, marginY, 0.0f));
-	mFrame.setSize(Vector2f(sw - marginX * 2.0f, sh - marginY * 2.0f));
+	mFrame.setSize(Vector2f(sw - (marginX * 2.0f), sh - (marginY * 2.0f)));
 	mFrame.setCornerSize(Vector2f(16.0f, 16.0f));
 	mFrame.setOpacity(0.95f);
 
-	// ---------------- layout ----------------
-	const float innerX = marginX + sw * 0.02f;
-	const float innerY = marginY + sh * 0.02f;
-	const float innerW = (sw - marginX * 2.0f) - sw * 0.04f;
-	const float innerH = (sh - marginY * 2.0f) - sh * 0.04f;
+	// ============================================================
+	// Layout interno (todo dentro del frame)
+	// ============================================================
+	mInnerX = marginX + (sw * 0.02f);
+	mInnerY = marginY + (sh * 0.02f);
+	mInnerW = (sw - (marginX * 2.0f)) - (sw * 0.04f);
+	mInnerH = (sh - (marginY * 2.0f)) - (sh * 0.04f);
 
-	mHeader.setPosition(innerX, innerY);
-	mHeader.setSize(innerW, 40.0f);
+	// Header
+	mHeader.setPosition(mInnerX, mInnerY);
+	mHeader.setSize(mInnerW, 40.0f);
 
+	// Footer (texto simple, centrado)
+	mFooter.setPosition(mInnerX, mInnerY + mInnerH - 32.0f);
+	mFooter.setSize(mInnerW, 28.0f);
+
+	// Separación debajo del header
 	const float topPad = 55.0f;
+	const float bottomPad = 40.0f; // para que no tape el footer
 
-	mList.setPosition(innerX, innerY + topPad);
-	mList.setSize(innerW * 0.46f, innerH - topPad);
+	// Lista izquierda
+	mList.setPosition(mInnerX, mInnerY + topPad);
+	mList.setSize(mInnerW * 0.46f, (mInnerH - topPad - bottomPad));
 
-	mPreview.setPosition(innerX + innerW * 0.50f, innerY + topPad + 10.0f);
-	mPreview.setResize(innerW * 0.46f, innerH * 0.68f);
+	// Preview derecha (más chico estilo “detalles”)
+	const float previewX = mInnerX + (mInnerW * 0.50f);
+	const float previewY = mInnerY + topPad + 10.0f;
+
+	mPreview.setPosition(previewX, previewY);
+	mPreview.setResize(mInnerW * 0.46f, (mInnerH - topPad - bottomPad) * 0.95f);
 	mPreview.setOrigin(0.0f, 0.0f);
 
 	loadThemes();
 	rebuildList();
 	updatePreview();
+	updateFooter();
+
+	// Help prompts visibles
+	updateHelpPrompts();
 }
 
-// ------------------------------------------------------------
-// popup
-// ------------------------------------------------------------
 void GuiThemeBrowser::showPopup(const std::string& msg, int durationMs)
 {
+	// Window::setInfoPopup espera un Window::InfoPopup* (abstract base)
+	// GuiInfoPopup es una implementación concreta compatible.
 	mWindow->setInfoPopup(new GuiInfoPopup(mWindow, msg, durationMs));
 }
 
-// ------------------------------------------------------------
-// load themes.ini
-// ------------------------------------------------------------
 void GuiThemeBrowser::loadThemes()
 {
 	mThemes.clear();
@@ -120,13 +138,14 @@ void GuiThemeBrowser::loadThemes()
 
 	auto flushSection = [&]()
 	{
-		if (!inSection || current.id.empty())
-			return;
+		if (!inSection) return;
+		if (current.id.empty()) return;
 
 		if (current.title.empty())  current.title  = current.id;
 		if (current.folder.empty()) current.folder = current.id;
 
 		mThemes.push_back(current);
+
 		current = ThemeEntry{};
 		inSection = false;
 	};
@@ -135,9 +154,10 @@ void GuiThemeBrowser::loadThemes()
 	while (std::getline(f, line))
 	{
 		line = trim(line);
-		if (line.empty() || line[0] == ';' || line[0] == '#')
-			continue;
+		if (line.empty()) continue;
+		if (line[0] == ';' || line[0] == '#') continue;
 
+		// [section]
 		if (line.front() == '[' && line.back() == ']')
 		{
 			flushSection();
@@ -146,32 +166,32 @@ void GuiThemeBrowser::loadThemes()
 			continue;
 		}
 
+		// key = value
 		const size_t eq = line.find('=');
-		if (eq == std::string::npos || !inSection)
-			continue;
+		if (eq == std::string::npos) continue;
+		if (!inSection) continue;
 
 		const std::string key = trim(line.substr(0, eq));
 		const std::string val = trim(line.substr(eq + 1));
 
-		if      (key == "title")        current.title = val;
-		else if (key == "repo")         current.repo = val;
+		if (key == "title") current.title = val;
+		else if (key == "repo") current.repo = val;
 		else if (key == "preview_hint") current.previewHint = val;
-		else if (key == "folder")       current.folder = val;
+		else if (key == "folder") current.folder = val;
 	}
 
 	flushSection();
 
-	if (mLastSelectedIndex < 0 || mLastSelectedIndex >= (int)mThemes.size())
-		mLastSelectedIndex = 0;
+	if (mLastSelectedIndex < 0) mLastSelectedIndex = 0;
+	if (mLastSelectedIndex >= (int)mThemes.size()) mLastSelectedIndex = 0;
 }
 
-// ------------------------------------------------------------
 bool GuiThemeBrowser::isInstalled(const ThemeEntry& e) const
 {
-	return Utils::FileSystem::exists(mThemesDir + "/" + e.folder);
+	const std::string dst = mThemesDir + "/" + e.folder;
+	return Utils::FileSystem::exists(dst);
 }
 
-// ------------------------------------------------------------
 void GuiThemeBrowser::rebuildList()
 {
 	mList.clear();
@@ -179,14 +199,13 @@ void GuiThemeBrowser::rebuildList()
 	if (mThemes.empty())
 	{
 		ComponentListRow row;
-		row.addElement(std::make_shared<TextComponent>(
-			mWindow,
-			"No themes found (themes.ini vacío?)",
-			Font::get(FONT_SIZE_MEDIUM),
-			0xFFFFFFFF,
-			ALIGN_LEFT), true);
-
+		auto txt = std::make_shared<TextComponent>(
+			mWindow, "No themes found (themes.ini vacío?)",
+			Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_LEFT
+		);
+		row.addElement(txt, true);
 		mList.addRow(row, true);
+		mLastSelectedIndex = 0;
 		return;
 	}
 
@@ -200,46 +219,54 @@ void GuiThemeBrowser::rebuildList()
 		if (isInstalled(e))
 			label += "  [INSTALLED]";
 
-		row.addElement(std::make_shared<TextComponent>(
-			mWindow,
-			label,
-			Font::get(FONT_SIZE_MEDIUM),
-			0xFFFFFFFF,
-			ALIGN_LEFT), true);
+		auto title = std::make_shared<TextComponent>(
+			mWindow, label,
+			Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_LEFT
+		);
+		row.addElement(title, true);
 
 		if (!e.repo.empty())
 		{
-			row.addElement(std::make_shared<TextComponent>(
-				mWindow,
-				e.repo,
-				Font::get(FONT_SIZE_SMALL),
-				0xAAAAAAFF,
-				ALIGN_LEFT), false);
+			auto repo = std::make_shared<TextComponent>(
+				mWindow, e.repo,
+				Font::get(FONT_SIZE_SMALL), 0xAAAAAAFF, ALIGN_LEFT
+			);
+			row.addElement(repo, false);
 		}
 
-		mList.addRow(row, i == mLastSelectedIndex);
+		// Accept handler solo para refrescar preview/footer si el list lo dispara
+		row.makeAcceptInputHandler([this, i]()
+		{
+			mLastSelectedIndex = i;
+			updatePreview();
+			updateFooter();
+			updateHelpPrompts();
+		});
+
+		mList.addRow(row, (i == mLastSelectedIndex));
 	}
 
 	updatePreview();
+	updateFooter();
+	updateHelpPrompts();
 }
 
-// ------------------------------------------------------------
 std::string GuiThemeBrowser::getPreviewPath(const ThemeEntry& e) const
 {
-	const std::string base = e.previewHint.empty() ? e.id : e.previewHint;
+	std::string base = e.previewHint.empty() ? e.id : e.previewHint;
 
 	const std::string p1 = mPreviewDir + "/" + base + ".png";
-	const std::string p2 = mPreviewDir + "/" + base + ".jpg";
-	const std::string p3 = mPreviewDir + "/" + base + ".jpeg";
-
 	if (fileExists(p1)) return p1;
+
+	const std::string p2 = mPreviewDir + "/" + base + ".jpg";
 	if (fileExists(p2)) return p2;
+
+	const std::string p3 = mPreviewDir + "/" + base + ".jpeg";
 	if (fileExists(p3)) return p3;
 
 	return "";
 }
 
-// ------------------------------------------------------------
 void GuiThemeBrowser::updatePreview()
 {
 	if (mThemes.empty())
@@ -249,21 +276,43 @@ void GuiThemeBrowser::updatePreview()
 		return;
 	}
 
+	if (mLastSelectedIndex < 0) mLastSelectedIndex = 0;
+	if (mLastSelectedIndex >= (int)mThemes.size()) mLastSelectedIndex = 0;
+
 	const ThemeEntry& e = mThemes[mLastSelectedIndex];
+
 	mHeader.setText(e.title);
 
-	const std::string p = getPreviewPath(e);
-	mPreview.setImage(p.empty() ? "" : p);
+	const std::string preview = getPreviewPath(e);
+	mPreview.setImage(preview.empty() ? "" : preview);
 }
 
-// ------------------------------------------------------------
+void GuiThemeBrowser::updateFooter()
+{
+	if (mThemes.empty())
+	{
+		mFooter.setText("B Volver");
+		return;
+	}
+
+	const ThemeEntry& e = mThemes[mLastSelectedIndex];
+	const bool installed = isInstalled(e);
+
+	std::string s = "A ";
+	s += installed ? "Actualizar" : "Descargar";
+	s += "   |   X ";
+	s += installed ? "Desinstalar" : "—";
+	s += "   |   B Volver";
+
+	mFooter.setText(s);
+}
+
 int GuiThemeBrowser::runCmd(const std::string& cmd)
 {
 	LOG(LogInfo) << "GuiThemeBrowser cmd: " << cmd;
 	return std::system(cmd.c_str());
 }
 
-// ------------------------------------------------------------
 bool GuiThemeBrowser::downloadOrUpdate(const ThemeEntry& e)
 {
 	if (e.repo.empty())
@@ -275,13 +324,22 @@ bool GuiThemeBrowser::downloadOrUpdate(const ThemeEntry& e)
 	Utils::FileSystem::createDirectory(mThemesDir);
 
 	const std::string dst = mThemesDir + "/" + e.folder;
-	const bool installed = isInstalled(e);
+	const bool installed = Utils::FileSystem::exists(dst);
 
 	showPopup(installed ? "Updating theme..." : "Downloading theme...", 2000);
 
-	int rc = installed
-		? runCmd("git -C " + quote(dst) + " pull --ff-only")
-		: runCmd("git clone --depth 1 " + quote(e.repo) + " " + quote(dst));
+	int rc = 0;
+
+	if (!installed)
+	{
+		const std::string cmd = "git clone --depth 1 " + quote(e.repo) + " " + quote(dst);
+		rc = runCmd(cmd);
+	}
+	else
+	{
+		const std::string cmd = "git -C " + quote(dst) + " pull --ff-only";
+		rc = runCmd(cmd);
+	}
 
 	if (rc == 0)
 	{
@@ -293,18 +351,18 @@ bool GuiThemeBrowser::downloadOrUpdate(const ThemeEntry& e)
 	return false;
 }
 
-// ------------------------------------------------------------
 bool GuiThemeBrowser::uninstallTheme(const ThemeEntry& e)
 {
 	const std::string dst = mThemesDir + "/" + e.folder;
 
-	if (!isInstalled(e))
+	if (!Utils::FileSystem::exists(dst))
 	{
 		showPopup("Theme is not installed.", 3000);
 		return false;
 	}
 
-	const int rc = runCmd("rm -rf " + quote(dst));
+	const std::string cmd = "rm -rf " + quote(dst);
+	const int rc = runCmd(cmd);
 
 	if (rc == 0 && !Utils::FileSystem::exists(dst))
 	{
@@ -316,53 +374,70 @@ bool GuiThemeBrowser::uninstallTheme(const ThemeEntry& e)
 	return false;
 }
 
-// ------------------------------------------------------------
 bool GuiThemeBrowser::input(InputConfig* config, Input input)
 {
 	if (input.value == 0)
 		return false;
 
-	// Back
+	// B / Back = salir
 	if (config->isMappedTo("b", input) || config->isMappedTo("back", input))
 	{
 		mWindow->removeGui(this);
 		return true;
 	}
 
+	if (mThemes.empty())
+		return GuiComponent::input(config, input);
+
+	// Navegación propia
 	if (config->isMappedTo("up", input))
 	{
-		mLastSelectedIndex = (mLastSelectedIndex - 1 + mThemes.size()) % mThemes.size();
+		mLastSelectedIndex--;
+		if (mLastSelectedIndex < 0) mLastSelectedIndex = (int)mThemes.size() - 1;
 		rebuildList();
 		return true;
 	}
 
 	if (config->isMappedTo("down", input))
 	{
-		mLastSelectedIndex = (mLastSelectedIndex + 1) % mThemes.size();
+		mLastSelectedIndex++;
+		if (mLastSelectedIndex >= (int)mThemes.size()) mLastSelectedIndex = 0;
 		rebuildList();
 		return true;
 	}
 
-	// A = download/update
+	// A / Start = descargar/actualizar
 	if (config->isMappedTo("a", input) || config->isMappedTo("start", input))
 	{
-		downloadOrUpdate(mThemes[mLastSelectedIndex]);
+		const ThemeEntry& cur = mThemes[mLastSelectedIndex];
+		downloadOrUpdate(cur);
 		rebuildList();
 		return true;
 	}
 
-	// X = uninstall
+	// X / Delete = desinstalar
 	if (config->isMappedTo("x", input) || config->isMappedTo("delete", input))
 	{
-		uninstallTheme(mThemes[mLastSelectedIndex]);
-		rebuildList();
+		const ThemeEntry& cur = mThemes[mLastSelectedIndex];
+		if (isInstalled(cur))
+		{
+			uninstallTheme(cur);
+			rebuildList();
+		}
+		else
+		{
+			showPopup("Not installed.", 2500);
+		}
 		return true;
 	}
 
-	return false;
+	// fallback al list
+	if (mList.input(config, input))
+		return true;
+
+	return GuiComponent::input(config, input);
 }
 
-// ------------------------------------------------------------
 void GuiThemeBrowser::update(int deltaTime)
 {
 	GuiComponent::update(deltaTime);
@@ -370,9 +445,9 @@ void GuiThemeBrowser::update(int deltaTime)
 	mList.update(deltaTime);
 	mPreview.update(deltaTime);
 	mHeader.update(deltaTime);
+	mFooter.update(deltaTime);
 }
 
-// ------------------------------------------------------------
 void GuiThemeBrowser::render(const Transform4x4f& parentTrans)
 {
 	Transform4x4f trans = parentTrans * getTransform();
@@ -382,4 +457,34 @@ void GuiThemeBrowser::render(const Transform4x4f& parentTrans)
 	mHeader.render(trans);
 	mList.render(trans);
 	mPreview.render(trans);
+	mFooter.render(trans);
+}
+
+// ============================================================
+// Help prompts (barra inferior del sistema)
+// ============================================================
+std::vector<HelpPrompt> GuiThemeBrowser::getHelpPrompts()
+{
+	std::vector<HelpPrompt> p;
+
+	p.push_back(HelpPrompt("up/down", "Move"));
+
+	const bool hasThemes = !mThemes.empty();
+	const bool installed = (hasThemes ? isInstalled(mThemes[mLastSelectedIndex]) : false);
+
+	p.push_back(HelpPrompt("a", installed ? "Update" : "Download"));
+
+	// Solo mostrar X si está instalado, para que sea “limpio”
+	if (installed)
+		p.push_back(HelpPrompt("x", "Uninstall"));
+
+	p.push_back(HelpPrompt("b", "Back"));
+
+	return p;
+}
+
+void GuiThemeBrowser::updateHelpPrompts()
+{
+	HelpStyle style; // default seguro
+	mWindow->setHelpPrompts(getHelpPrompts(), style);
 }

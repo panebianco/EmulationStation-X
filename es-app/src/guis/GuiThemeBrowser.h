@@ -1,3 +1,4 @@
+// es-app/src/guis/GuiThemeBrowser.h
 #pragma once
 
 #include "GuiComponent.h"
@@ -6,20 +7,22 @@
 #include "components/ImageComponent.h"
 #include "components/TextComponent.h"
 #include "components/NinePatchComponent.h"
-#include "components/HelpComponent.h"
 
 #include <string>
 #include <vector>
-#include <memory>
 
 class GuiThemeBrowser : public GuiComponent
 {
 public:
-	explicit GuiThemeBrowser(Window* window);
+	GuiThemeBrowser(Window* window);
 
 	bool input(InputConfig* config, Input input) override;
 	void update(int deltaTime) override;
 	void render(const Transform4x4f& parentTrans) override;
+
+	// Help prompts (barra inferior del sistema) - SIN override (tu GuiComponent no lo expone como virtual)
+	std::vector<HelpPrompt> getHelpPrompts();
+	void updateHelpPrompts();
 
 private:
 	struct ThemeEntry
@@ -34,6 +37,7 @@ private:
 	void loadThemes();
 	void rebuildList();
 	void updatePreview();
+	void updateFooter();
 	std::string getPreviewPath(const ThemeEntry& e) const;
 
 	bool isInstalled(const ThemeEntry& e) const;
@@ -46,21 +50,23 @@ private:
 	void showPopup(const std::string& msg, int durationMs);
 
 private:
-	// Frame “ventana”
 	NinePatchComponent mFrame;
 
-	// UI
 	ComponentList  mList;
 	ImageComponent mPreview;
 	TextComponent  mHeader;
+	TextComponent  mFooter;
 
-	// Barra de ayuda (A/X/B)
-	std::shared_ptr<HelpComponent> mHelp;
-
-	// Data
 	std::vector<ThemeEntry> mThemes;
 
 	std::string mPreviewDir;
 	std::string mThemesDir;
+
 	int mLastSelectedIndex;
+
+	// layout cache
+	float mInnerX;
+	float mInnerY;
+	float mInnerW;
+	float mInnerH;
 };
