@@ -3,35 +3,37 @@
 #include "components/ComponentGrid.h"
 #include "components/ImageComponent.h"
 #include "components/TextComponent.h"
+
 #include "resources/TextureResource.h"
+#include "resources/ResourceManager.h"
+#include "resources/Font.h"
+
 #include "utils/StringUtil.h"
+#include "utils/FileSystemUtil.h"
+
 #include "Log.h"
 #include "Settings.h"
-#include "../LocaleESHook.h"   // Para es_translate()
+#include "../LocaleESHook.h"   // es_translate()
 
-#define OFFSET_X 12 
-#define OFFSET_Y 12 
+#include <algorithm>
 
 #define ICON_TEXT_SPACING 8
 #define ENTRY_SPACING 16
 
-// 🔹 Mapa de íconos
-static const std::map<std::string, const char*> ICON_PATH_MAP {
-	{ "up/down", ":/help/dpad_updown.svg" },
-	{ "left/right", ":/help/dpad_leftright.svg" },
-	{ "up/down/left/right", ":/help/dpad_all.svg" },
-	{ "a", ":/help/button_a.svg" },
-	{ "b", ":/help/button_b.svg" },
-	{ "x", ":/help/button_x.svg" },
-	{ "y", ":/help/button_y.svg" },
-	{ "l", ":/help/button_l.svg" },
-	{ "r", ":/help/button_r.svg" },
-	{ "lr", ":/help/button_lr.svg" },
-	{ "start", ":/help/button_start.svg" },
-	{ "select", ":/help/button_select.svg" }
-};
+// ------------------------------------------------------------
+// Helpers locales
+// ------------------------------------------------------------
+static std::string trimSlashes(std::string s)
+{
+	while (!s.empty() && (s.back() == '/' || s.back() == '\\'))
+		s.pop_back();
+	return s;
+}
 
-HelpComponent::HelpComponent(Window* window) : GuiComponent(window)
+// ------------------------------------------------------------
+
+HelpComponent::HelpComponent(Window* window)
+	: GuiComponent(window)
 {
 }
 
@@ -53,11 +55,11 @@ void HelpComponent::setStyle(const HelpStyle& style)
 	updateGrid();
 }
 
-// 🔹 Normaliza claves como "favorites", "favs", "favorite" → "FAVORITES"
-static std::string normalizeKey(const std::string& key)
+std::string HelpComponent::normalizeKey(const std::string& key)
 {
 	std::string k = Utils::String::toLower(key);
 
+	// Normalización mínima (tu sistema de traducción .ini usa keys como FAVORITES/BACK/etc.)
 	if (k == "favorites" || k == "favs" || k == "favorite")
 		return "FAVORITES";
 
@@ -76,27 +78,236 @@ static std::string normalizeKey(const std::string& key)
 	if (k == "choose")
 		return "CHOOSE";
 
+	if (k == "close")
+		return "CLOSE";
+
 	return Utils::String::toUpper(key);
+}
+
+std::string HelpComponent::getSettingSafe(const std::string& key, const std::string& def)
+{
+	std::string v = Settings::getInstance()->getString(key);
+	if (v.empty())
+		return def;
+	return v;
+}
+
+std::string HelpComponent::joinPath(const std::string& base, const std::string& rel)
+{
+	if (base.empty())
+		return rel;
+
+	// resource path
+	if (base.rfind(":/", 0) == 0)
+	{
+		std::string b = trimSlashes(base);
+		if (!rel.empty() && rel.front() == '/')
+			return b + rel;
+		return b + "/" + rel;
+	}
+
+	// filesystem
+	std::string b = trimSlashes(base);
+	if (!rel.empty() && (rel.front() == '/' || rel.front() == '\\'))
+		return b + rel;
+
+	return b + "/" + rel;
+}
+
+bool HelpComponent::existsAny(const std::string& path)
+{
+	// resource
+	if (path.rfind(":/", 0) == 0)
+		return ResourceManager::getInstance()->fileExists(path);
+
+	// filesystem
+	return Utils::FileSystem::exists(path);
+}
+
+std::vector<std::string> HelpComponent::getSearchBases()
+{
+	std::vector<std::string> bases;
+
+	// ÚNICA configuración: HelpIconSet
+	// - "default" => busca en :/help (y también permite overrides en ~/.emulationstation/help)
+	// - otro      => busca en ~/.emulationstation/help/<set>, ~/.emulationstation/help/iconsets/<set>, y :/help/<set>
+	const std::string set = getSettingSafe("HelpIconSet", "default");
+	const std::string home = Utils::FileSystem::getHomePath();
+
+	// Overrides en filesystem (siempre permitidos)
+	// (ideal para que el usuario pueda inyectar iconos sin recompilar)
+	if (set != "default" && !set.empty())
+	{
+		bases.push_back(home + "/.emulationstation/help/" + set);
+		bases.push_back(home + "/.emulationstation/help/iconsets/" + set);
+	}
+
+	bases.push_back(home + "/.emulationstation/help");
+	bases.push_back(home + "/.emulationstation/help/iconsets");
+
+	// resources
+	if (set != "default" && !set.empty())
+		bases.push_back(std::string(":/help/") + set);
+
+	// resources default
+	bases.push_back(":/help");
+
+	return bases;
+}
+
+std::vector<std::string> HelpComponent::buildCandidateRelativeFiles(const std::string& logicalName)
+{
+	// IMPORTANTE:
+	// - NO hay HelpIconStyle ni sufijos por settings.
+	// - Todo se resuelve por el iconset (carpeta) y por nombres “simples”.
+	std::vector<std::string> rel;
+
+	auto svg = [&](const std::string& n) { rel.push_back(n + ".svg"); };
+	auto png = [&](const std::string& n) { rel.push_back(n + ".png"); };
+
+	// Direcciones / DPAD
+	if (logicalName == "up/down")
+	{
+		svg("dpad_updown");
+		svg("updown");
+		png("updown");
+	}
+	else if (logicalName == "left/right")
+	{
+		svg("dpad_leftright");
+		svg("leftright");
+		png("leftright");
+	}
+	else if (logicalName == "up/down/left/right")
+	{
+		svg("dpad_all");
+		svg("all");
+		png("all");
+	}
+	// Botones ABXY
+	else if (logicalName == "a" || logicalName == "b" || logicalName == "x" || logicalName == "y")
+	{
+		// Nombres simples (PlayStation-X / iconsets típicos)
+		svg(logicalName);
+		png(logicalName);
+
+		// Compat ES-DE style genérico
+		svg(std::string("button_") + logicalName);
+		svg(std::string("mbuttons_") + logicalName);
+	}
+	// Start / Select / Back
+	else if (logicalName == "start")
+	{
+		svg("start");
+		png("start");
+		svg("button_start");
+	}
+	else if (logicalName == "select")
+	{
+		svg("select");
+		png("select");
+		svg("button_select");
+	}
+	else if (logicalName == "back")
+	{
+		svg("back");
+		png("back");
+		svg("button_back");
+	}
+	// Hombros y gatillos
+	else if (logicalName == "l")
+	{
+		svg("l"); png("l");
+		svg("button_l");
+	}
+	else if (logicalName == "r")
+	{
+		svg("r"); png("r");
+		svg("button_r");
+	}
+	else if (logicalName == "lr")
+	{
+		svg("lr"); png("lr");
+		svg("button_lr");
+	}
+	else if (logicalName == "lt")
+	{
+		svg("lt"); png("lt");
+		svg("button_lt");
+	}
+	else if (logicalName == "rt")
+	{
+		svg("rt"); png("rt");
+		svg("button_rt");
+	}
+	else if (logicalName == "ltrt")
+	{
+		svg("ltrt"); png("ltrt");
+		svg("button_ltrt");
+	}
+	// Fallback genérico
+	else
+	{
+		svg(logicalName);
+		png(logicalName);
+		svg(std::string("button_") + logicalName);
+	}
+
+	return rel;
+}
+
+std::shared_ptr<TextureResource> HelpComponent::getIconTexture(const char* logicalName)
+{
+	const std::string key(logicalName);
+
+	auto it = mIconCache.find(key);
+	if (it != mIconCache.cend())
+		return it->second;
+
+	const std::vector<std::string> relFiles = buildCandidateRelativeFiles(key);
+	const std::vector<std::string> bases = getSearchBases();
+
+	for (const auto& base : bases)
+	{
+		for (const auto& rel : relFiles)
+		{
+			const std::string full = joinPath(base, rel);
+
+			if (existsAny(full))
+			{
+				auto tex = TextureResource::get(full);
+				mIconCache[key] = tex;
+				return tex;
+			}
+		}
+	}
+
+	LOG(LogWarning) << "HelpComponent: missing icon for \"" << key << "\"";
+	mIconCache[key] = nullptr;
+	return nullptr;
 }
 
 void HelpComponent::updateGrid()
 {
-	if(!Settings::getInstance()->getBool("ShowHelpPrompts") || mPrompts.empty())
+	if (!Settings::getInstance()->getBool("ShowHelpPrompts") || mPrompts.empty())
 	{
 		mGrid.reset();
 		return;
 	}
 
 	std::shared_ptr<Font>& font = mStyle.font;
+	if (!font)
+		font = Font::get(FONT_SIZE_SMALL);
+
 	mGrid = std::make_shared<ComponentGrid>(mWindow, Vector2i((int)mPrompts.size() * 4, 1));
 
-	std::vector< std::shared_ptr<ImageComponent> > icons;
-	std::vector< std::shared_ptr<TextComponent> > labels;
+	std::vector<std::shared_ptr<ImageComponent>> icons;
+	std::vector<std::shared_ptr<TextComponent>> labels;
 
-	float width = 0;
+	float width = 0.0f;
 	const float height = Math::round(font->getLetterHeight() * 1.25f);
 
-	for(auto it = mPrompts.cbegin(); it != mPrompts.cend(); it++)
+	for (auto it = mPrompts.cbegin(); it != mPrompts.cend(); ++it)
 	{
 		auto icon = std::make_shared<ImageComponent>(mWindow);
 		icon->setImage(getIconTexture(it->first.c_str()));
@@ -104,7 +315,6 @@ void HelpComponent::updateGrid()
 		icon->setResize(0, height);
 		icons.push_back(icon);
 
-		// 🔹 Traducción corregida
 		std::string normalizedKey = normalizeKey(it->second);
 		std::string translated = es_translate(normalizedKey);
 
@@ -119,14 +329,21 @@ void HelpComponent::updateGrid()
 		width += icon->getSize().x() + lbl->getSize().x() + ICON_TEXT_SPACING + ENTRY_SPACING;
 	}
 
+	if (width <= 0.0f)
+		width = 1.0f;
+
 	mGrid->setSize(width, height);
 
-	for(unsigned int i = 0; i < icons.size(); i++)
+	for (unsigned int i = 0; i < icons.size(); i++)
 	{
-		const int col = i * 4;
-		mGrid->setColWidthPerc(col, icons.at(i)->getSize().x() / width);
-		mGrid->setColWidthPerc(col + 1, ICON_TEXT_SPACING / width);
-		mGrid->setColWidthPerc(col + 2, labels.at(i)->getSize().x() / width);
+		const int col = (int)i * 4;
+
+		const float iconW = icons.at(i)->getSize().x();
+		const float labelW = labels.at(i)->getSize().x();
+
+		mGrid->setColWidthPerc(col, iconW / width);
+		mGrid->setColWidthPerc(col + 1, (float)ICON_TEXT_SPACING / width);
+		mGrid->setColWidthPerc(col + 2, labelW / width);
 
 		mGrid->setEntry(icons.at(i), Vector2i(col, 0), false, false);
 		mGrid->setEntry(labels.at(i), Vector2i(col + 2, 0), false, false);
@@ -135,41 +352,21 @@ void HelpComponent::updateGrid()
 	mGrid->setPosition(Vector3f(mStyle.position.x(), mStyle.position.y(), 0.0f));
 }
 
-std::shared_ptr<TextureResource> HelpComponent::getIconTexture(const char* name)
-{
-	auto it = mIconCache.find(name);
-	if(it != mIconCache.cend())
-		return it->second;
-
-	auto pathLookup = ICON_PATH_MAP.find(name);
-	if(pathLookup == ICON_PATH_MAP.cend())
-	{
-		LOG(LogError) << "Unknown help icon \"" << name << "\"!";
-		return nullptr;
-	}
-	if(!ResourceManager::getInstance()->fileExists(pathLookup->second))
-	{
-		LOG(LogError) << "Missing icon file \"" << pathLookup->second << "\"!";
-		return nullptr;
-	}
-
-	auto tex = TextureResource::get(pathLookup->second);
-	mIconCache[std::string(name)] = tex;
-	return tex;
-}
-
 void HelpComponent::setOpacity(unsigned char opacity)
 {
 	GuiComponent::setOpacity(opacity);
 
-	for(unsigned int i = 0; i < mGrid->getChildCount(); i++)
+	if (!mGrid)
+		return;
+
+	for (unsigned int i = 0; i < mGrid->getChildCount(); i++)
 		mGrid->getChild(i)->setOpacity(opacity);
 }
 
-void HelpComponent::render(const Transform4x4f& parentTrans)
+void HelpComponent::render(const Transform4x4f& parent)
 {
-	Transform4x4f trans = parentTrans * getTransform();
+	Transform4x4f trans = parent * getTransform();
 
-	if(mGrid)
+	if (mGrid)
 		mGrid->render(trans);
 }
