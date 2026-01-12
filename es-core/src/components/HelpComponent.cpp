@@ -20,17 +20,12 @@
 #define ICON_TEXT_SPACING 8
 #define ENTRY_SPACING 16
 
-// ------------------------------------------------------------
-// Helpers locales
-// ------------------------------------------------------------
 static std::string trimSlashes(std::string s)
 {
 	while (!s.empty() && (s.back() == '/' || s.back() == '\\'))
 		s.pop_back();
 	return s;
 }
-
-// ------------------------------------------------------------
 
 HelpComponent::HelpComponent(Window* window)
 	: GuiComponent(window)
@@ -45,41 +40,55 @@ void HelpComponent::clearPrompts()
 
 void HelpComponent::setPrompts(const std::vector<HelpPrompt>& prompts)
 {
+	if (promptsEqual(mPrompts, prompts))
+		return;
+
 	mPrompts = prompts;
 	updateGrid();
 }
 
 void HelpComponent::setStyle(const HelpStyle& style)
 {
+	if (styleEqual(mStyle, style))
+		return;
+
 	mStyle = style;
 	updateGrid();
+}
+
+bool HelpComponent::promptsEqual(const std::vector<HelpPrompt>& a, const std::vector<HelpPrompt>& b) const
+{
+	if (a.size() != b.size())
+		return false;
+
+	for (size_t i = 0; i < a.size(); i++)
+	{
+		if (a[i].first != b[i].first)  return false;
+		if (a[i].second != b[i].second) return false;
+	}
+	return true;
+}
+
+bool HelpComponent::styleEqual(const HelpStyle& a, const HelpStyle& b) const
+{
+	if (a.position != b.position) return false;
+	if (a.iconColor != b.iconColor) return false;
+	if (a.textColor != b.textColor) return false;
+	if (a.font != b.font) return false;
+	return true;
 }
 
 std::string HelpComponent::normalizeKey(const std::string& key)
 {
 	std::string k = Utils::String::toLower(key);
 
-	// Normalización mínima (tu sistema de traducción .ini usa keys como FAVORITES/BACK/etc.)
-	if (k == "favorites" || k == "favs" || k == "favorite")
-		return "FAVORITES";
-
-	if (k == "back")
-		return "BACK";
-
-	if (k == "select")
-		return "SELECT";
-
-	if (k == "menu")
-		return "MENU";
-
-	if (k == "random")
-		return "RANDOM";
-
-	if (k == "choose")
-		return "CHOOSE";
-
-	if (k == "close")
-		return "CLOSE";
+	if (k == "favorites" || k == "favs" || k == "favorite") return "FAVORITES";
+	if (k == "back")  return "BACK";
+	if (k == "select") return "SELECT";
+	if (k == "menu")  return "MENU";
+	if (k == "random") return "RANDOM";
+	if (k == "choose") return "CHOOSE";
+	if (k == "close") return "CLOSE";
 
 	return Utils::String::toUpper(key);
 }
@@ -87,9 +96,7 @@ std::string HelpComponent::normalizeKey(const std::string& key)
 std::string HelpComponent::getSettingSafe(const std::string& key, const std::string& def)
 {
 	std::string v = Settings::getInstance()->getString(key);
-	if (v.empty())
-		return def;
-	return v;
+	return v.empty() ? def : v;
 }
 
 std::string HelpComponent::joinPath(const std::string& base, const std::string& rel)
@@ -97,7 +104,6 @@ std::string HelpComponent::joinPath(const std::string& base, const std::string& 
 	if (base.empty())
 		return rel;
 
-	// resource path
 	if (base.rfind(":/", 0) == 0)
 	{
 		std::string b = trimSlashes(base);
@@ -106,7 +112,6 @@ std::string HelpComponent::joinPath(const std::string& base, const std::string& 
 		return b + "/" + rel;
 	}
 
-	// filesystem
 	std::string b = trimSlashes(base);
 	if (!rel.empty() && (rel.front() == '/' || rel.front() == '\\'))
 		return b + rel;
@@ -116,11 +121,9 @@ std::string HelpComponent::joinPath(const std::string& base, const std::string& 
 
 bool HelpComponent::existsAny(const std::string& path)
 {
-	// resource
 	if (path.rfind(":/", 0) == 0)
 		return ResourceManager::getInstance()->fileExists(path);
 
-	// filesystem
 	return Utils::FileSystem::exists(path);
 }
 
@@ -128,14 +131,9 @@ std::vector<std::string> HelpComponent::getSearchBases()
 {
 	std::vector<std::string> bases;
 
-	// ÚNICA configuración: HelpIconSet
-	// - "default" => busca en :/help (y también permite overrides en ~/.emulationstation/help)
-	// - otro      => busca en ~/.emulationstation/help/<set>, ~/.emulationstation/help/iconsets/<set>, y :/help/<set>
 	const std::string set = getSettingSafe("HelpIconSet", "default");
 	const std::string home = Utils::FileSystem::getHomePath();
 
-	// Overrides en filesystem (siempre permitidos)
-	// (ideal para que el usuario pueda inyectar iconos sin recompilar)
 	if (set != "default" && !set.empty())
 	{
 		bases.push_back(home + "/.emulationstation/help/" + set);
@@ -145,11 +143,9 @@ std::vector<std::string> HelpComponent::getSearchBases()
 	bases.push_back(home + "/.emulationstation/help");
 	bases.push_back(home + "/.emulationstation/help/iconsets");
 
-	// resources
 	if (set != "default" && !set.empty())
 		bases.push_back(std::string(":/help/") + set);
 
-	// resources default
 	bases.push_back(":/help");
 
 	return bases;
@@ -157,100 +153,68 @@ std::vector<std::string> HelpComponent::getSearchBases()
 
 std::vector<std::string> HelpComponent::buildCandidateRelativeFiles(const std::string& logicalName)
 {
-	// IMPORTANTE:
-	// - NO hay HelpIconStyle ni sufijos por settings.
-	// - Todo se resuelve por el iconset (carpeta) y por nombres “simples”.
 	std::vector<std::string> rel;
 
 	auto svg = [&](const std::string& n) { rel.push_back(n + ".svg"); };
 	auto png = [&](const std::string& n) { rel.push_back(n + ".png"); };
 
-	// Direcciones / DPAD
 	if (logicalName == "up/down")
 	{
-		svg("dpad_updown");
-		svg("updown");
-		png("updown");
+		svg("dpad_updown"); svg("updown"); png("updown");
 	}
 	else if (logicalName == "left/right")
 	{
-		svg("dpad_leftright");
-		svg("leftright");
-		png("leftright");
+		svg("dpad_leftright"); svg("leftright"); png("leftright");
 	}
 	else if (logicalName == "up/down/left/right")
 	{
-		svg("dpad_all");
-		svg("all");
-		png("all");
+		svg("dpad_all"); svg("all"); png("all");
 	}
-	// Botones ABXY
 	else if (logicalName == "a" || logicalName == "b" || logicalName == "x" || logicalName == "y")
 	{
-		// Nombres simples (PlayStation-X / iconsets típicos)
-		svg(logicalName);
-		png(logicalName);
-
-		// Compat ES-DE style genérico
+		svg(logicalName); png(logicalName);
 		svg(std::string("button_") + logicalName);
 		svg(std::string("mbuttons_") + logicalName);
 	}
-	// Start / Select / Back
 	else if (logicalName == "start")
 	{
-		svg("start");
-		png("start");
-		svg("button_start");
+		svg("start"); png("start"); svg("button_start");
 	}
 	else if (logicalName == "select")
 	{
-		svg("select");
-		png("select");
-		svg("button_select");
+		svg("select"); png("select"); svg("button_select");
 	}
 	else if (logicalName == "back")
 	{
-		svg("back");
-		png("back");
-		svg("button_back");
+		svg("back"); png("back"); svg("button_back");
 	}
-	// Hombros y gatillos
 	else if (logicalName == "l")
 	{
-		svg("l"); png("l");
-		svg("button_l");
+		svg("l"); png("l"); svg("button_l");
 	}
 	else if (logicalName == "r")
 	{
-		svg("r"); png("r");
-		svg("button_r");
+		svg("r"); png("r"); svg("button_r");
 	}
 	else if (logicalName == "lr")
 	{
-		svg("lr"); png("lr");
-		svg("button_lr");
+		svg("lr"); png("lr"); svg("button_lr");
 	}
 	else if (logicalName == "lt")
 	{
-		svg("lt"); png("lt");
-		svg("button_lt");
+		svg("lt"); png("lt"); svg("button_lt");
 	}
 	else if (logicalName == "rt")
 	{
-		svg("rt"); png("rt");
-		svg("button_rt");
+		svg("rt"); png("rt"); svg("button_rt");
 	}
 	else if (logicalName == "ltrt")
 	{
-		svg("ltrt"); png("ltrt");
-		svg("button_ltrt");
+		svg("ltrt"); png("ltrt"); svg("button_ltrt");
 	}
-	// Fallback genérico
 	else
 	{
-		svg(logicalName);
-		png(logicalName);
-		svg(std::string("button_") + logicalName);
+		svg(logicalName); png(logicalName); svg(std::string("button_") + logicalName);
 	}
 
 	return rel;
@@ -259,6 +223,13 @@ std::vector<std::string> HelpComponent::buildCandidateRelativeFiles(const std::s
 std::shared_ptr<TextureResource> HelpComponent::getIconTexture(const char* logicalName)
 {
 	const std::string key(logicalName);
+
+	const std::string currentSet = getSettingSafe("HelpIconSet", "default");
+	if (mCachedIconSet != currentSet)
+	{
+		mIconCache.clear();
+		mCachedIconSet = currentSet;
+	}
 
 	auto it = mIconCache.find(key);
 	if (it != mIconCache.cend())
@@ -272,7 +243,6 @@ std::shared_ptr<TextureResource> HelpComponent::getIconTexture(const char* logic
 		for (const auto& rel : relFiles)
 		{
 			const std::string full = joinPath(base, rel);
-
 			if (existsAny(full))
 			{
 				auto tex = TextureResource::get(full);
@@ -289,23 +259,41 @@ std::shared_ptr<TextureResource> HelpComponent::getIconTexture(const char* logic
 
 void HelpComponent::updateGrid()
 {
-	if (!Settings::getInstance()->getBool("ShowHelpPrompts") || mPrompts.empty())
+	// Apagado global: ahí sí destruimos
+	if (!Settings::getInstance()->getBool("ShowHelpPrompts"))
 	{
 		mGrid.reset();
+		mLastBuiltPrompts.clear();
 		return;
 	}
 
-	std::shared_ptr<Font>& font = mStyle.font;
+	// Si no hay prompts: NO destruimos el grid (evita 1 frame vacío / parpadeo)
+	if (mPrompts.empty())
+	{
+		mLastBuiltPrompts.clear();
+		return;
+	}
+
+	// Si nada cambió respecto a lo ya construido, no toques nada.
+	if (mGrid && promptsEqual(mLastBuiltPrompts, mPrompts) && styleEqual(mLastBuiltStyle, mStyle))
+		return;
+
+	std::shared_ptr<Font> font = mStyle.font;
 	if (!font)
 		font = Font::get(FONT_SIZE_SMALL);
 
-	mGrid = std::make_shared<ComponentGrid>(mWindow, Vector2i((int)mPrompts.size() * 4, 1));
+	const float height = Math::round(font->getLetterHeight() * 1.25f);
+
+	// Construimos un grid NUEVO (seguro) y al final hacemos swap
+	auto newGrid = std::make_shared<ComponentGrid>(mWindow, Vector2i((int)mPrompts.size() * 4, 1));
+
+	float width = 0.0f;
 
 	std::vector<std::shared_ptr<ImageComponent>> icons;
 	std::vector<std::shared_ptr<TextComponent>> labels;
 
-	float width = 0.0f;
-	const float height = Math::round(font->getLetterHeight() * 1.25f);
+	icons.reserve(mPrompts.size());
+	labels.reserve(mPrompts.size());
 
 	for (auto it = mPrompts.cbegin(); it != mPrompts.cend(); ++it)
 	{
@@ -332,24 +320,29 @@ void HelpComponent::updateGrid()
 	if (width <= 0.0f)
 		width = 1.0f;
 
-	mGrid->setSize(width, height);
+	newGrid->setSize(width, height);
 
 	for (unsigned int i = 0; i < icons.size(); i++)
 	{
 		const int col = (int)i * 4;
 
-		const float iconW = icons.at(i)->getSize().x();
+		const float iconW  = icons.at(i)->getSize().x();
 		const float labelW = labels.at(i)->getSize().x();
 
-		mGrid->setColWidthPerc(col, iconW / width);
-		mGrid->setColWidthPerc(col + 1, (float)ICON_TEXT_SPACING / width);
-		mGrid->setColWidthPerc(col + 2, labelW / width);
+		newGrid->setColWidthPerc(col,     iconW / width);
+		newGrid->setColWidthPerc(col + 1, (float)ICON_TEXT_SPACING / width);
+		newGrid->setColWidthPerc(col + 2, labelW / width);
 
-		mGrid->setEntry(icons.at(i), Vector2i(col, 0), false, false);
-		mGrid->setEntry(labels.at(i), Vector2i(col + 2, 0), false, false);
+		newGrid->setEntry(icons.at(i),  Vector2i(col, 0),     false, false);
+		newGrid->setEntry(labels.at(i), Vector2i(col + 2, 0), false, false);
 	}
 
-	mGrid->setPosition(Vector3f(mStyle.position.x(), mStyle.position.y(), 0.0f));
+	newGrid->setPosition(Vector3f(mStyle.position.x(), mStyle.position.y(), 0.0f));
+
+	// ✅ Swap atómico: nunca queda “sin grid” a mitad
+	mGrid = newGrid;
+	mLastBuiltPrompts = mPrompts;
+	mLastBuiltStyle   = mStyle;
 }
 
 void HelpComponent::setOpacity(unsigned char opacity)
@@ -365,8 +358,9 @@ void HelpComponent::setOpacity(unsigned char opacity)
 
 void HelpComponent::render(const Transform4x4f& parent)
 {
-	Transform4x4f trans = parent * getTransform();
+	if (!mGrid || mPrompts.empty())
+		return;
 
-	if (mGrid)
-		mGrid->render(trans);
+	Transform4x4f trans = parent * getTransform();
+	mGrid->render(trans);
 }

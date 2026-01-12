@@ -41,10 +41,19 @@ private:
 	static std::string joinPath(const std::string& base, const std::string& rel);
 	static bool existsAny(const std::string& path);
 
+	bool promptsEqual(const std::vector<HelpPrompt>& a, const std::vector<HelpPrompt>& b) const;
+	bool styleEqual(const HelpStyle& a, const HelpStyle& b) const;
+
 private:
+	// Cache (invalida cuando cambia el set)
 	std::map<std::string, std::shared_ptr<TextureResource>> mIconCache;
+	std::string mCachedIconSet;
 
 	std::shared_ptr<ComponentGrid> mGrid;
+
+	// Último estado construido (para no reconstruir al pedo)
+	std::vector<HelpPrompt> mLastBuiltPrompts;
+	HelpStyle mLastBuiltStyle;
 
 	std::vector<HelpPrompt> mPrompts;
 	HelpStyle mStyle;
