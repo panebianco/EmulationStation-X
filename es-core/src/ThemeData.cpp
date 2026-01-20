@@ -619,8 +619,12 @@ void ThemeData::parseVariables(const pugi::xml_node& root)
 		std::string key = it->name();
 		std::string val = resolvePlaceholders(it->text().as_string());
 
-		if (!val.empty())
-			mVariables.insert(std::pair<std::string, std::string>(key, val));
+		// FIX CRITICO:
+		// Antes se usaba mVariables.insert(...), lo que NO sobreescribe si la key ya existía
+		// (por sysDataMap o theme.ini). Eso hacía que el "base" no se aplicara en inglés
+		// si no había <language en_...>. Aquí debe ser override.
+		if (!key.empty() && !val.empty())
+			mVariables[key] = val;
 	}
 }
 
