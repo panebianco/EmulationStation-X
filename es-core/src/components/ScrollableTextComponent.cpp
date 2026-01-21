@@ -1,74 +1,85 @@
 #include "components/ScrollableTextComponent.h"
-
 #include "ThemeData.h"
 #include "renderers/Renderer.h"
 
 ScrollableTextComponent::ScrollableTextComponent(Window* window)
-	: GuiComponent(window)
-	, mScroll(window, 1000)
-	, mText(window)
-	, mAutoScroll(false)
-	, mAutoScrollDelay(1000)
+	: GuiComponent(window),
+	  mScroll(window, 0),
+	  mText(window),
+	  mAutoScroll(false),
+	  mDelayMs(1200)
 {
-	// Nuestro componente contiene un ScrollableContainer,
-	// y dentro de éste vive el TextComponent.
 	addChild(&mScroll);
 	mScroll.addChild(&mText);
 
-	// Layout por defecto dentro del contenedor
-	mText.setPosition(0, 0);
-	mText.setOrigin(0, 0);
+	// Texto interno pegado al contenedor
+	mText.setOrigin(0.0f, 0.0f);
+	mText.setPosition(0.0f, 0.0f, 0.0f);
 
-	syncChildren();
+	mScroll.setOrigin(0.0f, 0.0f);
+	mScroll.setPosition(0.0f, 0.0f, 0.0f);
 }
 
-void ScrollableTextComponent::setText(const std::string& text)
-{
-	mText.setText(text);
-}
-
-const std::string& ScrollableTextComponent::getText() const
-{
-	return mText.getText();
-}
-
-void ScrollableTextComponent::setAutoScroll(bool enabled, int delayMs)
+void ScrollableTextComponent::setAutoScroll(bool enabled)
 {
 	mAutoScroll = enabled;
-	if (delayMs < 0) delayMs = 0;
-	mAutoScrollDelay = delayMs;
-
-	// ScrollableContainer usa scrollDelay en el ctor, pero también lo resetea en setAutoScroll(true)
-	// Así que recreamos el comportamiento “delay” dejando el ctor fijo y usando setAutoScroll.
-	// (El delay real se maneja adentro con mAutoScrollDelay, acá hacemos reset seguro.)
-	mScroll.setAutoScroll(enabled);
+	mScroll.setAutoScroll(mAutoScroll, mDelayMs);
 }
 
-void ScrollableTextComponent::setSize(const Vector2f& size)
+void ScrollableTextComponent::setAutoScrollDelay(float secondsOrMs)
 {
-	GuiComponent::setSize(size);
-	syncChildren();
+	if (secondsOrMs < 0.0f)
+		secondsOrMs = 0.0f;
+
+	// Si llega algo grande (1200), interpretamos como ms.
+	// Si llega algo chico (1.2), interpretamos como segundos.
+	if (secondsOrMs > 50.0f)
+		mDelayMs = (int)secondsOrMs;
+	else
+		mDelayMs = (int)(secondsOrMs * 1000.0f);
+
+	mScroll.setAutoScroll(mAutoScroll, mDelayMs);
 }
 
-void ScrollableTextComponent::setPosition(float x, float y, float z)
+std::string ScrollableTextComponent::getValue() const
 {
-	GuiComponent::setPosition(x, y, z);
+	return mText.getValue();
 }
 
-void ScrollableTextComponent::setPosition(const Vector3f& offset)
+void ScrollableTextComponent::setValue(const std::string& value)
 {
-	GuiComponent::setPosition(offset);
+	mText.setValue(value);
+	syncLayout();
 }
 
-void ScrollableTextComponent::syncChildren()
+void ScrollableTextComponent::onSizeChanged()
 {
-	// El contenedor ocupa todo el área del componente
-	mScroll.setPosition(0, 0);
+	syncLayout();
+}
+
+void ScrollableTextComponent::syncLayout()
+{
+	// Ventana visible (clip)
 	mScroll.setSize(mSize);
 
-	// El texto: se renderiza desde (0,0) y se deja que crezca; el contenedor lo “clippea”
-	mText.setPosition(0, 0);
-	mText.setSize(mSize);
+	// Wrap: ancho fijo, alto 0 => alto automático
+	if (mSize.x() > 0.0f)
+		mText.setSize(mSize.x(), 0.0f);
+	else
+		mText.setSize(0.0f, 0.0f);
+
+	mScroll.reset();
+	mScroll.setAutoScroll(mAutoScroll, mDelayMs);
+}
+
+void ScrollableTextComponent::update(int deltaTime)
+{
+	GuiComponent::update(deltaTime);
+}
+
+void ScrollableTextComponent::render(const Transform4x4f& parentTrans)
+{
+	GuiComponent::render(parentTrans);
 }
 
 void ScrollableTextComponent::applyTheme(const std::shared_ptr<ThemeData>& theme,
@@ -76,89 +87,55 @@ void ScrollableTextComponent::applyTheme(const std::shared_ptr<ThemeData>& theme
                                         const std::string& element,
                                         unsigned int properties)
 {
-	// Este elemento ES un "text" en el tema
 	const ThemeData::ThemeElement* elem = theme->getElement(view, element, "text");
 	if (!elem)
+	{
+		mText.applyTheme(theme, view, element, properties);
+		syncLayout();
 		return;
-
-	// Escala a pantalla (igual que hacen los otros applyTheme)
-	const Vector2f screenSize((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
-
-	if ((properties & ThemeFlags::POSITION) && elem->has("pos"))
-	{
-		Vector2f p = elem->get<Vector2f>("pos") * screenSize;
-		setPosition(p.x(), p.y());
 	}
 
-	if ((properties & ThemeFlags::SIZE) && elem->has("size"))
+	// Escala de pantalla (px)
+	const float sw = (float)Renderer::getScreenWidth();
+	const float sh = (float)Renderer::getScreenHeight();
+
+	// TRANSFORM DEL WRAPPER (no del TextComponent interno)
+	if (elem->has("pos"))
 	{
-		Vector2f s = elem->get<Vector2f>("size") * screenSize;
-		setSize(s);
+		Vector2f p = elem->get<Vector2f>("pos");
+		setPosition(p.x() * sw, p.y() * sh, 0.0f);
 	}
 
-	if ((properties & ThemeFlags::ORIGIN) && elem->has("origin"))
+	if (elem->has("size"))
 	{
-		setOrigin(elem->get<Vector2f>("origin"));
+		Vector2f s = elem->get<Vector2f>("size");
+		setSize(s.x() * sw, s.y() * sh);
 	}
 
-	if ((properties & ThemeFlags::ROTATION) && elem->has("rotation"))
+	if (elem->has("origin"))
 	{
-		setRotation(elem->get<float>("rotation"));
+		Vector2f o = elem->get<Vector2f>("origin");
+		setOrigin(o);
 	}
 
-	if ((properties & ThemeFlags::ROTATION_ORIGIN) && elem->has("rotationOrigin"))
-	{
+	if (elem->has("rotation"))
+		setRotationDegrees(elem->get<float>("rotation"));
+
+	if (elem->has("rotationOrigin"))
 		setRotationOrigin(elem->get<Vector2f>("rotationOrigin"));
-	}
 
-	if ((properties & ThemeFlags::VISIBLE) && elem->has("visible"))
-	{
-		setVisible(elem->get<bool>("visible"));
-	}
-
-	if ((properties & ThemeFlags::Z_INDEX) && elem->has("zIndex"))
-	{
+	if (elem->has("zIndex"))
 		setZIndex(elem->get<float>("zIndex"));
-	}
 
-	// Aplicamos estilo SOLO al texto (sin pos/size porque ya los controla el contenedor)
-	unsigned int textFlags =
-		ThemeFlags::TEXT |
-		ThemeFlags::FONT_PATH |
-		ThemeFlags::FONT_SIZE |
-		ThemeFlags::COLOR |
-		ThemeFlags::ALIGNMENT |
-		ThemeFlags::LINE_SPACING |
-		ThemeFlags::FORCE_UPPERCASE |
-		ThemeFlags::BACKGROUND_COLOR;
+	if (elem->has("visible"))
+		setVisible(elem->get<bool>("visible"));
 
-	// (Tus stroke props ya están en ThemeData; TextComponent debe soportarlas si ya lo tenías.)
-	mText.applyTheme(theme, view, element, textFlags);
+	// Estilo tipográfico al TextComponent interno
+	mText.applyTheme(theme, view, element, properties);
 
-	// Texto siempre dentro del container
-	mText.setPosition(0, 0);
-	mText.setOrigin(0, 0);
-	mText.setSize(mSize);
+	// Texto interno siempre pegado arriba-izq dentro del contenedor
+	mText.setOrigin(0.0f, 0.0f);
+	mText.setPosition(0.0f, 0.0f, 0.0f);
 
-	// autoScroll
-	bool enable = false;
-	int delayMs = 1000;
-
-	if (elem->has("autoScroll"))
-		enable = elem->get<bool>("autoScroll");
-
-	if (elem->has("autoScrollDelay"))
-	{
-		float d = elem->get<float>("autoScrollDelay");
-		if (d < 0) d = 0;
-		delayMs = (int)(d);
-	}
-
-	// Ajustamos el delay interno del ScrollableContainer:
-	// Como ScrollableContainer recibe delay en constructor, lo más estable es:
-	// - mantenerlo fijo y usar setAutoScroll(true) que resetea.
-	// (Si querés delay real, en tu ScrollableContainer habría que exponer setter; por ahora evitamos tocarlo.)
-	setAutoScroll(enable, delayMs);
-
-	syncChildren();
+	syncLayout();
 }

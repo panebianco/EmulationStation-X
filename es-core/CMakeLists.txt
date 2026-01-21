@@ -41,6 +41,10 @@ set(CORE_HEADERS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/NinePatchComponent.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/OptionListComponent.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/ScrollableContainer.h
+
+	# ✅ NUEVO: ScrollableTextComponent (header)
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/ScrollableTextComponent.h
+
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/SliderComponent.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/SwitchComponent.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/TextComponent.h
@@ -48,6 +52,9 @@ set(CORE_HEADERS
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/VideoComponent.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/VideoPlayerComponent.h
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/VideoVlcComponent.h
+
+	# (Opcional, pero recomendado si existe el archivo)
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/MarqueeTextComponent.h
 
 	# Guis
 	${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiDetectDevice.h
@@ -104,27 +111,31 @@ set(CORE_SOURCES
 	${CMAKE_CURRENT_SOURCE_DIR}/src/animations/AnimationController.cpp
 
 	# GuiComponents
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/AnimatedImageComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/BusyComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/ButtonComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/ComponentGrid.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/ComponentList.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/DateTimeComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/DateTimeEditComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/HelpComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/GridTileComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/ImageComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/MenuComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/NinePatchComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/ScrollableContainer.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/SliderComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/SwitchComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/TextComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/MarqueeTextComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/TextEditComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/VideoComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/VideoPlayerComponent.cpp
-${CMAKE_CURRENT_SOURCE_DIR}/src/components/VideoVlcComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/AnimatedImageComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/BusyComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/ButtonComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/ComponentGrid.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/ComponentList.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/DateTimeComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/DateTimeEditComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/HelpComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/GridTileComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/ImageComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/MenuComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/NinePatchComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/ScrollableContainer.cpp
+
+	# ✅ NUEVO: ScrollableTextComponent (source)
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/ScrollableTextComponent.cpp
+
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/SliderComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/SwitchComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/TextComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/MarqueeTextComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/TextEditComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/VideoComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/VideoPlayerComponent.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/VideoVlcComponent.cpp
 
 	# Guis
 	${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiDetectDevice.cpp

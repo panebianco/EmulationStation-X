@@ -3,12 +3,22 @@
 #include "math/Vector2i.h"
 #include "renderers/Renderer.h"
 
-#define AUTO_SCROLL_RESET_DELAY 3000 // ms to reset to top after we reach the bottom
-#define AUTO_SCROLL_DELAY 1000 // ms to wait before we start to scroll
-#define AUTO_SCROLL_SPEED 50 // ms between scrolls
+#include <algorithm> // std::max
 
-ScrollableContainer::ScrollableContainer(Window* window, int scrollDelay) : GuiComponent(window),
-	mAutoScrollDelay(scrollDelay), mAutoScrollSpeed(0), mAutoScrollAccumulator(0), mScrollPos(0, 0), mScrollDir(0, 0), mAutoScrollResetAccumulator(0)
+#define AUTO_SCROLL_RESET_DELAY 3000 // ms to reset to top after we reach the bottom
+#define AUTO_SCROLL_DELAY       1000 // ms to wait before we start to scroll (legacy default)
+#define AUTO_SCROLL_SPEED       50   // ms between scrolls
+
+ScrollableContainer::ScrollableContainer(Window* window, int scrollDelay)
+	: GuiComponent(window),
+	  mAutoScrollDelay(scrollDelay),
+	  mAutoScrollSpeed(0),
+	  mAutoScrollAccumulator(0),
+	  mScrollPos(0, 0),
+	  mScrollDir(0, 0),
+	  mAutoScrollResetAccumulator(0),
+	  mAtEnd(false),
+	  mAutoScroll(false)
 {
 }
 
@@ -22,7 +32,10 @@ void ScrollableContainer::render(const Transform4x4f& parentTrans)
 	Vector2i clipPos((int)trans.translation().x(), (int)trans.translation().y());
 
 	Vector3f dimScaled = trans * Vector3f(mSize.x(), mSize.y(), 0);
-	Vector2i clipDim((int)(dimScaled.x() - trans.translation().x()), (int)(dimScaled.y() - trans.translation().y()));
+	Vector2i clipDim(
+		(int)(dimScaled.x() - trans.translation().x()),
+		(int)(dimScaled.y() - trans.translation().y())
+	);
 
 	Renderer::pushClipRect(clipPos, clipDim);
 
@@ -34,22 +47,38 @@ void ScrollableContainer::render(const Transform4x4f& parentTrans)
 	Renderer::popClipRect();
 }
 
+// Compatibilidad con código viejo (si el delay es 0, usamos default legacy 1000ms)
 void ScrollableContainer::setAutoScroll(bool autoScroll)
 {
-	if(autoScroll)
+	int delay = mAutoScrollDelay;
+	if (delay <= 0)
+		delay = AUTO_SCROLL_DELAY;
+
+	setAutoScroll(autoScroll, delay);
+}
+
+// NUEVO: delay mutable (respeta 0 = arranque inmediato)
+void ScrollableContainer::setAutoScroll(bool autoScroll, int delayMs)
+{
+	if (delayMs < 0)
+		delayMs = 0;
+
+	mAutoScroll = autoScroll;
+	mAutoScrollDelay = delayMs;
+
+	if (autoScroll)
 	{
 		mScrollDir = Vector2f(0, 1);
-		if (mAutoScrollDelay == 0)
-		{
-			mAutoScrollDelay = AUTO_SCROLL_DELAY;
-		}
 		mAutoScrollSpeed = AUTO_SCROLL_SPEED;
 		reset();
-	}else{
+	}
+	else
+	{
 		mScrollDir = Vector2f(0, 0);
-		mAutoScrollDelay = 0;
 		mAutoScrollSpeed = 0;
 		mAutoScrollAccumulator = 0;
+		mAutoScrollResetAccumulator = 0;
+		mAtEnd = false;
 	}
 }
 
@@ -65,65 +94,56 @@ void ScrollableContainer::setScrollPos(const Vector2f& pos)
 
 void ScrollableContainer::update(int deltaTime)
 {
-	if(mAutoScrollSpeed != 0)
+	if (mAutoScrollSpeed != 0)
 	{
 		mAutoScrollAccumulator += deltaTime;
 
-		//scale speed by our width! more text per line = slower scrolling
-		const float widthMod = (680.0f / getSize().x());
-		while(mAutoScrollAccumulator >= mAutoScrollSpeed)
+		while (mAutoScrollAccumulator >= mAutoScrollSpeed)
 		{
 			mScrollPos += mScrollDir;
 			mAutoScrollAccumulator -= mAutoScrollSpeed;
 		}
 	}
 
-	//clip scrolling within bounds
-	if(mScrollPos.x() < 0)
+	// límites
+	if (mScrollPos.x() < 0)
 		mScrollPos[0] = 0;
-	if(mScrollPos.y() < 0)
+	if (mScrollPos.y() < 0)
 		mScrollPos[1] = 0;
 
 	const Vector2f contentSize = getContentSize();
-	if(mScrollPos.x() + getSize().x() > contentSize.x())
-	{
-		mScrollPos[0] = contentSize.x() - getSize().x();
-		mAtEnd = true;
-	}
 
-	if(contentSize.y() < getSize().y())
+	if (contentSize.y() < getSize().y())
 	{
 		mScrollPos[1] = 0;
-	}else if(mScrollPos.y() + getSize().y() > contentSize.y())
+		mAtEnd = false;
+	}
+	else if (mScrollPos.y() + getSize().y() > contentSize.y())
 	{
 		mScrollPos[1] = contentSize.y() - getSize().y();
 		mAtEnd = true;
 	}
 
-	if(mAtEnd)
+	if (mAtEnd)
 	{
 		mAutoScrollResetAccumulator += deltaTime;
-		if(mAutoScrollResetAccumulator >= AUTO_SCROLL_RESET_DELAY)
+		if (mAutoScrollResetAccumulator >= AUTO_SCROLL_RESET_DELAY)
 			reset();
 	}
 
 	GuiComponent::update(deltaTime);
 }
 
-//this should probably return a box to allow for when controls don't start at 0,0
 Vector2f ScrollableContainer::getContentSize()
 {
 	Vector2f max(0, 0);
-	for(unsigned int i = 0; i < mChildren.size(); i++)
+	for (auto* child : mChildren)
 	{
-		Vector2f pos(mChildren.at(i)->getPosition()[0], mChildren.at(i)->getPosition()[1]);
-		Vector2f bottomRight = mChildren.at(i)->getSize() + pos;
-		if(bottomRight.x() > max.x())
-			max.x() = bottomRight.x();
-		if(bottomRight.y() > max.y())
-			max.y() = bottomRight.y();
+		Vector2f pos(child->getPosition().x(), child->getPosition().y());
+		Vector2f br = child->getSize() + pos;
+		max.x() = std::max(max.x(), br.x());
+		max.y() = std::max(max.y(), br.y());
 	}
-
 	return max;
 }
 
@@ -131,6 +151,10 @@ void ScrollableContainer::reset()
 {
 	mScrollPos = Vector2f(0, 0);
 	mAutoScrollResetAccumulator = 0;
+
+	// Delay real antes de arrancar: acumulador negativo
+	// Si delay=0 => arranca inmediato
 	mAutoScrollAccumulator = -mAutoScrollDelay + mAutoScrollSpeed;
+
 	mAtEnd = false;
 }
