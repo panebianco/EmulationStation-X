@@ -2,6 +2,7 @@
 
 #include "components/ImageComponent.h"
 #include "components/TextComponent.h"
+#include "components/ScrollableTextComponent.h" // autoScroll en <text extra="true">
 #include "resources/ResourceManager.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
@@ -83,9 +84,13 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "visible", BOOLEAN },
 		{ "zIndex", FLOAT },
 
-		// NUEVO: borde de texto
+		// borde de texto
 		{ "textStrokeColor", COLOR },
-		{ "textStrokeSize", FLOAT }
+		{ "textStrokeSize", FLOAT },
+
+		// ScrollableTextComponent
+		{ "autoScroll", BOOLEAN },
+		{ "autoScrollDelay", FLOAT }
 	} },
 
 	{ "textlist", {
@@ -196,10 +201,10 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "logoAlignment", STRING },
 		{ "maxLogoCount", FLOAT },
 		{ "zIndex", FLOAT },
-		// NUEVO: propiedades extra del carrusel
-		{ "minLogoOpacity", FLOAT },      // 0.0 – 1.0
-		{ "scaledLogoSpacing", FLOAT },   // factor de separación
-		{ "scrollSound", PATH }           // sonido opcional (por ahora solo parseado)
+		// propiedades extra del carrusel
+		{ "minLogoOpacity", FLOAT },
+		{ "scaledLogoSpacing", FLOAT },
+		{ "scrollSound", PATH }
 	} }
 };
 
@@ -231,25 +236,21 @@ static unsigned int getHexColor(const char* str)
 }
 
 // ─────────────────────────────────────────────
-// NUEVO: carga de variables externas desde theme.ini
-//        con soporte de secciones y layouts
+// carga de variables externas desde theme.ini
 // ─────────────────────────────────────────────
 namespace
 {
 	void loadExternalThemeVariables(const std::string& themeXmlPath,
 	                               std::map<std::string, std::string>& outVars)
 	{
-		// Layout activo elegido por el usuario (ej: "smd", "layout_smd", etc.)
 		const std::string activeLayoutSetting = Settings::getInstance()->getString("ThemeLayout");
 		const bool hasActiveLayout = !activeLayoutSetting.empty();
 		const std::string activeLower = Utils::String::toLower(activeLayoutSetting);
 
-		// Carpeta del theme.xml y sus padres
 		const std::string xmlDir   = Utils::FileSystem::getParent(themeXmlPath);
 		const std::string parent1  = Utils::FileSystem::getParent(xmlDir);
 		const std::string parent2  = Utils::FileSystem::getParent(parent1);
 
-		// Rutas candidatas para theme.ini
 		std::vector<std::string> candidates;
 		candidates.push_back(xmlDir  + "/theme.ini");
 		candidates.push_back(parent1 + "/theme.ini");
@@ -270,27 +271,22 @@ namespace
 			LOG(LogInfo) << "ThemeData: loading variables from " << cfgPath;
 
 			std::string line;
-			std::string currentSection; // "", "global", "layout_smd", etc.
-
-			// Si NO hay ThemeLayout definido, usaremos SOLO la primera sección "layout_..."
+			std::string currentSection;
 			bool layoutAlreadyChosen = false;
 
 			while (std::getline(file, line))
 			{
 				line = Utils::String::trim(line);
 
-				// saltar líneas vacías y comentarios
 				if (line.empty() || line[0] == '#' || line[0] == ';')
 					continue;
 
-				// Sección INI: [nombre]
 				if (line.front() == '[' && line.back() == ']' && line.size() >= 2)
 				{
 					currentSection = Utils::String::trim(line.substr(1, line.size() - 2));
 					continue;
 				}
 
-				// Clave = valor
 				auto eqPos = line.find('=');
 				if (eqPos == std::string::npos)
 					continue;
@@ -301,11 +297,6 @@ namespace
 				if (key.empty())
 					continue;
 
-				// ¿Aplicamos esta línea?
-				// - sin sección              -> siempre
-				// - [global] / [default]     -> siempre
-				// - [layout_xyz] con layout  -> si coincide con ThemeLayout (flexible)
-				// - [layout_xyz] sin layout  -> solo la PRIMER sección "layout_..." del archivo
 				bool isGlobalSection =
 					currentSection.empty()
 					|| Utils::String::toLower(currentSection) == "global"
@@ -323,21 +314,16 @@ namespace
 
 					if (hasActiveLayout)
 					{
-						// Modo flexible:
-						// ThemeLayout = "smd"         con sección "[layout_smd]"
-						// ThemeLayout = "layout_smd"  con sección "[layout_smd]"
 						if (sectionLower == activeLower)
 						{
 							matchesLayout = true;
 						}
 						else if (isLayoutSection)
 						{
-							// sección "layout_xxx", layout "xxx"
 							std::string withoutPrefix = sectionLower.substr(7);
 							if (activeLower == withoutPrefix)
 								matchesLayout = true;
 
-							// sección "xxx", layout "layout_xxx"
 							if (!matchesLayout && activeLower.size() > 7 &&
 							    activeLower.substr(0, 7) == "layout_" &&
 							    sectionLower == activeLower.substr(7))
@@ -348,7 +334,6 @@ namespace
 					}
 					else
 					{
-						// No hay ThemeLayout: tomamos SOLO la primera sección "layout_..."
 						bool isLayoutSectionNoSetting =
 							sectionLower.size() >= 7 &&
 							sectionLower.substr(0, 7) == "layout_";
@@ -362,20 +347,16 @@ namespace
 				}
 
 				if (isGlobalSection || matchesLayout)
-				{
-					// sobreescribe si ya existe (layout por encima de global)
 					outVars[key] = value;
-				}
 			}
 
-			// Solo usamos el primer theme.ini encontrado
 			break;
 		}
 	}
 }
 
 // ─────────────────────────────────────────────
-// NUEVO: soporte de <language name="..."><variables>..</variables></language>
+// soporte de <language name="..."><variables>..</variables></language>
 // ─────────────────────────────────────────────
 std::string ThemeData::normalizeLanguage(const std::string& lang) const
 {
@@ -397,7 +378,6 @@ bool ThemeData::languageMatches(const std::string& nodeLang, const std::string& 
 	if (node == active)
 		return true;
 
-	// match por prefijo base (antes del '_')
 	const auto nodeUnder = node.find('_');
 	const auto activeUnder = active.find('_');
 
@@ -438,11 +418,9 @@ void ThemeData::parseLanguageVariables(const pugi::xml_node& root)
 			if (key.empty() || val.empty())
 				continue;
 
-			// override
 			mVariables[key] = val;
 		}
 
-		// aplicar el primer match y salir
 		break;
 	}
 }
@@ -464,7 +442,6 @@ std::string ThemeData::resolvePlaceholders(const char* in)
 	std::string replace = inStr.substr(variableBegin + 2, variableEnd - (variableBegin + 2));
 	std::string suffix  = resolvePlaceholders(inStr.substr(variableEnd + 1).c_str());
 
-	// Si la variable existe, la reemplazamos, si no, la dejamos en blanco
 	auto varIt = mVariables.find(replace);
 	std::string value;
 	if (varIt != mVariables.cend())
@@ -494,10 +471,8 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 	mViews.clear();
 	mVariables.clear();
 
-	// Variables del sistema (nombre, shortName, etc.)
 	mVariables.insert(sysDataMap.cbegin(), sysDataMap.cend());
 
-	// NUEVO: variables externas desde theme.ini (global + layout activo)
 	loadExternalThemeVariables(path, mVariables);
 
 	pugi::xml_document doc;
@@ -509,7 +484,6 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 	if (!root)
 		throw error << "Missing <theme> tag!";
 
-	// parse version
 	mVersion = root.child("formatVersion").text().as_float(-404);
 	if (mVersion == -404)
 		throw error << "<formatVersion> tag missing!\n   It's either out of date or you need to add <formatVersion>"
@@ -520,7 +494,6 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 		throw error << "Theme uses format version " << mVersion
 		            << ". Minimum supported version is " << MINIMUM_THEME_FORMAT_VERSION << ".";
 
-	// parse resolution
 	std::string resolution = root.child("resolution").text().as_string("");
 
 	if (resolution.size())
@@ -537,10 +510,7 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 		}
 	}
 
-	// Orden importante:
-	// 1) variables base
 	parseVariables(root);
-	// 2) override por idioma (ES-DE style)
 	parseLanguageVariables(root);
 
 	parseIncludes(root);
@@ -573,7 +543,6 @@ void ThemeData::parseIncludes(const pugi::xml_node& root)
 		if (!theme)
 			throw error << "Missing <theme> tag!";
 
-		// Variables y overrides de idioma del include
 		parseVariables(theme);
 		parseLanguageVariables(theme);
 
@@ -619,10 +588,6 @@ void ThemeData::parseVariables(const pugi::xml_node& root)
 		std::string key = it->name();
 		std::string val = resolvePlaceholders(it->text().as_string());
 
-		// FIX CRITICO:
-		// Antes se usaba mVariables.insert(...), lo que NO sobreescribe si la key ya existía
-		// (por sysDataMap o theme.ini). Eso hacía que el "base" no se aplicara en inglés
-		// si no había <language en_...>. Aquí debe ser override.
 		if (!key.empty() && !val.empty())
 			mVariables[key] = val;
 	}
@@ -633,7 +598,6 @@ void ThemeData::parseViews(const pugi::xml_node& root)
 	ThemeException error;
 	error.setFiles(mPaths);
 
-	// parse views
 	for (pugi::xml_node node = root.child("view"); node; node = node.next_sibling("view"))
 	{
 		if (!node.attribute("name"))
@@ -840,7 +804,7 @@ const ThemeData::ThemeElement* ThemeData::getElement(const std::string& view, co
 {
 	auto viewIt = mViews.find(view);
 	if (viewIt == mViews.cend())
-		return NULL; // not found
+		return NULL;
 
 	auto elemIt = viewIt->second.elements.find(element);
 	if (elemIt == viewIt->second.elements.cend())
@@ -874,7 +838,7 @@ const std::shared_ptr<ThemeData>& ThemeData::getDefault()
 			catch (ThemeException& e)
 			{
 				LOG(LogError) << e.what();
-				theme = std::shared_ptr<ThemeData>(new ThemeData()); // reset to empty
+				theme = std::shared_ptr<ThemeData>(new ThemeData());
 			}
 		}
 	}
@@ -890,22 +854,60 @@ std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData
 	if (viewIt == theme->mViews.cend())
 		return comps;
 
-	for (auto it = viewIt->second.orderedKeys.cbegin(); it != viewIt->second.orderedKeys.cend(); it++)
+	for (auto it = viewIt->second.orderedKeys.cbegin(); it != viewIt->second.orderedKeys.cend(); ++it)
 	{
 		ThemeElement& elem = viewIt->second.elements.at(*it);
-		if (elem.extra)
-		{
-			GuiComponent* comp = NULL;
-			const std::string& t = elem.type;
-			if (t == "image")
-				comp = new ImageComponent(window);
-			else if (t == "text")
-				comp = new TextComponent(window);
+		if (!elem.extra)
+			continue;
 
-			comp->setDefaultZIndex(10);
-			comp->applyTheme(theme, view, *it, ThemeFlags::ALL);
-			comps.push_back(comp);
+		GuiComponent* comp = NULL;
+		const std::string& t = elem.type;
+
+		if (t == "image")
+		{
+			comp = new ImageComponent(window);
 		}
+		else if (t == "text")
+		{
+			bool wantsScroll = false;
+			if (elem.has("autoScroll"))
+				wantsScroll = elem.get<bool>("autoScroll");
+
+			if (wantsScroll)
+				comp = new ScrollableTextComponent(window);
+			else
+				comp = new TextComponent(window);
+		}
+
+		if (!comp)
+			continue;
+
+		comp->setDefaultZIndex(10);
+		comp->applyTheme(theme, view, *it, ThemeFlags::ALL);
+
+		// Configurar scroll SOLO si realmente es ScrollableTextComponent
+		if (t == "text")
+		{
+			auto* st = dynamic_cast<ScrollableTextComponent*>(comp);
+			if (st)
+			{
+				// delay (puede venir en ms: 1200, o en segundos: 1.2)
+				if (elem.has("autoScrollDelay"))
+				{
+					float delayVal = elem.get<float>("autoScrollDelay");
+					st->setAutoScrollDelay(delayVal);
+				}
+
+				// Respeta el autoScroll real del tema
+				bool enable = true;
+				if (elem.has("autoScroll"))
+					enable = elem.get<bool>("autoScroll");
+
+				st->setAutoScroll(enable);
+			}
+		}
+
+		comps.push_back(comp);
 	}
 
 	return comps;
