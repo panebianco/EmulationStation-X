@@ -211,9 +211,6 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 #define MINIMUM_THEME_FORMAT_VERSION 3
 #define CURRENT_THEME_FORMAT_VERSION 6
 
-// ------------------------------------------------------
-// helper: conversión de color "RRGGBB" o "RRGGBBAA" a int
-// ------------------------------------------------------
 static unsigned int getHexColor(const char* str)
 {
 	ThemeException error;
@@ -236,7 +233,7 @@ static unsigned int getHexColor(const char* str)
 }
 
 // ─────────────────────────────────────────────
-// carga de variables externas desde theme.ini
+// carga de variables externas desde theme.ini (global + layout)
 // ─────────────────────────────────────────────
 namespace
 {
@@ -347,10 +344,10 @@ namespace
 				}
 
 				if (isGlobalSection || matchesLayout)
-					outVars[key] = value;
+					outVars[key] = value; // pisa siempre
 			}
 
-			break;
+			break; // usa el primer theme.ini encontrado
 		}
 	}
 }
@@ -456,69 +453,10 @@ ThemeData::ThemeData()
 	mResolution = { 1, 1 };
 }
 
-void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path)
-{
-	mPaths.push_back(path);
-
-	ThemeException error;
-	error.setFiles(mPaths);
-
-	if (!Utils::FileSystem::exists(path))
-		throw error << "File does not exist!";
-
-	mVersion = 0;
-	mResolution = { 1, 1 };
-	mViews.clear();
-	mVariables.clear();
-
-	mVariables.insert(sysDataMap.cbegin(), sysDataMap.cend());
-
-	loadExternalThemeVariables(path, mVariables);
-
-	pugi::xml_document doc;
-	pugi::xml_parse_result res = doc.load_file(path.c_str());
-	if (!res)
-		throw error << "XML parsing error: \n    " << res.description();
-
-	pugi::xml_node root = doc.child("theme");
-	if (!root)
-		throw error << "Missing <theme> tag!";
-
-	mVersion = root.child("formatVersion").text().as_float(-404);
-	if (mVersion == -404)
-		throw error << "<formatVersion> tag missing!\n   It's either out of date or you need to add <formatVersion>"
-		            << CURRENT_THEME_FORMAT_VERSION
-		            << "</formatVersion> inside your <theme> tag.";
-
-	if (mVersion < MINIMUM_THEME_FORMAT_VERSION)
-		throw error << "Theme uses format version " << mVersion
-		            << ". Minimum supported version is " << MINIMUM_THEME_FORMAT_VERSION << ".";
-
-	std::string resolution = root.child("resolution").text().as_string("");
-
-	if (resolution.size())
-	{
-		size_t divider = resolution.find(' ');
-
-		if (divider != std::string::npos)
-		{
-			std::string w = resolution.substr(0, divider);
-			std::string h = resolution.substr(divider, std::string::npos);
-
-			mResolution.x() = (float)atof(w.c_str());
-			mResolution.y() = (float)atof(h.c_str());
-		}
-	}
-
-	parseVariables(root);
-	parseLanguageVariables(root);
-
-	parseIncludes(root);
-	parseViews(root);
-	parseFeatures(root);
-}
-
-void ThemeData::parseIncludes(const pugi::xml_node& root)
+// ─────────────────────────────────────────────
+// PASADA 1: parsea SOLO variables/language de includes (sin views)
+// ─────────────────────────────────────────────
+void ThemeData::parseIncludesVariables(const pugi::xml_node& root)
 {
 	ThemeException error;
 	error.setFiles(mPaths);
@@ -527,6 +465,7 @@ void ThemeData::parseIncludes(const pugi::xml_node& root)
 	{
 		std::string relPath = resolvePlaceholders(node.text().as_string());
 		std::string path = Utils::FileSystem::resolveRelativePath(relPath, mPaths.back(), true, false);
+
 		if (!ResourceManager::getInstance()->fileExists(path))
 			throw error << "Included file \"" << relPath << "\" not found! (resolved to \"" << path << "\")";
 
@@ -543,15 +482,129 @@ void ThemeData::parseIncludes(const pugi::xml_node& root)
 		if (!theme)
 			throw error << "Missing <theme> tag!";
 
+		// SOLO variables/language (sin views)
 		parseVariables(theme);
 		parseLanguageVariables(theme);
 
-		parseIncludes(theme);
+		// recursivo
+		parseIncludesVariables(theme);
+
+		mPaths.pop_back();
+	}
+}
+
+// ─────────────────────────────────────────────
+// PASADA 2: parsea SOLO views/features de includes (sin variables)
+// ─────────────────────────────────────────────
+void ThemeData::parseIncludesViewsAndFeatures(const pugi::xml_node& root)
+{
+	ThemeException error;
+	error.setFiles(mPaths);
+
+	for (pugi::xml_node node = root.child("include"); node; node = node.next_sibling("include"))
+	{
+		std::string relPath = resolvePlaceholders(node.text().as_string());
+		std::string path = Utils::FileSystem::resolveRelativePath(relPath, mPaths.back(), true, false);
+
+		if (!ResourceManager::getInstance()->fileExists(path))
+			throw error << "Included file \"" << relPath << "\" not found! (resolved to \"" << path << "\")";
+
+		error << "    from included file \"" << relPath << "\":\n    ";
+
+		mPaths.push_back(path);
+
+		pugi::xml_document includeDoc;
+		pugi::xml_parse_result result = includeDoc.load_file(path.c_str());
+		if (!result)
+			throw error << "Error parsing file: \n    " << result.description();
+
+		pugi::xml_node theme = includeDoc.child("theme");
+		if (!theme)
+			throw error << "Missing <theme> tag!";
+
+		// Primero recursivo para respetar orden "include dentro de include"
+		parseIncludesViewsAndFeatures(theme);
+
+		// SOLO views/features (ya con variables finales)
 		parseViews(theme);
 		parseFeatures(theme);
 
 		mPaths.pop_back();
 	}
+}
+
+void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const std::string& path)
+{
+	mPaths.push_back(path);
+
+	ThemeException error;
+	error.setFiles(mPaths);
+
+	if (!Utils::FileSystem::exists(path))
+		throw error << "File does not exist!";
+
+	mVersion = 0;
+	mResolution = { 1, 1 };
+	mViews.clear();
+	mVariables.clear();
+
+	// 0) Variables del sistema
+	mVariables.insert(sysDataMap.cbegin(), sysDataMap.cend());
+
+	pugi::xml_document doc;
+	pugi::xml_parse_result res = doc.load_file(path.c_str());
+	if (!res)
+		throw error << "XML parsing error: \n    " << res.description();
+
+	pugi::xml_node root = doc.child("theme");
+	if (!root)
+		throw error << "Missing <theme> tag!";
+
+	// version
+	mVersion = root.child("formatVersion").text().as_float(-404);
+	if (mVersion == -404)
+		throw error << "<formatVersion> tag missing!\n   It's either out of date or you need to add <formatVersion>"
+		            << CURRENT_THEME_FORMAT_VERSION
+		            << "</formatVersion> inside your <theme> tag.";
+
+	if (mVersion < MINIMUM_THEME_FORMAT_VERSION)
+		throw error << "Theme uses format version " << mVersion
+		            << ". Minimum supported version is " << MINIMUM_THEME_FORMAT_VERSION << ".";
+
+	// resolution
+	std::string resolution = root.child("resolution").text().as_string("");
+	if (resolution.size())
+	{
+		size_t divider = resolution.find(' ');
+		if (divider != std::string::npos)
+		{
+			std::string w = resolution.substr(0, divider);
+			std::string h = resolution.substr(divider, std::string::npos);
+
+			mResolution.x() = (float)atof(w.c_str());
+			mResolution.y() = (float)atof(h.c_str());
+		}
+	}
+
+	// ─────────────────────────────────────────────
+	// PASADA 1: juntar TODAS las variables del XML (root + includes + language)
+	// ─────────────────────────────────────────────
+	parseVariables(root);
+	parseLanguageVariables(root);
+	parseIncludesVariables(root);
+
+	// ─────────────────────────────────────────────
+	// AHORA recién: theme.ini pisa al final (global + layout)
+	// ─────────────────────────────────────────────
+	loadExternalThemeVariables(path, mVariables);
+
+	// ─────────────────────────────────────────────
+	// PASADA 2: parsear vistas/features (includes primero, luego root)
+	// usando variables ya FINALIZADAS
+	// ─────────────────────────────────────────────
+	parseIncludesViewsAndFeatures(root);
+	parseViews(root);
+	parseFeatures(root);
 }
 
 void ThemeData::parseFeatures(const pugi::xml_node& root)
@@ -579,7 +632,6 @@ void ThemeData::parseVariables(const pugi::xml_node& root)
 	error.setFiles(mPaths);
 
 	pugi::xml_node variables = root.child("variables");
-
 	if (!variables)
 		return;
 
@@ -589,7 +641,7 @@ void ThemeData::parseVariables(const pugi::xml_node& root)
 		std::string val = resolvePlaceholders(it->text().as_string());
 
 		if (!key.empty() && !val.empty())
-			mVariables[key] = val;
+			mVariables[key] = val; // pisa siempre
 	}
 }
 
@@ -705,7 +757,6 @@ void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::str
 			std::string second = str.substr(divider, std::string::npos);
 
 			Vector2f val((float)atof(first.c_str()), (float)atof(second.c_str()));
-
 			element.properties[node.name()] = val / mResolution;
 			break;
 		}
@@ -744,7 +795,6 @@ void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::str
 			std::string second = str.substr(divider, std::string::npos);
 
 			Vector2f val((float)atof(first.c_str()), (float)atof(second.c_str()));
-
 			element.properties[node.name()] = val;
 			break;
 		}
@@ -891,14 +941,12 @@ std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData
 			auto* st = dynamic_cast<ScrollableTextComponent*>(comp);
 			if (st)
 			{
-				// delay (puede venir en ms: 1200, o en segundos: 1.2)
 				if (elem.has("autoScrollDelay"))
 				{
 					float delayVal = elem.get<float>("autoScrollDelay");
 					st->setAutoScrollDelay(delayVal);
 				}
 
-				// Respeta el autoScroll real del tema
 				bool enable = true;
 				if (elem.has("autoScroll"))
 					enable = elem.get<bool>("autoScroll");

@@ -115,7 +115,7 @@ public:
 		template<typename T>
 		const T get(const std::string& prop) const
 		{
-			if (std::is_same<T, Vector2f>::value)     return *(const T*)&properties.at(prop).v;
+			if (std::is_same<T, Vector2f>::value)          return *(const T*)&properties.at(prop).v;
 			else if (std::is_same<T, std::string>::value)  return *(const T*)&properties.at(prop).s;
 			else if (std::is_same<T, unsigned int>::value) return *(const T*)&properties.at(prop).i;
 			else if (std::is_same<T, float>::value)        return *(const T*)&properties.at(prop).f;
@@ -176,20 +176,25 @@ private:
 	float mVersion;
 	Vector2f mResolution;
 
+	// PASADA 1: solo variables/language/includes
+	void parseIncludesVariables(const pugi::xml_node& themeRoot);
+
+	// PASADA 2: solo views/features/includes
+	void parseIncludesViewsAndFeatures(const pugi::xml_node& themeRoot);
+
 	void parseFeatures(const pugi::xml_node& themeRoot);
-	void parseIncludes(const pugi::xml_node& themeRoot);
-	void parseVariables(const pugi::xml_node& root);
-
-	// NUEVO: soporte ES-DE style <language name="xx_YY"><variables>...</variables></language>
-	void parseLanguageVariables(const pugi::xml_node& root);
-	bool languageMatches(const std::string& nodeLang, const std::string& activeLang) const;
-	std::string normalizeLanguage(const std::string& lang) const;
-
 	void parseViews(const pugi::xml_node& themeRoot);
 	void parseView(const pugi::xml_node& viewNode, ThemeView& view);
 	void parseElement(const pugi::xml_node& elementNode,
 	                  const std::map<std::string, ElementPropertyType>& typeMap,
 	                  ThemeElement& element);
+
+	void parseVariables(const pugi::xml_node& root);
+
+	// soporte ES-DE style <language name="xx_YY"><variables>...</variables></language>
+	void parseLanguageVariables(const pugi::xml_node& root);
+	bool languageMatches(const std::string& nodeLang, const std::string& activeLang) const;
+	std::string normalizeLanguage(const std::string& lang) const;
 
 	std::map<std::string, ThemeView> mViews;
 
