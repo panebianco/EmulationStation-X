@@ -17,6 +17,7 @@
 #include <sstream>
 #include <algorithm>
 #include <map>
+#include <cctype>
 
 namespace
 {
@@ -40,9 +41,6 @@ namespace
 		std::string defaultValue;
 	};
 
-	// -----------------------------
-	// Small helpers (ES-X compatible)
-	// -----------------------------
 	static std::string trim(const std::string& s)
 	{
 		size_t start = s.find_first_not_of(" \t\r\n");
@@ -52,9 +50,16 @@ namespace
 		return s.substr(start, end - start + 1);
 	}
 
+	static std::string toUpper(const std::string& s)
+	{
+		std::string out = s;
+		std::transform(out.begin(), out.end(), out.begin(),
+			[](unsigned char c) { return (char)std::toupper(c); });
+		return out;
+	}
+
 	static bool isAbsolutePathSimple(const std::string& p)
 	{
-		// Linux/Unix absolute
 		return !p.empty() && p[0] == '/';
 	}
 
@@ -72,7 +77,6 @@ namespace
 
 	static std::string normalizeRelative(const std::string& p)
 	{
-		// remove leading "./"
 		if(p.rfind("./", 0) == 0)
 			return p.substr(2);
 		return p;
@@ -128,9 +132,6 @@ namespace
 		}
 	}
 
-	// ------------------------------------------------------------
-	// Read INI sections into a map: section -> (key->value)
-	// ------------------------------------------------------------
 	static std::map<std::string, std::map<std::string, std::string>>
 	loadIniSections(const std::string& iniPath)
 	{
@@ -169,9 +170,6 @@ namespace
 		return data;
 	}
 
-	// ------------------------------------------------------------
-	// Read top-level key=value (before first [section])
-	// ------------------------------------------------------------
 	static std::string readTopIniValue(const std::string& iniPath, const std::string& key)
 	{
 		std::ifstream in(iniPath.c_str());
@@ -179,13 +177,12 @@ namespace
 			return "";
 
 		std::string line;
-		bool inTop = true;
 
 		while(std::getline(in, line))
 		{
 			std::string t = trim(line);
 
-			if(inTop && !t.empty() && t.front() == '[')
+			if(!t.empty() && t.front() == '[')
 				break;
 
 			if(t.empty() || t[0] == ';' || t[0] == '#')
@@ -203,6 +200,7 @@ namespace
 		return "";
 	}
 
+	// Reemplaza TODAS las ocurrencias top-level exactas de key=..., si no existe inserta una.
 	static void updateThemeIniValue(const std::string& iniPath, const std::string& key, const std::string& value)
 	{
 		std::ifstream in(iniPath.c_str());
@@ -211,8 +209,8 @@ namespace
 
 		std::vector<std::string> lines;
 		std::string line;
-		bool updated = false;
-		bool inTop   = true;
+		bool updatedAny = false;
+		bool inTop = true;
 
 		while(std::getline(in, line))
 		{
@@ -229,16 +227,17 @@ namespace
 					std::string thisKey = trim(t.substr(0, posEq));
 					if(thisKey == key)
 					{
-						line    = key + " = " + value;
-						updated = true;
+						line = key + "=" + value;
+						updatedAny = true;
 					}
 				}
 			}
+
 			lines.push_back(line);
 		}
 		in.close();
 
-		if(!updated)
+		if(!updatedAny)
 		{
 			size_t insertPos = lines.size();
 			for(size_t i = 0; i < lines.size(); ++i)
@@ -250,19 +249,17 @@ namespace
 					break;
 				}
 			}
-			lines.insert(lines.begin() + insertPos, key + " = " + value);
+			lines.insert(lines.begin() + insertPos, key + "=" + value);
 		}
 
 		std::ofstream out(iniPath.c_str(), std::ios::trunc);
 		if(!out)
 			return;
+
 		for(const auto& l : lines)
 			out << l << "\n";
 	}
 
-	// ------------------------------------------------------------
-	// Auto-detect /layout subfolders and add [layout] option if missing
-	// ------------------------------------------------------------
 	static void ensureLayoutOptionIfLayoutFolderExists(const std::string& themeDir, std::vector<ThemeOption>& options)
 	{
 		const std::string layoutDir = themeDir + "/layout";
@@ -301,15 +298,17 @@ namespace
 		for(const auto& l : layouts)
 			layoutOpt.values.emplace_back(l, l);
 
-		const std::string current = Settings::getInstance()->getString("ThemeLayout");
-		layoutOpt.defaultValue = !current.empty() ? current : layouts.front();
+		std::string current = Settings::getInstance()->getString("ThemeLayout");
+		if(current.empty())
+		{
+			const std::string iniPath = themeDir + "/theme.ini";
+			current = readTopIniValue(iniPath, "LAYOUT");
+		}
 
+		layoutOpt.defaultValue = !current.empty() ? current : layouts.front();
 		options.insert(options.begin(), layoutOpt);
 	}
 
-	// ------------------------------------------------------------
-	// Auto-detect /_inc/avatars images and add [avatar] option if missing
-	// ------------------------------------------------------------
 	static bool hasImageExt(const std::string& f)
 	{
 		auto lower = f;
@@ -329,7 +328,6 @@ namespace
 
 	static void ensureAvatarOptionIfAvatarFolderExists(const std::string& themeDir, std::vector<ThemeOption>& options)
 	{
-		// If theme.ini already declared [avatar], do nothing.
 		for(const auto& o : options)
 			if(o.id == "avatar")
 				return;
@@ -373,17 +371,11 @@ namespace
 
 		const std::string iniPath = themeDir + "/theme.ini";
 		std::string current = readTopIniValue(iniPath, opt.key);
-		if(!current.empty())
-			opt.defaultValue = current;
-		else
-			opt.defaultValue = opt.values.front().first;
+		opt.defaultValue = !current.empty() ? current : opt.values.front().first;
 
 		options.push_back(opt);
 	}
 
-	// ------------------------------------------------------------
-	// Load theme.ini options
-	// ------------------------------------------------------------
 	static std::vector<ThemeOption> loadThemeOptionsFromIni(const std::string& themeDir)
 	{
 		std::vector<ThemeOption> options;
@@ -405,7 +397,6 @@ namespace
 					std::string t = opt.type;
 					std::transform(t.begin(), t.end(), t.begin(), ::tolower);
 
-					// select requires values, input does not
 					if(t == "select")
 					{
 						if(!opt.values.empty())
@@ -456,9 +447,6 @@ namespace
 		return options;
 	}
 
-	// ------------------------------------------------------------
-	// Apply layout by COPYING layout files to theme root (dialog-style)
-	// ------------------------------------------------------------
 	static bool applyLayoutByCopy(Window* win, const std::string& themeDir, const std::string& layoutId)
 	{
 		const std::string iniPath = themeDir + "/theme.ini";
@@ -466,7 +454,6 @@ namespace
 		if(Utils::FileSystem::isRegularFile(iniPath))
 			ini = loadIniSections(iniPath);
 
-		// Defaults: ./layout/<layoutId>/<file>.xml
 		auto defPath = [&](const std::string& fileName) -> std::string
 		{
 			return "./layout/" + layoutId + "/" + fileName;
@@ -480,7 +467,6 @@ namespace
 		std::string srcUser   = defPath("user.xml");
 		std::string srcStart  = defPath("start.xml");
 
-		// If mapping exists in ini, override
 		if(!ini.empty() && ini.count(section))
 		{
 			auto& s = ini[section];
@@ -491,7 +477,6 @@ namespace
 			if(s.count("start"))  srcStart  = s["start"];
 		}
 
-		// Resolve paths
 		const std::string absTheme  = resolveThemePath(themeDir, srcTheme);
 		const std::string absSwatch = resolveThemePath(themeDir, srcSwatch);
 		const std::string absAvatar = resolveThemePath(themeDir, srcAvatar);
@@ -507,10 +492,7 @@ namespace
 				return;
 
 			if(!Utils::FileSystem::isRegularFile(srcAbs))
-			{
-				// Not fatal; just skip
 				return;
-			}
 
 			const std::string dstAbs = themeDir + "/" + dstName;
 			if(!copyFileForce(srcAbs, dstAbs))
@@ -541,24 +523,47 @@ namespace
 		return true;
 	}
 
+	// Determina la key real a escribir en theme.ini:
+	// 1) opt.key (si existe)
+	// 2) opt.applyTo (si existe y NO es "theme_ini")
+	// 3) opt.id
+	static std::string getOutputKeyForOption(const ThemeOption& opt)
+	{
+		if(!opt.key.empty())
+			return opt.key;
+
+		if(!opt.applyTo.empty() && opt.applyTo != "theme_ini")
+			return opt.applyTo;
+
+		return opt.id;
+	}
+
 	static void applyThemeOption(Window* win, const std::string& themeDir, const ThemeOption& opt, const std::string& value)
 	{
 		if(opt.id.empty() || value.empty())
 			return;
+
+		const std::string iniPath = themeDir + "/theme.ini";
 
 		if(opt.applyTo == "layout" || opt.id == "layout")
 		{
 			Settings::getInstance()->setString("ThemeLayout", value);
 			Settings::getInstance()->saveFile();
 
-			// IMPORTANT: copy layout files to theme root (dialog behavior)
+			updateThemeIniValue(iniPath, "LAYOUT", value);
 			applyLayoutByCopy(win, themeDir, value);
 		}
 		else
 		{
-			const std::string iniPath = themeDir + "/theme.ini";
-			const std::string outKey  = !opt.key.empty() ? opt.key : opt.id;
+			const std::string outKey = getOutputKeyForOption(opt);
+
+			// Escribe key real (camelCase por ejemplo)
 			updateThemeIniValue(iniPath, outKey, value);
+
+			// Compat: también en MAYÚSCULAS (para themes legacy)
+			const std::string upperKey = toUpper(outKey);
+			if(upperKey != outKey)
+				updateThemeIniValue(iniPath, upperKey, value);
 		}
 
 		auto vc = ViewController::get();
@@ -655,14 +660,16 @@ namespace
 			return;
 
 		const std::string iniPath = themeDir + "/theme.ini";
-		const std::string outKey  = !opt.key.empty() ? opt.key : opt.id;
+		const std::string outKey  = getOutputKeyForOption(opt);
+		const std::string upperKey = toUpper(outKey);
 
 		std::string current = readTopIniValue(iniPath, outKey);
+		if(current.empty() && upperKey != outKey)
+			current = readTopIniValue(iniPath, upperKey);
+
 		if(current.empty())
 			current = opt.defaultValue;
 
-		// NOTE: acceptBtnText is const char* and may be stored as pointer.
-		// Use static std::string to guarantee lifetime and allow translation.
 		static std::string okLabel = _("OK");
 
 		win->pushGui(new GuiTextEditPopup(
@@ -676,8 +683,8 @@ namespace
 
 				applyThemeOption(win, themeDir, opt, newValue);
 			},
-			false,              // multiline
-			okLabel.c_str()     // safe lifetime
+			false,
+			okLabel.c_str()
 		));
 	}
 }

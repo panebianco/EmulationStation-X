@@ -237,12 +237,61 @@ static unsigned int getHexColor(const char* str)
 // ─────────────────────────────────────────────
 namespace
 {
+	static std::string trimLocal(const std::string& s)
+	{
+		size_t start = s.find_first_not_of(" \t\r\n");
+		if (start == std::string::npos) return "";
+		size_t end = s.find_last_not_of(" \t\r\n");
+		return s.substr(start, end - start + 1);
+	}
+
+	// Lee un top-level key=val (antes del primer [section])
+	static std::string readTopIniValueLocal(const std::string& iniPath, const std::string& key)
+	{
+		std::ifstream in(iniPath.c_str());
+		if (!in) return "";
+
+		std::string line;
+		while (std::getline(in, line))
+		{
+			std::string t = trimLocal(line);
+			if (!t.empty() && t.front() == '[')
+				break;
+
+			if (t.empty() || t[0] == ';' || t[0] == '#')
+				continue;
+
+			auto posEq = t.find('=');
+			if (posEq == std::string::npos)
+				continue;
+
+			std::string k = trimLocal(t.substr(0, posEq));
+			if (k == key)
+				return trimLocal(t.substr(posEq + 1));
+		}
+		return "";
+	}
+
+	// Copia segura: si el ini trae KEY en mayúsculas, espejo a camelCase
+	static void mirrorCommonKeysCaseInsensitive(std::map<std::string, std::string>& outVars,
+	                                           const std::string& key,
+	                                           const std::string& value)
+	{
+		std::string lower = Utils::String::toLower(key);
+
+		// Art Book Next / themes con includes por variables
+		if (lower == "colorscheme")   outVars["colorScheme"]   = value;
+		if (lower == "soundset")      outVars["soundSet"]      = value;
+		if (lower == "aspectratio")   outVars["aspectRatio"]   = value;
+		if (lower == "gameliststyle") outVars["gameListStyle"] = value;
+	}
+
 	void loadExternalThemeVariables(const std::string& themeXmlPath,
 	                               std::map<std::string, std::string>& outVars)
 	{
-		const std::string activeLayoutSetting = Settings::getInstance()->getString("ThemeLayout");
-		const bool hasActiveLayout = !activeLayoutSetting.empty();
-		const std::string activeLower = Utils::String::toLower(activeLayoutSetting);
+		std::string activeLayoutSetting = Settings::getInstance()->getString("ThemeLayout");
+		bool hasActiveLayout = !activeLayoutSetting.empty();
+		std::string activeLower = Utils::String::toLower(activeLayoutSetting);
 
 		const std::string xmlDir   = Utils::FileSystem::getParent(themeXmlPath);
 		const std::string parent1  = Utils::FileSystem::getParent(xmlDir);
@@ -257,6 +306,18 @@ namespace
 		{
 			if (!Utils::FileSystem::exists(cfgPath))
 				continue;
+
+			// If ThemeLayout is empty, try infer from LAYOUT= in this ini
+			if (!hasActiveLayout)
+			{
+				std::string inferred = readTopIniValueLocal(cfgPath, "LAYOUT");
+				if (!inferred.empty())
+				{
+					activeLayoutSetting = inferred;
+					hasActiveLayout = true;
+					activeLower = Utils::String::toLower(activeLayoutSetting);
+				}
+			}
 
 			std::ifstream file(cfgPath.c_str());
 			if (!file.good())
@@ -344,7 +405,10 @@ namespace
 				}
 
 				if (isGlobalSection || matchesLayout)
-					outVars[key] = value; // pisa siempre
+				{
+					outVars[key] = value;
+					mirrorCommonKeysCaseInsensitive(outVars, key, value);
+				}
 			}
 
 			break; // usa el primer theme.ini encontrado
@@ -424,8 +488,7 @@ void ThemeData::parseLanguageVariables(const pugi::xml_node& root)
 
 std::string ThemeData::resolvePlaceholders(const char* in)
 {
-	std::string inStr(in);
-
+	std::string inStr(in ? in : "");
 	if (inStr.empty())
 		return inStr;
 
@@ -440,11 +503,12 @@ std::string ThemeData::resolvePlaceholders(const char* in)
 	std::string suffix  = resolvePlaceholders(inStr.substr(variableEnd + 1).c_str());
 
 	auto varIt = mVariables.find(replace);
-	std::string value;
-	if (varIt != mVariables.cend())
-		value = varIt->second;
 
-	return prefix + value + suffix;
+	// Si falta, dejamos placeholder (para que el error sea evidente)
+	if (varIt == mVariables.end())
+		return prefix + "${" + replace + "}" + suffix;
+
+	return prefix + varIt->second + suffix;
 }
 
 ThemeData::ThemeData()
@@ -482,11 +546,9 @@ void ThemeData::parseIncludesVariables(const pugi::xml_node& root)
 		if (!theme)
 			throw error << "Missing <theme> tag!";
 
-		// SOLO variables/language (sin views)
 		parseVariables(theme);
 		parseLanguageVariables(theme);
 
-		// recursivo
 		parseIncludesVariables(theme);
 
 		mPaths.pop_back();
@@ -522,10 +584,8 @@ void ThemeData::parseIncludesViewsAndFeatures(const pugi::xml_node& root)
 		if (!theme)
 			throw error << "Missing <theme> tag!";
 
-		// Primero recursivo para respetar orden "include dentro de include"
 		parseIncludesViewsAndFeatures(theme);
 
-		// SOLO views/features (ya con variables finales)
 		parseViews(theme);
 		parseFeatures(theme);
 
@@ -548,7 +608,7 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 	mViews.clear();
 	mVariables.clear();
 
-	// 0) Variables del sistema
+	// 1) variables del sistema (sysDataMap)
 	mVariables.insert(sysDataMap.cbegin(), sysDataMap.cend());
 
 	pugi::xml_document doc;
@@ -560,7 +620,6 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 	if (!root)
 		throw error << "Missing <theme> tag!";
 
-	// version
 	mVersion = root.child("formatVersion").text().as_float(-404);
 	if (mVersion == -404)
 		throw error << "<formatVersion> tag missing!\n   It's either out of date or you need to add <formatVersion>"
@@ -571,7 +630,6 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 		throw error << "Theme uses format version " << mVersion
 		            << ". Minimum supported version is " << MINIMUM_THEME_FORMAT_VERSION << ".";
 
-	// resolution
 	std::string resolution = root.child("resolution").text().as_string("");
 	if (resolution.size())
 	{
@@ -586,22 +644,19 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 		}
 	}
 
-	// ─────────────────────────────────────────────
-	// PASADA 1: juntar TODAS las variables del XML (root + includes + language)
-	// ─────────────────────────────────────────────
+	// 2) variables del XML principal primero (defaults del theme)
 	parseVariables(root);
-	parseLanguageVariables(root);
-	parseIncludesVariables(root);
 
-	// ─────────────────────────────────────────────
-	// AHORA recién: theme.ini pisa al final (global + layout)
-	// ─────────────────────────────────────────────
+	// ✅ 3) CARGAR theme.ini ANTES de procesar includes (CLAVE para Ruckage/ArtBook)
 	loadExternalThemeVariables(path, mVariables);
 
-	// ─────────────────────────────────────────────
-	// PASADA 2: parsear vistas/features (includes primero, luego root)
-	// usando variables ya FINALIZADAS
-	// ─────────────────────────────────────────────
+	// 4) language vars (pueden pisar defaults también)
+	parseLanguageVariables(root);
+
+	// 5) ahora sí: includes de variables, ya con theme.ini aplicado
+	parseIncludesVariables(root);
+
+	// 6) includes/views/features
 	parseIncludesViewsAndFeatures(root);
 	parseViews(root);
 	parseFeatures(root);
@@ -935,7 +990,6 @@ std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData
 		comp->setDefaultZIndex(10);
 		comp->applyTheme(theme, view, *it, ThemeFlags::ALL);
 
-		// Configurar scroll SOLO si realmente es ScrollableTextComponent
 		if (t == "text")
 		{
 			auto* st = dynamic_cast<ScrollableTextComponent*>(comp);
