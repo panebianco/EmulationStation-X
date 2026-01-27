@@ -48,9 +48,35 @@ FileData* findOrCreateFile(SystemData* system, const std::string& path, FileType
 			if(found)
 				return treeNode;
 
+			// --- FIX: allow creating <folder> entries from gamelist if they exist on filesystem ---
+			// ES-dev historically refused to create folders coming from gamelist.xml if they were
+			// not already present in the in-memory filesystem tree.
+			//
+			// That causes "Error finding/creating FileData..." for folders that exist on disk but
+			// were not created during scanning (e.g. filtered/hidden earlier).
+			//
+			// Safe rule:
+			// - If type == FOLDER and the folder exists on disk, create it and attach it.
+			// - If it does not exist, keep old behavior (warn + return NULL).
 			if(type == FOLDER)
 			{
-				LOG(LogWarning) << "gameList: folder doesn't already exist, won't create";
+				// Only create if it actually exists in the filesystem
+				if(Utils::FileSystem::exists(path))
+				{
+					// Ensure parent is a folder
+					if (treeNode->getType() != FOLDER)
+					{
+						LOG(LogWarning) << "gameList: cannot add folder '" << path
+							<< "' because parent is not a folder (parent path: " << treeNode->getPath() << ")";
+						return NULL;
+					}
+
+					FileData* folder = new FileData(FOLDER, path, system->getSystemEnvData(), system);
+					treeNode->addChild(folder);
+					return folder;
+				}
+
+				LOG(LogWarning) << "gameList: folder doesn't exist on filesystem, won't create: " << path;
 				return NULL;
 			}
 
@@ -157,7 +183,9 @@ void parseGamelist(SystemData* system)
 			FileData* file = findOrCreateFile(system, path, type);
 			if(!file)
 			{
-				LOG(LogError) << "Error finding/creating FileData for \"" << path << "\", skipping.";
+				// This is often a gamelist inconsistency or a folder that was filtered during scan.
+				// Avoid marking it as a hard error.
+				LOG(LogWarning) << "Error finding/creating FileData for \"" << path << "\", skipping.";
 				continue;
 			}
 			else if(!file->isArcadeAsset())
