@@ -35,8 +35,9 @@ private:
 		std::string author;  // NUEVO
 	};
 
-	// Catálogo (repo con themes.ini + previews)
-	bool updateCatalog();
+	// Catálogo (snapshot ZIP)
+	bool updateCatalogZip();
+	bool hasCommand(const std::string& cmd) const;
 
 	void loadThemes();
 	void rebuildList();
@@ -45,6 +46,8 @@ private:
 	std::string getPreviewPath(const ThemeEntry& e) const;
 
 	bool isInstalled(const ThemeEntry& e) const;
+
+	// Temas: snapshot (sin .git). Update = reinstalar limpio.
 	bool downloadOrUpdate(const ThemeEntry& e);
 	bool uninstallTheme(const ThemeEntry& e);
 
@@ -64,10 +67,10 @@ private:
 
 	std::vector<ThemeEntry> mThemes;
 
-	// OJO: ahora el previewDir apunta al repo catálogo clonado
-	std::string mCatalogDir;
-	std::string mPreviewDir;
-	std::string mThemesDir;
+	// Paths
+	std::string mCatalogDir;   // ~/.emulationstation/esx/theme-catalog
+	std::string mPreviewDir;   // <catalog>/theme-previews
+	std::string mThemesDir;    // ~/.emulationstation/themes
 
 	int mLastSelectedIndex;
 
