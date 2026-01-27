@@ -121,7 +121,7 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	loadThemes();
 	rebuildList();
 
-	// 🔑 CLAVE: este menú “maneja” la lista manualmente, así que le damos foco nosotros
+	// este menú “maneja” la lista manualmente
 	mList.onFocusGained();
 
 	updatePreview();
@@ -195,6 +195,7 @@ void GuiThemeBrowser::loadThemes()
 		else if (key == "repo") current.repo = val;
 		else if (key == "preview_hint") current.previewHint = val;
 		else if (key == "folder") current.folder = val;
+		else if (key == "author") current.author = val;
 	}
 
 	flushSection();
@@ -221,7 +222,6 @@ void GuiThemeBrowser::rebuildList()
 			Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_LEFT
 		);
 
-		// 🔑 invert_when_selected=false -> si hay selector bar, el texto se dibuja encima
 		row.addElement(txt, false);
 		mList.addRow(row, true);
 		mLastSelectedIndex = 0;
@@ -235,16 +235,15 @@ void GuiThemeBrowser::rebuildList()
 
 		ComponentListRow row;
 
-		std::string label = (e.title.empty() ? e.id : e.title);
-		if (installed)
-			label += "  [INSTALLED]";
+		// Badge ASCII (installed / not installed)
+		std::string label = installed ? "☑  " : "☐  ";
+		label += (e.title.empty() ? e.id : e.title);
 
 		auto title = std::make_shared<TextComponent>(
 			mWindow, label,
 			Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_LEFT
 		);
 
-		// 🔑 CLAVE: esto hace que el texto NO sea tapado por la barra (y solo afecta a este menú)
 		row.addElement(title, false);
 
 		row.makeAcceptInputHandler([this, i]()
@@ -299,10 +298,15 @@ void GuiThemeBrowser::updatePreview()
 	const std::string preview = getPreviewPath(e);
 	mPreview.setImage(preview.empty() ? "" : preview);
 
-	if (!e.repo.empty())
-		mRepoLabel.setText(ellipsize(e.repo, 70));
+	std::string repoLine = e.repo.empty() ? "" : ellipsize(e.repo, 70);
+	std::string authorLine = e.author.empty() ? "" : ("by " + e.author);
+
+	if (!repoLine.empty() && !authorLine.empty())
+		mRepoLabel.setText(repoLine + "\n" + authorLine);
+	else if (!repoLine.empty())
+		mRepoLabel.setText(repoLine);
 	else
-		mRepoLabel.setText("");
+		mRepoLabel.setText(authorLine);
 }
 
 void GuiThemeBrowser::updateFooter()
@@ -318,9 +322,8 @@ void GuiThemeBrowser::updateFooter()
 
 	std::string s = "A ";
 	s += installed ? "Update" : "Download";
-	s += "   |   X ";
-	s += installed ? "Uninstall" : "—";
-	s += "   |   B Back";
+	if (installed) s += "    X Uninstall";
+	s += "    B Back";
 
 	mFooter.setText(s);
 }
@@ -355,8 +358,19 @@ bool GuiThemeBrowser::downloadOrUpdate(const ThemeEntry& e)
 	}
 	else
 	{
-		const std::string cmd = "git -C " + quote(dst) + " pull --ff-only";
-		rc = runCmd(cmd);
+		const std::string pullCmd = "git -C " + quote(dst) + " pull --ff-only";
+		rc = runCmd(pullCmd);
+
+		// Fallback ultra estable: si falla el pull, reinstala limpio
+		if (rc != 0)
+		{
+			LOG(LogWarning) << "Theme update failed, reinstalling: " << e.folder;
+
+			runCmd("rm -rf " + quote(dst));
+
+			const std::string cloneCmd = "git clone --depth 1 " + quote(e.repo) + " " + quote(dst);
+			rc = runCmd(cloneCmd);
+		}
 	}
 
 	if (rc == 0)
@@ -399,7 +413,6 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 
 	if (config->isMappedTo("b", input) || config->isMappedTo("back", input))
 	{
-		// opcional: mList.onFocusLost();
 		mWindow->removeGui(this);
 		return true;
 	}

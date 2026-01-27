@@ -32,6 +32,7 @@ private:
 		std::string repo;
 		std::string previewHint;
 		std::string folder; // ~/.emulationstation/themes/<folder>
+		std::string author; // NUEVO (opcional)
 	};
 
 	void loadThemes();
@@ -46,7 +47,7 @@ private:
 
 	int runCmd(const std::string& cmd);
 
-	// popup helper (Window::setInfoPopup espera InfoPopup*)
+	// popup helper
 	void showPopup(const std::string& msg, int durationMs);
 
 private:
