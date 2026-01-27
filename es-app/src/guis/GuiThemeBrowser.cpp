@@ -43,24 +43,28 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	: GuiComponent(window)
 	, mFrame(window)
 	, mList(window)
-
 	, mPreview(window)
 	, mRepoLabel(window, "", Font::get(FONT_SIZE_SMALL), 0x777777CC, ALIGN_LEFT)
-
 	, mHeader(window, "Theme Downloader", Font::get(FONT_SIZE_LARGE), 0xFFFFFFFF, ALIGN_CENTER)
 	, mFooter(window, "", Font::get(FONT_SIZE_SMALL), 0xFFFFFFFF, ALIGN_CENTER)
-
+	, mCatalogDir("")
 	, mPreviewDir("")
 	, mThemesDir("")
 	, mLastSelectedIndex(0)
-
 	, mInnerX(0.0f)
 	, mInnerY(0.0f)
 	, mInnerW(0.0f)
 	, mInnerH(0.0f)
 {
 	const std::string home = Utils::FileSystem::getHomePath();
-	mPreviewDir = home + "/.emulationstation/esx/theme-previews";
+
+	// Catálogo git local (vive en ~/.emulationstation/esx/theme-catalog)
+	mCatalogDir = home + "/.emulationstation/esx/theme-catalog";
+
+	// Dentro del repo: theme-previews/themes.ini + previews png/jpg
+	mPreviewDir = mCatalogDir + "/theme-previews";
+
+	// Temas instalados
 	mThemesDir  = home + "/.emulationstation/themes";
 
 	const float sw = (float)Renderer::getScreenWidth();
@@ -118,6 +122,9 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	mRepoLabel.setPosition(rightX, repoY);
 	mRepoLabel.setSize(rightW, rightH * 0.16f);
 
+	// ✅ CLAVE: actualizar catálogo al abrir (sin UI extra rara)
+	updateCatalog();
+
 	loadThemes();
 	rebuildList();
 
@@ -132,6 +139,73 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 void GuiThemeBrowser::showPopup(const std::string& msg, int durationMs)
 {
 	mWindow->setInfoPopup(new GuiInfoPopup(mWindow, msg, durationMs));
+}
+
+int GuiThemeBrowser::runCmd(const std::string& cmd)
+{
+	LOG(LogInfo) << "GuiThemeBrowser cmd: " << cmd;
+	return std::system(cmd.c_str());
+}
+
+// ============================================================
+// Catálogo: git clone / pull al abrir
+// ============================================================
+bool GuiThemeBrowser::updateCatalog()
+{
+	// ⚠️ Poné aquí el repo del catálogo (themes.ini + previews)
+	const std::string catalogRepo = "https://github.com/Renetrox/esx-theme-catalog";
+
+	// Si no querés catálogo remoto todavía, dejá el repo vacío
+	if (catalogRepo.empty())
+		return false;
+
+	// Asegurar carpeta padre: ~/.emulationstation/esx
+	Utils::FileSystem::createDirectory(Utils::FileSystem::getParent(mCatalogDir));
+
+	const bool hasGit = Utils::FileSystem::exists(mCatalogDir + "/.git");
+	const bool exists = Utils::FileSystem::exists(mCatalogDir);
+
+	if (!exists)
+	{
+		showPopup("Updating theme catalog...", 2500);
+		const std::string cmd = "git clone --depth 1 " + quote(catalogRepo) + " " + quote(mCatalogDir);
+		const int rc = runCmd(cmd);
+		if (rc != 0)
+		{
+			showPopup("Catalog download failed.", 4000);
+			return false;
+		}
+		return true;
+	}
+
+	// Existe pero no es repo: no tocar (estabilidad)
+	if (exists && !hasGit)
+	{
+		LOG(LogWarning) << "GuiThemeBrowser: catalog folder exists but is not a git repo: " << mCatalogDir;
+		return false;
+	}
+
+	// Pull rápido y seguro
+	showPopup("Updating theme catalog...", 2500);
+	const std::string pullCmd = "git -C " + quote(mCatalogDir) + " pull --ff-only";
+	int rc = runCmd(pullCmd);
+
+	// Fallback ultra estable: si pull falla, reinstala limpio
+	if (rc != 0)
+	{
+		LOG(LogWarning) << "GuiThemeBrowser: catalog pull failed, reinstalling clean.";
+		runCmd("rm -rf " + quote(mCatalogDir));
+
+		const std::string cloneCmd = "git clone --depth 1 " + quote(catalogRepo) + " " + quote(mCatalogDir);
+		rc = runCmd(cloneCmd);
+		if (rc != 0)
+		{
+			showPopup("Catalog update failed.", 4000);
+			return false;
+		}
+	}
+
+	return true;
 }
 
 void GuiThemeBrowser::loadThemes()
@@ -326,12 +400,6 @@ void GuiThemeBrowser::updateFooter()
 	s += "    B Back";
 
 	mFooter.setText(s);
-}
-
-int GuiThemeBrowser::runCmd(const std::string& cmd)
-{
-	LOG(LogInfo) << "GuiThemeBrowser cmd: " << cmd;
-	return std::system(cmd.c_str());
 }
 
 bool GuiThemeBrowser::downloadOrUpdate(const ThemeEntry& e)

@@ -31,9 +31,12 @@ private:
 		std::string title;
 		std::string repo;
 		std::string previewHint;
-		std::string folder; // ~/.emulationstation/themes/<folder>
-		std::string author; // NUEVO (opcional)
+		std::string folder;  // ~/.emulationstation/themes/<folder>
+		std::string author;  // NUEVO
 	};
+
+	// Catálogo (repo con themes.ini + previews)
+	bool updateCatalog();
 
 	void loadThemes();
 	void rebuildList();
@@ -47,7 +50,7 @@ private:
 
 	int runCmd(const std::string& cmd);
 
-	// popup helper
+	// popup helper (Window::setInfoPopup espera InfoPopup*)
 	void showPopup(const std::string& msg, int durationMs);
 
 private:
@@ -61,6 +64,8 @@ private:
 
 	std::vector<ThemeEntry> mThemes;
 
+	// OJO: ahora el previewDir apunta al repo catálogo clonado
+	std::string mCatalogDir;
 	std::string mPreviewDir;
 	std::string mThemesDir;
 
