@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <map>
 #include <cctype>
+#include <vector>
 
 namespace
 {
@@ -33,8 +34,6 @@ namespace
 		std::string label;
 		std::string path;
 		std::string applyTo;
-
-		// Optional output key for theme.ini (e.g. key=USER_NAME)
 		std::string key;
 
 		std::vector<std::pair<std::string, std::string>> values;
@@ -44,8 +43,7 @@ namespace
 	static std::string trim(const std::string& s)
 	{
 		size_t start = s.find_first_not_of(" \t\r\n");
-		if(start == std::string::npos)
-			return "";
+		if(start == std::string::npos) return "";
 		size_t end = s.find_last_not_of(" \t\r\n");
 		return s.substr(start, end - start + 1);
 	}
@@ -93,11 +91,56 @@ namespace
 		return joinPathSimple(themeDir, normalizeRelative(maybeRelative));
 	}
 
+	// --- FIX: getDirContent puede devolver "nombre" o "/abs/ruta/nombre"
+	static std::string baseNameSimple(const std::string& p)
+	{
+		auto pos = p.find_last_of('/');
+		if(pos == std::string::npos) return p;
+		return p.substr(pos + 1);
+	}
+
+	static std::string childPath(const std::string& parent, const std::string& entry)
+	{
+		if(entry.empty()) return "";
+		if(isAbsolutePathSimple(entry)) return entry;
+		return parent + "/" + entry;
+	}
+
+	// --- FIX: mkdir -p (createDirectory no siempre crea anidado)
+	static void mkdirs(const std::string& dir)
+	{
+		if(dir.empty()) return;
+		if(Utils::FileSystem::isDirectory(dir)) return;
+
+		std::string cur;
+		if(dir[0] == '/')
+			cur = "/";
+
+		std::stringstream ss(dir);
+		std::string part;
+		while(std::getline(ss, part, '/'))
+		{
+			if(part.empty()) continue;
+			if(cur.size() > 1 && cur.back() != '/') cur += "/";
+			cur += part;
+			if(!Utils::FileSystem::isDirectory(cur))
+				Utils::FileSystem::createDirectory(cur);
+		}
+	}
+
 	static bool copyFileForce(const std::string& src, const std::string& dst)
 	{
 		std::ifstream in(src.c_str(), std::ios::binary);
 		if(!in)
 			return false;
+
+		// Asegura carpeta destino (anidada)
+		auto pos = dst.find_last_of('/');
+		if(pos != std::string::npos)
+		{
+			std::string parent = dst.substr(0, pos);
+			mkdirs(parent);
+		}
 
 		std::ofstream out(dst.c_str(), std::ios::binary | std::ios::trunc);
 		if(!out)
@@ -200,7 +243,6 @@ namespace
 		return "";
 	}
 
-	// Reemplaza TODAS las ocurrencias top-level exactas de key=..., si no existe inserta una.
 	static void updateThemeIniValue(const std::string& iniPath, const std::string& key, const std::string& value)
 	{
 		std::ifstream in(iniPath.c_str());
@@ -271,15 +313,15 @@ namespace
 				return;
 
 		Utils::FileSystem::stringList lst = Utils::FileSystem::getDirContent(layoutDir);
-		std::vector<std::string> dirs(lst.begin(), lst.end());
 
 		std::vector<std::string> layouts;
-		for(const auto& name : dirs)
+		for(const auto& entry : lst)
 		{
-			if(name.empty() || name[0] == '.')
-				continue;
+			if(entry.empty()) continue;
+			const std::string name = baseNameSimple(entry);
+			if(name.empty() || name[0] == '.') continue;
 
-			const std::string full = layoutDir + "/" + name;
+			const std::string full = childPath(layoutDir, name);
 			if(Utils::FileSystem::isDirectory(full))
 				layouts.push_back(name);
 		}
@@ -337,15 +379,15 @@ namespace
 			return;
 
 		Utils::FileSystem::stringList lst = Utils::FileSystem::getDirContent(avatarDir);
-		std::vector<std::string> files(lst.begin(), lst.end());
 
 		std::vector<std::string> imgs;
-		for(const auto& name : files)
+		for(const auto& entry : lst)
 		{
-			if(name.empty() || name[0] == '.')
-				continue;
+			if(entry.empty()) continue;
+			const std::string name = baseNameSimple(entry);
+			if(name.empty() || name[0] == '.') continue;
 
-			const std::string full = avatarDir + "/" + name;
+			const std::string full = childPath(avatarDir, name);
 			if(Utils::FileSystem::isRegularFile(full) && hasImageExt(name))
 				imgs.push_back(name);
 		}
@@ -447,6 +489,53 @@ namespace
 		return options;
 	}
 
+	static bool endsWithXml(const std::string& f)
+	{
+		std::string lower = f;
+		std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+		return (lower.size() >= 4 && lower.rfind(".xml") == lower.size() - 4);
+	}
+
+	static void listXmlRecursiveAbs(const std::string& baseDir, std::vector<std::string>& out)
+	{
+		if(!Utils::FileSystem::isDirectory(baseDir))
+			return;
+
+		Utils::FileSystem::stringList lst = Utils::FileSystem::getDirContent(baseDir);
+		for(const auto& entry : lst)
+		{
+			if(entry.empty()) continue;
+			const std::string name = baseNameSimple(entry);
+			if(name.empty() || name[0] == '.') continue;
+
+			const std::string abs = childPath(baseDir, name);
+
+			if(Utils::FileSystem::isDirectory(abs))
+			{
+				listXmlRecursiveAbs(abs, out);
+				continue;
+			}
+
+			if(Utils::FileSystem::isRegularFile(abs) && endsWithXml(name))
+				out.push_back(abs);
+		}
+	}
+
+	static std::string makeDstFromLayoutRel(const std::string& layoutAbsDir,
+	                                       const std::string& themeDir,
+	                                       const std::string& xmlAbs)
+	{
+		std::string rel = xmlAbs;
+
+		if(rel.rfind(layoutAbsDir, 0) == 0)
+			rel = rel.substr(layoutAbsDir.size());
+
+		while(!rel.empty() && rel.front() == '/')
+			rel.erase(rel.begin());
+
+		return themeDir + "/" + rel;
+	}
+
 	static bool applyLayoutByCopy(Window* win, const std::string& themeDir, const std::string& layoutId)
 	{
 		const std::string iniPath = themeDir + "/theme.ini";
@@ -501,11 +590,30 @@ namespace
 				okAny = true;
 		};
 
+		// 1) Copia clásica
 		doCopy(absTheme,  "theme.xml");
 		doCopy(absSwatch, "Swatch.xml");
 		doCopy(absAvatar, "avatar.xml");
 		doCopy(absUser,   "user.xml");
 		doCopy(absStart,  "start.xml");
+
+		// 2) Copia genérica recursiva
+		const std::string layoutAbsDir = themeDir + "/layout/" + layoutId;
+		std::vector<std::string> xmls;
+		listXmlRecursiveAbs(layoutAbsDir, xmls);
+
+		if(!xmls.empty())
+		{
+			std::sort(xmls.begin(), xmls.end());
+			for(const auto& xmlAbs : xmls)
+			{
+				const std::string dstAbs = makeDstFromLayoutRel(layoutAbsDir, themeDir, xmlAbs);
+				if(copyFileForce(xmlAbs, dstAbs))
+					okAny = true;
+				else
+					okAll = false;
+			}
+		}
 
 		if(!okAny)
 		{
@@ -523,10 +631,6 @@ namespace
 		return true;
 	}
 
-	// Determina la key real a escribir en theme.ini:
-	// 1) opt.key (si existe)
-	// 2) opt.applyTo (si existe y NO es "theme_ini")
-	// 3) opt.id
 	static std::string getOutputKeyForOption(const ThemeOption& opt)
 	{
 		if(!opt.key.empty())
@@ -557,10 +661,8 @@ namespace
 		{
 			const std::string outKey = getOutputKeyForOption(opt);
 
-			// Escribe key real (camelCase por ejemplo)
 			updateThemeIniValue(iniPath, outKey, value);
 
-			// Compat: también en MAYÚSCULAS (para themes legacy)
 			const std::string upperKey = toUpper(outKey);
 			if(upperKey != outKey)
 				updateThemeIniValue(iniPath, upperKey, value);
