@@ -6,7 +6,7 @@
 #include "components/TextComponent.h"
 #include "resources/Font.h"
 #include "GuiComponent.h"
-#include "Sound.h"          // ← para std::shared_ptr<Sound>
+#include "Sound.h"
 #include <memory>
 #include <string>
 
@@ -40,15 +40,14 @@ struct SystemViewCarousel
 	unsigned int color;
 	unsigned int colorEnd;
 	bool colorGradientHorizontal;
-	int maxLogoCount; // number of logos shown on the carousel
+	int maxLogoCount;
 	Vector2f logoSize;
 	float zIndex;
 
-	// NUEVO: propiedades mejoradas para comportamiento visual
-	float minLogoOpacity;      // Opacidad mínima (0.0f–1.0f)
-	float scaledLogoSpacing;   // Ajuste de separación cuando el logo central está escalado
+	// mejoras visuales (compat Batocera)
+	float minLogoOpacity;
+	float scaledLogoSpacing;
 };
-
 
 class SystemView : public IList<SystemViewData, SystemData*>
 {
@@ -86,7 +85,6 @@ private:
 	SystemViewCarousel mCarousel;
 	TextComponent mSystemInfo;
 
-	// unit is list index
 	float mCamOffset;
 	float mExtrasCamOffset;
 	float mExtrasFadeOpacity;
@@ -94,8 +92,7 @@ private:
 	bool mViewNeedsReload;
 	bool mShowing;
 
-	// NUEVO: sonido opcional al mover el carrusel
-	// Se carga desde scrollSound del <carousel>.
+	// scroll sound opcional desde <carousel scrollSound="...">
 	std::shared_ptr<Sound> mScrollSnd;
 };
 
