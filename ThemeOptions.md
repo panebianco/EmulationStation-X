@@ -1,4 +1,4 @@
-Theme Options in ES-X
+Theme Options in ES-X (pendiente)
 The core of modern themes
 
 In ES-X, Theme Options are the most important concept in the theme system.
