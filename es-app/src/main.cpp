@@ -34,6 +34,15 @@
 // NUEVO: música de fondo ES-X
 #include "audio/BackgroundMusicManager.h"
 
+// ✅ NUEVO: restart request (micro-reinicio tipo Batocera)
+#include "RestartRequest.h"
+
+#ifndef _WIN32
+#include <unistd.h> // execv
+#endif
+#include <vector>
+#include <string>
+
 bool scrape_cmdline = false;
 
 bool parseArgs(int argc, char* argv[])
@@ -290,6 +299,15 @@ void onExit()
 
 int main(int argc, char* argv[])
 {
+	// Guardar argv para poder relanzar el binario si se pidió “restart”
+	static std::string gExePath;
+	static std::vector<std::string> gArgs;
+
+	gExePath = argv[0];
+	gArgs.clear();
+	for (int i = 0; i < argc; i++)
+		gArgs.emplace_back(argv[i]);
+
 	std::locale::global(std::locale("C"));
 
 	if(!parseArgs(argc, argv))
@@ -474,6 +492,29 @@ int main(int argc, char* argv[])
 	ProfileDump();
 
 	LOG(LogInfo) << "EmulationStation cleanly shutting down.";
+
+	// ============================================================
+	// ✅ Micro-reinicio: si alguien pidió restart, relanzar binario
+	// ============================================================
+	if (isRestartRequested())
+	{
+		LOG(LogInfo) << "Restart requested: " << getRestartReason();
+
+#ifndef _WIN32
+		std::vector<char*> argvExec;
+		argvExec.reserve(gArgs.size() + 1);
+		for (auto& s : gArgs)
+			argvExec.push_back(const_cast<char*>(s.c_str()));
+		argvExec.push_back(nullptr);
+
+		execv(gExePath.c_str(), argvExec.data());
+
+		// si execv falla:
+		LOG(LogError) << "execv() failed; could not restart.";
+#else
+		LOG(LogError) << "Restart requested but not implemented on Windows build.";
+#endif
+	}
 
 	return 0;
 }

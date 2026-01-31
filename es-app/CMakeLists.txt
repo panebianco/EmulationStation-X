@@ -17,6 +17,8 @@ set(ES_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ThemeOptions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeBrowser.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/RestartRequest.h
+
 
     # 🔊 Background music
     ${CMAKE_CURRENT_SOURCE_DIR}/src/audio/BackgroundMusicManager.h
@@ -71,6 +73,9 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FileData.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FileSorts.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
+     # ✅ Restart request (micro-reinicio)
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/RestartRequest.cpp
+    
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MetaData.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformId.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ScraperCmdLine.cpp

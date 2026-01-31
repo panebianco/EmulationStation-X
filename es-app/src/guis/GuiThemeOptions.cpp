@@ -20,6 +20,10 @@
 #include <cctype>
 #include <vector>
 
+// ✅ NUEVO: restart request (micro-reinicio)
+#include "RestartRequest.h"
+#include <SDL_events.h>
+
 namespace
 {
 	inline std::string _(const std::string& key)
@@ -656,6 +660,17 @@ namespace
 
 			updateThemeIniValue(iniPath, "LAYOUT", value);
 			applyLayoutByCopy(win, themeDir, value);
+
+			// ✅ Mostrar “splash” simple y reiniciar el proceso (limpia VRAM/caches)
+			if (win)
+				win->renderLoadingScreen("Applying theme...");
+
+			requestRestart("theme layout change");
+
+			SDL_Event ev;
+			ev.type = SDL_QUIT;
+			SDL_PushEvent(&ev);
+			return; // IMPORTANT: no reloadAll()
 		}
 		else
 		{
