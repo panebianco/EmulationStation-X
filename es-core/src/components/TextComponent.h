@@ -27,7 +27,6 @@ public:
 	void setHorizontalAlignment(Alignment align);
 	void setVerticalAlignment(Alignment align);
 	void setLineSpacing(float spacing);
-	float getLineSpacing() const { return mLineSpacing; }
 	void setBackgroundColor(unsigned int color);
 	void setRenderBackground(bool render);
 

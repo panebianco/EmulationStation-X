@@ -1,11 +1,9 @@
 #include "components/ScrollableContainer.h"
 
-#include "components/TextComponent.h"
 #include "math/Vector2i.h"
 #include "renderers/Renderer.h"
 
 #include <algorithm> // std::max
-#include <cmath>
 
 #define AUTO_SCROLL_RESET_DELAY 3000 // ms to reset to top after we reach the bottom
 #define AUTO_SCROLL_DELAY       1000 // ms to wait before we start to scroll (legacy default)
@@ -22,9 +20,6 @@ ScrollableContainer::ScrollableContainer(Window* window, int scrollDelay)
 	  mAtEnd(false),
 	  mAutoScroll(false)
 {
-	mAutoScrollResetDelayConstant = AUTO_SCROLL_RESET_DELAY;
-	mAutoScrollDelayConstant = AUTO_SCROLL_DELAY;
-	mAutoScrollSpeedConstant = AUTO_SCROLL_SPEED;
 }
 
 void ScrollableContainer::render(const Transform4x4f& parentTrans)
@@ -32,22 +27,15 @@ void ScrollableContainer::render(const Transform4x4f& parentTrans)
 	if (!isVisible())
 		return;
 
-	auto* text = dynamic_cast<TextComponent*>(mChildren.empty() ? nullptr : mChildren.front());
-	if (text && text->getValue().empty())
-		return;
-
 	Transform4x4f trans = parentTrans * getTransform();
 
 	Vector2i clipPos((int)trans.translation().x(), (int)trans.translation().y());
 
-	Vector3f dimScaled = trans * Vector3f(mSize.x(), mAdjustedHeight > 0.0f ? mAdjustedHeight : mSize.y(), 0);
+	Vector3f dimScaled = trans * Vector3f(mSize.x(), mSize.y(), 0);
 	Vector2i clipDim(
 		(int)(dimScaled.x() - trans.translation().x()),
 		(int)(dimScaled.y() - trans.translation().y())
 	);
-
-	clipPos[1] += (int)mClipSpacing;
-	clipDim[1] -= (int)mClipSpacing;
 
 	Renderer::pushClipRect(clipPos, clipDim);
 
@@ -81,7 +69,7 @@ void ScrollableContainer::setAutoScroll(bool autoScroll, int delayMs)
 	if (autoScroll)
 	{
 		mScrollDir = Vector2f(0, 1);
-		mAutoScrollSpeed = (int)mAutoScrollSpeedConstant;
+		mAutoScrollSpeed = AUTO_SCROLL_SPEED;
 		reset();
 	}
 	else
@@ -106,72 +94,14 @@ void ScrollableContainer::setScrollPos(const Vector2f& pos)
 
 void ScrollableContainer::update(int deltaTime)
 {
-	if (!isVisible() || mSize == Vector2f(0, 0))
-		return;
-
-	auto* text = dynamic_cast<TextComponent*>(mChildren.empty() ? nullptr : mChildren.front());
-	if (!text || !text->getFont())
-	{
-		GuiComponent::update(deltaTime);
-		return;
-	}
-
-	const Vector2f contentSize = getContentSize();
-	const float lineSpacing = text->getLineSpacing();
-	const float lineHeight = text->getFont()->getHeight(lineSpacing);
-	if (lineHeight <= 0.0f)
-		return;
-
-	float rowModifier = 1.0f;
-
-	if (lineSpacing > 1.2f && mClipSpacing == 0.0f)
-	{
-		const float minimumSpacing = text->getFont()->getHeight(1.2f);
-		const float currentSpacing = text->getFont()->getHeight(lineSpacing);
-		mClipSpacing = std::round((currentSpacing - minimumSpacing) / 2.0f);
-	}
-
-	if (!mUpdatedSize)
-	{
-		if (mVerticalSnap)
-		{
-			float numLines = std::floor(mSize.y() / lineHeight);
-			if (numLines == 0)
-				numLines = 1;
-			mAdjustedHeight = std::ceil(numLines * lineHeight);
-		}
-		else
-		{
-			mAdjustedHeight = mSize.y();
-		}
-		mUpdatedSize = true;
-	}
-
-	if (!mAdjustedAutoScrollSpeed)
-	{
-		const float fontSize = (float)text->getFont()->getSize();
-		float width = contentSize.x() / (fontSize * 1.3f);
-		float speedModifier = std::clamp(width, 10.0f, 40.0f);
-		speedModifier *= mAutoScrollSpeedConstant;
-		mAdjustedAutoScrollSpeed = (int)speedModifier;
-	}
-
-	const float lines = mAdjustedHeight / lineHeight;
-	if (lines < 8.0f)
-		rowModifier = lines / 8.0f;
-
-	if (mAdjustedAutoScrollSpeed < 0)
-		mAdjustedAutoScrollSpeed = 1;
-
-	if (mAdjustedAutoScrollSpeed != 0)
+	if (mAutoScrollSpeed != 0)
 	{
 		mAutoScrollAccumulator += deltaTime;
 
-		while (mAutoScrollAccumulator >= (int)(rowModifier * (float)mAdjustedAutoScrollSpeed))
+		while (mAutoScrollAccumulator >= mAutoScrollSpeed)
 		{
-			if (!mAtEnd && contentSize.y() > mAdjustedHeight)
-				mScrollPos += mScrollDir;
-			mAutoScrollAccumulator -= (int)(rowModifier * (float)mAdjustedAutoScrollSpeed);
+			mScrollPos += mScrollDir;
+			mAutoScrollAccumulator -= mAutoScrollSpeed;
 		}
 	}
 
@@ -181,21 +111,23 @@ void ScrollableContainer::update(int deltaTime)
 	if (mScrollPos.y() < 0)
 		mScrollPos[1] = 0;
 
-	if (contentSize.y() < mAdjustedHeight)
+	const Vector2f contentSize = getContentSize();
+
+	if (contentSize.y() < getSize().y())
 	{
 		mScrollPos[1] = 0;
 		mAtEnd = false;
 	}
-	else if (mScrollPos.y() + mAdjustedHeight > contentSize.y())
+	else if (mScrollPos.y() + getSize().y() > contentSize.y())
 	{
-		mScrollPos[1] = contentSize.y() - mAdjustedHeight;
+		mScrollPos[1] = contentSize.y() - getSize().y();
 		mAtEnd = true;
 	}
 
 	if (mAtEnd)
 	{
 		mAutoScrollResetAccumulator += deltaTime;
-		if (mAutoScrollResetAccumulator >= (int)mAutoScrollResetDelayConstant)
+		if (mAutoScrollResetAccumulator >= AUTO_SCROLL_RESET_DELAY)
 			reset();
 	}
 
@@ -225,7 +157,4 @@ void ScrollableContainer::reset()
 	mAutoScrollAccumulator = -mAutoScrollDelay + mAutoScrollSpeed;
 
 	mAtEnd = false;
-	mUpdatedSize = false;
-	mAdjustedAutoScrollSpeed = 0;
-	mClipSpacing = 0.0f;
 }
