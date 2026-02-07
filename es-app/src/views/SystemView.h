@@ -1,3 +1,4 @@
+// es-app/src/views/SystemView.h
 #pragma once
 #ifndef ES_APP_VIEWS_SYSTEM_VIEW_H
 #define ES_APP_VIEWS_SYSTEM_VIEW_H
@@ -25,6 +26,19 @@ struct SystemViewData
 {
 	std::shared_ptr<GuiComponent> logo;
 	std::vector<GuiComponent*> backgroundExtras;
+
+	// ─────────────────────────────────────────────
+	// InfoButton (temable)
+	// ─────────────────────────────────────────────
+	GuiComponent* infoButton = nullptr;          // idle
+	GuiComponent* infoButtonSelected = nullptr;  // focus
+
+	// ─────────────────────────────────────────────
+	// Descripción resuelta desde ThemeData:
+	// <text name="system-description" extra="true"><visible>false</visible>...
+	// ─────────────────────────────────────────────
+	bool hasDescription = false;
+	std::string descriptionText;
 };
 
 struct SystemViewCarousel
@@ -82,6 +96,10 @@ private:
 	void renderInfoBar(const Transform4x4f& trans);
 	void renderFade(const Transform4x4f& trans);
 
+	// foco del infoButton
+	bool selectedHasInfo() const;
+	void setInfoFocus(bool focus);
+
 	SystemViewCarousel mCarousel;
 	TextComponent mSystemInfo;
 
@@ -94,6 +112,9 @@ private:
 
 	// scroll sound opcional desde <carousel scrollSound="...">
 	std::shared_ptr<Sound> mScrollSnd;
+
+	// foco actual en el botón info
+	bool mInfoFocus;
 };
 
 #endif // ES_APP_VIEWS_SYSTEM_VIEW_H
