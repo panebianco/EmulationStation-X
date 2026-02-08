@@ -2,7 +2,6 @@
 
 #include "components/ImageComponent.h"
 #include "components/TextComponent.h"
-#include "components/ScrollableTextComponent.h" // autoScroll en <text extra="true">
 #include "resources/ResourceManager.h"
 #include "utils/FileSystemUtil.h"
 #include "utils/StringUtil.h"
@@ -88,7 +87,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "textStrokeColor", COLOR },
 		{ "textStrokeSize", FLOAT },
 
-		// ScrollableTextComponent
+		// Legacy: se mantienen para compatibilidad, pero se ignoran (ScrollableTextComponent deshabilitado)
 		{ "autoScroll", BOOLEAN },
 		{ "autoScrollDelay", FLOAT }
 	} },
@@ -965,7 +964,7 @@ std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData
 		if (!elem.extra)
 			continue;
 
-		GuiComponent* comp = NULL;
+		GuiComponent* comp = nullptr;
 		const std::string& t = elem.type;
 
 		if (t == "image")
@@ -974,14 +973,9 @@ std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData
 		}
 		else if (t == "text")
 		{
-			bool wantsScroll = false;
-			if (elem.has("autoScroll"))
-				wantsScroll = elem.get<bool>("autoScroll");
-
-			if (wantsScroll)
-				comp = new ScrollableTextComponent(window);
-			else
-				comp = new TextComponent(window);
+			// ScrollableTextComponent deshabilitado: siempre TextComponent.
+			// (autoScroll/autoScrollDelay se mantienen en el parser solo por compatibilidad.)
+			comp = new TextComponent(window);
 		}
 
 		if (!comp)
@@ -989,25 +983,6 @@ std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData
 
 		comp->setDefaultZIndex(10);
 		comp->applyTheme(theme, view, *it, ThemeFlags::ALL);
-
-		if (t == "text")
-		{
-			auto* st = dynamic_cast<ScrollableTextComponent*>(comp);
-			if (st)
-			{
-				if (elem.has("autoScrollDelay"))
-				{
-					float delayVal = elem.get<float>("autoScrollDelay");
-					st->setAutoScrollDelay(delayVal);
-				}
-
-				bool enable = true;
-				if (elem.has("autoScroll"))
-					enable = elem.get<bool>("autoScroll");
-
-				st->setAutoScroll(enable);
-			}
-		}
 
 		comps.push_back(comp);
 	}

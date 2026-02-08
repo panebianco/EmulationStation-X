@@ -94,16 +94,18 @@ void ScrollableContainer::setScrollPos(const Vector2f& pos)
 
 void ScrollableContainer::update(int deltaTime)
 {
-	if (mAutoScrollSpeed != 0)
-	{
-		mAutoScrollAccumulator += deltaTime;
+if (mAutoScrollSpeed != 0)
+{
+    mAutoScrollAccumulator += deltaTime;
 
-		while (mAutoScrollAccumulator >= mAutoScrollSpeed)
-		{
-			mScrollPos += mScrollDir;
-			mAutoScrollAccumulator -= mAutoScrollSpeed;
-		}
-	}
+    const int steps = mAutoScrollAccumulator / mAutoScrollSpeed;
+    if (steps > 0)
+    {
+        mScrollPos += mScrollDir * (float)steps;
+        mAutoScrollAccumulator -= steps * mAutoScrollSpeed;
+    }
+}
+
 
 	// límites
 	if (mScrollPos.x() < 0)

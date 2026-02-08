@@ -1,3 +1,5 @@
+// es-app/src/guis/GuiMenu.cpp
+
 #include "guis/GuiMenu.h"
 
 #include "components/OptionListComponent.h"
@@ -33,6 +35,7 @@
 #include "resources/Font.h"
 #include "ThemeData.h"
 #include "LocaleES.h"
+#include "renderers/Renderer.h" // ✅ para Renderer::getScreenWidth/Height
 
 // Navegación por sonido
 #include "Sound.h"
@@ -105,6 +108,7 @@ GuiMenu::GuiMenu(Window* window)
 	}
 	else
 	{
+		// Modo restringido: mantener solo lo básico
 		addEntry(_("SOUND SETTINGS").c_str(), menuColor, true, [this] { openSoundSettings(); });
 	}
 
@@ -282,13 +286,26 @@ void GuiMenu::openUISettings()
 
 	auto UImodeSelection = std::make_shared< OptionListComponent<std::string> >(mWindow, _("UI MODE").c_str(), false);
 	std::vector<std::string> UImodes = UIModeController::getInstance()->getUIModes();
+
+	const std::string currentMode = Settings::getInstance()->getString("UIMode").empty()
+		? "Full"
+		: Settings::getInstance()->getString("UIMode");
+
 	for (auto it = UImodes.cbegin(); it != UImodes.cend(); it++)
-		UImodeSelection->add(*it, *it, Settings::getInstance()->getString("UIMode") == *it);
+		UImodeSelection->add(*it, *it, (*it == currentMode));
+
+	// ✅ FIX: antes NO se agregaba al menú, por eso “no aparece nada”
+	s->addWithLabel(_("UI MODE").c_str(), UImodeSelection);
 
 	Window* window = mWindow;
-	s->addSaveFunc([UImodeSelection, window]
+	s->addSaveFunc([UImodeSelection, window, currentMode]
 	{
 		std::string selectedMode = UImodeSelection->getSelected();
+
+		// Nada que hacer si no cambió
+		if (selectedMode == currentMode)
+			return;
+
 		if (selectedMode != "Full")
 		{
 			std::string msg = _("You are changing the UI to a restricted mode:") + "\n" + selectedMode + "\n";
@@ -302,6 +319,13 @@ void GuiMenu::openUISettings()
 					Settings::getInstance()->setString("UIMode", selectedMode);
 					Settings::getInstance()->saveFile();
 				}, _("NO").c_str(), nullptr));
+		}
+		else
+		{
+			// ✅ FIX: antes “Full” no guardaba nunca
+			LOG(LogDebug) << "Setting UI mode to Full";
+			Settings::getInstance()->setString("UIMode", "Full");
+			Settings::getInstance()->saveFile();
 		}
 	});
 
