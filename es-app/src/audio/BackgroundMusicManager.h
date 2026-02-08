@@ -22,13 +22,18 @@ public:
     void onGameLaunched();
     void onGameEnded();
 
+    // Llamar desde el loop principal (Window::update / main loop)
     void update(int deltaTimeMs);
 
     void playNext();
 
+    // Popup "Now playing"
     bool songNameChanged();
     void resetSongNameChangedFlag();
     std::string getCurrentSongDisplayName() const;
+
+    // Ducking (cuando hay video reproduciéndose)
+    void setVideoPlaying(bool playing);
 
 private:
     BackgroundMusicManager();
@@ -50,6 +55,11 @@ private:
     void stopMusicInternal(bool fadeOut);
 
     void setNowPlaying(const std::string& fullPath);
+
+    // Ducking helpers
+    int  computeBaseMusicVolume() const;
+    void applyMusicVolumeImmediate(int vol);
+    void updateDucking(int deltaTimeMs);
 
     static void musicFinishedCallbackStatic();
     void musicFinishedCallback();
@@ -78,6 +88,13 @@ private:
 
     bool mPendingReopenOnResume;
 
-    // ⚠️ cruzado entre audio thread y main thread
+    // audio thread -> main thread
     std::atomic<bool> mPendingNextFromCallback;
+
+    // Ducking state (main thread only)
+    bool  mVideoPlaying;
+    int   mBaseVolume;        // 0..128
+    float mDuckFactor;        // 0..1 (ej 0.35)
+    int   mDuckTargetVol;     // 0..128
+    int   mDuckCurrentVol;    // 0..128
 };

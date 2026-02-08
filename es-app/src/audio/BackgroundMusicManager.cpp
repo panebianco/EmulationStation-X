@@ -12,10 +12,19 @@
 #include <random>
 #include <cmath>
 
+// -----------------------------
+//  Helpers (C++11 safe)
+// -----------------------------
+static inline int clampInt(int v, int lo, int hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+
 // =============================
 //  Singleton
 // =============================
-
 BackgroundMusicManager* BackgroundMusicManager::sInstance = nullptr;
 
 BackgroundMusicManager& BackgroundMusicManager::getInstance()
@@ -28,7 +37,6 @@ BackgroundMusicManager& BackgroundMusicManager::getInstance()
 // =============================
 //  Ctor / Dtor
 // =============================
-
 BackgroundMusicManager::BackgroundMusicManager()
     : mInitialized(false)
     , mEnabled(true)
@@ -44,8 +52,17 @@ BackgroundMusicManager::BackgroundMusicManager()
     , mPendingIndex(-1)
     , mPendingReopenOnResume(false)
     , mPendingNextFromCallback(false)
+    // ducking
+    , mVideoPlaying(false)
+    , mBaseVolume(96)
+    , mDuckFactor(0.35f)
+    , mDuckTargetVol(96)
+    , mDuckCurrentVol(96)
 {
     mEnabled = Settings::getInstance()->getBool("BackgroundMusic");
+    mBaseVolume = computeBaseMusicVolume();
+    mDuckTargetVol  = mBaseVolume;
+    mDuckCurrentVol = mBaseVolume;
 }
 
 BackgroundMusicManager::~BackgroundMusicManager()
@@ -56,7 +73,6 @@ BackgroundMusicManager::~BackgroundMusicManager()
 // =============================
 //  Popup helpers
 // =============================
-
 bool BackgroundMusicManager::songNameChanged()
 {
     return mSongNameChanged;
@@ -85,7 +101,6 @@ void BackgroundMusicManager::setNowPlaying(const std::string& fullPath)
 // =============================
 //  Mixer open/close/reopen
 // =============================
-
 bool BackgroundMusicManager::openMixer()
 {
     if (mMixerOpenedByUs)
@@ -102,7 +117,11 @@ bool BackgroundMusicManager::openMixer()
     Mix_HookMusicFinished(&BackgroundMusicManager::musicFinishedCallbackStatic);
 
     mMixerOpenedByUs = true;
-    LOG(LogInfo) << "BGM - Mixer OPEN";
+
+    // aplicar volumen (con ducking actual)
+    applyMusicVolumeImmediate(clampInt(mDuckCurrentVol, 0, 128));
+
+    LOG(LogInfo) << "BGM - Mixer OPEN (owned)";
     return true;
 }
 
@@ -144,7 +163,6 @@ bool BackgroundMusicManager::reopenMixer()
 // =============================
 //  Init / Shutdown
 // =============================
-
 void BackgroundMusicManager::init()
 {
     if (mInitialized)
@@ -178,7 +196,6 @@ void BackgroundMusicManager::shutdown()
 // =============================
 //  Enable / Disable
 // =============================
-
 void BackgroundMusicManager::setEnabled(bool enabled)
 {
     if (enabled == mEnabled)
@@ -218,9 +235,67 @@ void BackgroundMusicManager::setEnabled(bool enabled)
 }
 
 // =============================
+//  Ducking
+// =============================
+int BackgroundMusicManager::computeBaseMusicVolume() const
+{
+    // Si luego querés hacerlo configurable, acá se conecta a Settings.
+    // 96 es un buen default (75% de 128)
+    return clampInt(96, 0, 128);
+}
+
+void BackgroundMusicManager::applyMusicVolumeImmediate(int vol)
+{
+    if (!mMixerOpenedByUs)
+        return;
+
+    Mix_VolumeMusic(clampInt(vol, 0, 128));
+}
+
+void BackgroundMusicManager::setVideoPlaying(bool playing)
+{
+    mVideoPlaying = playing;
+
+    mBaseVolume = computeBaseMusicVolume();
+    const int base = clampInt(mBaseVolume, 0, 128);
+
+    // objetivo: cuando hay video, bajar a base * duckFactor
+    const int duck = clampInt((int)std::lround(base * mDuckFactor), 0, 128);
+
+    mDuckTargetVol = mVideoPlaying ? duck : base;
+
+    // no pegamos un salto abrupto; se interpola en updateDucking()
+    // pero si no está inicializado, mantenemos coherencia
+}
+
+void BackgroundMusicManager::updateDucking(int deltaTimeMs)
+{
+    if (!mMixerOpenedByUs)
+        return;
+
+    // Interpolación suave: ~250ms para llegar al target
+    const int target = clampInt(mDuckTargetVol, 0, 128);
+    int cur = clampInt(mDuckCurrentVol, 0, 128);
+
+    if (cur == target)
+        return;
+
+    // velocidad: cuantos "steps" por segundo
+    // 128 niveles, en 0.25s => ~512 niveles/s
+    const float stepsPerMs = 512.0f / 1000.0f;
+    int step = (int)std::lround(stepsPerMs * (float)deltaTimeMs);
+    if (step < 1) step = 1;
+
+    if (cur < target) cur = std::min(cur + step, target);
+    else              cur = std::max(cur - step, target);
+
+    mDuckCurrentVol = cur;
+    Mix_VolumeMusic(cur);
+}
+
+// =============================
 //  Game hooks
 // =============================
-
 void BackgroundMusicManager::onGameLaunched()
 {
     if (!mInitialized)
@@ -259,70 +334,87 @@ void BackgroundMusicManager::onGameEnded()
 // =============================
 //  Update (main thread)
 // =============================
-
 void BackgroundMusicManager::update(int deltaTimeMs)
 {
     if (!mInitialized)
         return;
 
+    // Ducking siempre (si hay mixer)
+    updateDucking(deltaTimeMs);
+
+    // Si la canción terminó, el callback marca el flag.
     if (mPendingNextFromCallback.exchange(false))
     {
+        LOG(LogInfo) << "BGM - update: pendingNext -> playNext()";
         if (!mGameRunning && mEnabled)
             playNext();
     }
 
-    if (!mPendingResume)
-        return;
-
-    if (mGameRunning || !mEnabled)
+    // Resume post-game con delay
+    if (mPendingResume)
     {
-        mPendingResume = false;
-        mResumeTimerMs = 0;
-        mPendingIndex  = -1;
-        mPendingReopenOnResume = false;
-        return;
+        if (mGameRunning || !mEnabled)
+        {
+            mPendingResume = false;
+            mResumeTimerMs = 0;
+            mPendingIndex  = -1;
+            mPendingReopenOnResume = false;
+        }
+        else
+        {
+            mResumeTimerMs -= deltaTimeMs;
+            if (mResumeTimerMs <= 0)
+            {
+                mPendingResume = false;
+                mResumeTimerMs = 0;
+
+                if (mPlaylist.empty())
+                    buildPlaylist();
+
+                if (!mPlaylist.empty())
+                {
+                    if (mPendingReopenOnResume)
+                    {
+                        mPendingReopenOnResume = false;
+                        if (!reopenMixer())
+                            return;
+                    }
+                    else
+                    {
+                        if (!openMixer())
+                            return;
+                    }
+
+                    if (mPendingIndex >= 0 && mPendingIndex < (int)mPlaylist.size())
+                        mCurrentIndex = mPendingIndex;
+                    else
+                        mCurrentIndex = pickNextIndex();
+
+                    mPendingIndex = -1;
+
+                    LOG(LogInfo) << "BGM - resume -> playCurrent() index=" << mCurrentIndex;
+                    playCurrent();
+                }
+            }
+        }
     }
 
-    mResumeTimerMs -= deltaTimeMs;
-    if (mResumeTimerMs > 0)
-        return;
-
-    mPendingResume = false;
-    mResumeTimerMs = 0;
-
-    if (mPlaylist.empty())
-        buildPlaylist();
-
-    if (mPlaylist.empty())
-        return;
-
-    if (mPendingReopenOnResume)
+    // Watchdog anti-silencio:
+    // Si por cualquier motivo se cortó antes de terminar (WAV raro, decoder, etc.),
+    // reengancha solo.
+    if (mEnabled && !mGameRunning && mMixerOpenedByUs && !mPendingResume)
     {
-        mPendingReopenOnResume = false;
-        if (!reopenMixer())
-            return;
+        if (!Mix_PlayingMusic() && !Mix_PausedMusic() && !mPlaylist.empty())
+        {
+            LOG(LogWarning) << "BGM - watchdog: music stopped unexpectedly -> playNext()";
+            playNext();
+        }
     }
-    else
-    {
-        if (!openMixer())
-            return;
-    }
-
-    if (mPendingIndex >= 0 && mPendingIndex < (int)mPlaylist.size())
-        mCurrentIndex = mPendingIndex;
-    else
-        mCurrentIndex = pickNextIndex();
-
-    mPendingIndex = -1;
-
-    LOG(LogInfo) << "BGM - resume -> playCurrent() index=" << mCurrentIndex;
-    playCurrent();
 }
 
 // =============================
 //  Playlist
 // =============================
-
 void BackgroundMusicManager::buildPlaylist()
 {
     mPlaylist.clear();
@@ -362,7 +454,6 @@ bool BackgroundMusicManager::isValidAudioFile(const std::string& path) const
 // =============================
 //  Shuffle inteligente
 // =============================
-
 void BackgroundMusicManager::addLastPlayed(const std::string& song)
 {
     int maxHistory = std::max(1, (int)std::floor(mPlaylist.size() * 0.4f));
@@ -399,12 +490,12 @@ int BackgroundMusicManager::pickNextIndex()
 // =============================
 //  Playback
 // =============================
-
 void BackgroundMusicManager::playCurrent()
 {
     if (!mInitialized || !mEnabled || !mMixerOpenedByUs || mPlaylist.empty())
         return;
 
+    // Si ya suena, no reiniciar
     if (Mix_PlayingMusic() && !Mix_PausedMusic())
         return;
 
@@ -440,7 +531,23 @@ void BackgroundMusicManager::playCurrent()
         LOG(LogInfo) << "BGM - Playing: " << song;
         setNowPlaying(song);
 
-        Mix_PlayMusic(mCurrentMusic, 0);
+        // Aplicar volumen actual (ducking) antes de play
+        applyMusicVolumeImmediate(clampInt(mDuckCurrentVol, 0, 128));
+
+        if (Mix_PlayMusic(mCurrentMusic, 0) != 0)
+        {
+            LOG(LogError) << "BGM - Mix_PlayMusic failed: " << Mix_GetError()
+                          << " | skipping: " << song;
+
+            Mix_FreeMusic(mCurrentMusic);
+            mCurrentMusic = nullptr;
+
+            mPlaylist.erase(mPlaylist.begin() + mCurrentIndex);
+            mCurrentIndex = -1;
+            attempts++;
+            continue;
+        }
+
         addLastPlayed(song);
         return;
     }
@@ -451,7 +558,6 @@ void BackgroundMusicManager::playCurrent()
 // =============================
 //  Controls
 // =============================
-
 void BackgroundMusicManager::playNext()
 {
     if (!mInitialized || mPlaylist.empty())
@@ -465,6 +571,8 @@ void BackgroundMusicManager::stopMusicInternal(bool fadeOut)
 {
     if (!mMixerOpenedByUs)
         return;
+
+    LOG(LogInfo) << "BGM - stopMusicInternal(fadeOut=" << (fadeOut ? "1" : "0") << ")";
 
     if (fadeOut)
         Mix_FadeOutMusic(500);
@@ -481,7 +589,6 @@ void BackgroundMusicManager::stopMusicInternal(bool fadeOut)
 // =============================
 //  Callback
 // =============================
-
 void BackgroundMusicManager::musicFinishedCallbackStatic()
 {
     if (sInstance)
@@ -493,5 +600,8 @@ void BackgroundMusicManager::musicFinishedCallback()
     if (mGameRunning || !mEnabled)
         return;
 
+    // OJO: esto se ejecuta desde el thread interno de mixer.
+    // Solo seteamos un flag atómico.
+    LOG(LogInfo) << "BGM - callback: music finished (pendingNext=1)";
     mPendingNextFromCallback.store(true);
 }
