@@ -5,6 +5,10 @@
 #include "utils/StringUtil.h"
 #include "PowerSaver.h"
 #include "Settings.h"
+
+// ✅ Ducking
+#include "audio/BackgroundMusicManager.h"
+
 #ifdef WIN32
 #include <basetsd.h>
 #include <codecvt>
@@ -12,6 +16,7 @@ typedef SSIZE_T ssize_t;
 #else
 #include <unistd.h>
 #endif
+
 #include <vlc/vlc.h>
 #include <SDL_mutex.h>
 
@@ -35,11 +40,12 @@ static void unlock(void *data, void* /*id*/, void *const* /*p_pixels*/) {
 
 // VLC wants to display a video frame.
 static void display(void* /*data*/, void* /*id*/) {
-	//Data to be displayed
+	// Data to be displayed
 }
 
 VideoVlcComponent::VideoVlcComponent(Window* window, std::string subtitles) :
 	VideoComponent(window),
+	mMedia(nullptr),
 	mMediaPlayer(nullptr)
 {
 	memset(&mContext, 0, sizeof(mContext));
@@ -53,7 +59,15 @@ VideoVlcComponent::VideoVlcComponent(Window* window, std::string subtitles) :
 
 VideoVlcComponent::~VideoVlcComponent()
 {
+	// ✅ asegurar que el ducking se libere siempre
 	stopVideo();
+}
+
+void VideoVlcComponent::notifyDucking(bool playing)
+{
+	// Si no hay música habilitada o el manager no está inicializado, igual es seguro:
+	// setVideoPlaying solo ajusta target volumen.
+	BackgroundMusicManager::getInstance().setVideoPlaying(playing);
 }
 
 void VideoVlcComponent::setResize(float width, float height)
@@ -82,49 +96,48 @@ void VideoVlcComponent::resize()
 	if(textureSize == Vector2f::Zero())
 		return;
 
-		// SVG rasterization is determined by height (see SVGResource.cpp), and rasterization is done in terms of pixels
-		// if rounding is off enough in the rasterization step (for images with extreme aspect ratios), it can cause cutoff when the aspect ratio breaks
-		// so, we always make sure the resultant height is an integer to make sure cutoff doesn't happen, and scale width from that
-		// (you'll see this scattered throughout the function)
-		// this is probably not the best way, so if you're familiar with this problem and have a better solution, please make a pull request!
+	// SVG rasterization is determined by height (see SVGResource.cpp), and rasterization is done in terms of pixels
+	// if rounding is off enough in the rasterization step (for images with extreme aspect ratios), it can cause cutoff when the aspect ratio breaks
+	// so, we always make sure the resultant height is an integer to make sure cutoff doesn't happen, and scale width from that
+	// (you'll see this scattered throughout the function)
+	// this is probably not the best way, so if you're familiar with this problem and have a better solution, please make a pull request!
 
-		if(mTargetIsMax)
+	if(mTargetIsMax)
+	{
+		mSize = textureSize;
+
+		Vector2f resizeScale((mTargetSize.x() / mSize.x()), (mTargetSize.y() / mSize.y()));
+
+		if(resizeScale.x() < resizeScale.y())
 		{
-
-			mSize = textureSize;
-
-			Vector2f resizeScale((mTargetSize.x() / mSize.x()), (mTargetSize.y() / mSize.y()));
-
-			if(resizeScale.x() < resizeScale.y())
-			{
-				mSize[0] *= resizeScale.x();
-				mSize[1] *= resizeScale.x();
-			}else{
-				mSize[0] *= resizeScale.y();
-				mSize[1] *= resizeScale.y();
-			}
-
-			// for SVG rasterization, always calculate width from rounded height (see comment above)
-			mSize[1] = Math::round(mSize[1]);
-			mSize[0] = (mSize[1] / textureSize.y()) * textureSize.x();
-
+			mSize[0] *= resizeScale.x();
+			mSize[1] *= resizeScale.x();
 		}else{
-			// if both components are set, we just stretch
-			// if no components are set, we don't resize at all
-			mSize = mTargetSize == Vector2f::Zero() ? textureSize : mTargetSize;
-
-			// if only one component is set, we resize in a way that maintains aspect ratio
-			// for SVG rasterization, we always calculate width from rounded height (see comment above)
-			if(!mTargetSize.x() && mTargetSize.y())
-			{
-				mSize[1] = Math::round(mTargetSize.y());
-				mSize[0] = (mSize.y() / textureSize.y()) * textureSize.x();
-			}else if(mTargetSize.x() && !mTargetSize.y())
-			{
-				mSize[1] = Math::round((mTargetSize.x() / textureSize.x()) * textureSize.y());
-				mSize[0] = (mSize.y() / textureSize.y()) * textureSize.x();
-			}
+			mSize[0] *= resizeScale.y();
+			mSize[1] *= resizeScale.y();
 		}
+
+		// for SVG rasterization, always calculate width from rounded height (see comment above)
+		mSize[1] = Math::round(mSize[1]);
+		mSize[0] = (mSize[1] / textureSize.y()) * textureSize.x();
+
+	}else{
+		// if both components are set, we just stretch
+		// if no components are set, we don't resize at all
+		mSize = mTargetSize == Vector2f::Zero() ? textureSize : mTargetSize;
+
+		// if only one component is set, we resize in a way that maintains aspect ratio
+		// for SVG rasterization, we always calculate width from rounded height (see comment above)
+		if(!mTargetSize.x() && mTargetSize.y())
+		{
+			mSize[1] = Math::round(mTargetSize.y());
+			mSize[0] = (mSize.y() / textureSize.y()) * textureSize.x();
+		}else if(mTargetSize.x() && !mTargetSize.y())
+		{
+			mSize[1] = Math::round((mTargetSize.x() / textureSize.x()) * textureSize.y());
+			mSize[0] = (mSize.y() / textureSize.y()) * textureSize.x();
+		}
+	}
 
 	// mSize.y() should already be rounded
 	mTexture->rasterizeAt((size_t)Math::round(mSize.x()), (size_t)Math::round(mSize.y()));
@@ -175,7 +188,8 @@ void VideoVlcComponent::setupContext()
 	if (!mContext.valid)
 	{
 		// Create an RGBA surface to render the video into
-		mContext.surface = SDL_CreateRGBSurface(SDL_SWSURFACE, (int)mVideoWidth, (int)mVideoHeight, 32, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
+		mContext.surface = SDL_CreateRGBSurface(SDL_SWSURFACE, (int)mVideoWidth, (int)mVideoHeight, 32,
+			0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
 		mContext.mutex = SDL_CreateMutex();
 		mContext.valid = true;
 		resize();
@@ -204,12 +218,12 @@ void VideoVlcComponent::setupVLC(std::string subtitles)
 
 		if (!subtitles.empty())
 		{
-			argslen = sizeof(newargs) / sizeof(newargs[0]);
+			argslen = (int)(sizeof(newargs) / sizeof(newargs[0]));
 			args = newargs;
 		}
 		else
 		{
-			argslen = sizeof(singleargs) / sizeof(singleargs[0]);
+			argslen = (int)(sizeof(singleargs) / sizeof(singleargs[0]));
 			args = singleargs;
 		}
 		mVLC = libvlc_new(argslen, args);
@@ -224,7 +238,6 @@ void VideoVlcComponent::handleLooping()
 		if (state == libvlc_Ended)
 		{
 			setMuteMode();
-			//libvlc_media_player_set_position(mMediaPlayer, 0.0f);
 			libvlc_media_player_set_media(mMediaPlayer, mMedia);
 			libvlc_media_player_play(mMediaPlayer);
 		}
@@ -233,118 +246,152 @@ void VideoVlcComponent::handleLooping()
 
 void VideoVlcComponent::startVideo()
 {
-	if (!mIsPlaying) {
-		mVideoWidth = 0;
-		mVideoHeight = 0;
+	if (mIsPlaying)
+		return;
+
+	// ✅ por seguridad: si por algún bug anterior quedó el ducking activado, lo limpiamos al iniciar “limpio”.
+	notifyDucking(false);
+
+	mVideoWidth = 0;
+	mVideoHeight = 0;
 
 #ifdef WIN32
-		std::string path(Utils::String::replace(mVideoPath, "/", "\\"));
+	std::string path(Utils::String::replace(mVideoPath, "/", "\\"));
 #else
-		std::string path(mVideoPath);
+	std::string path(mVideoPath);
 #endif
-		// Make sure we have a video path
-		if (mVLC && (path.size() > 0))
+
+	// Make sure we have a video path
+	if (!mVLC || path.empty())
+		return;
+
+	// Set the video that we are going to be playing so we don't attempt to restart it
+	mPlayingVideoPath = mVideoPath;
+
+	// Open the media
+	mMedia = libvlc_media_new_path(mVLC, path.c_str());
+	if (!mMedia)
+		return;
+
+	// Get the media metadata so we can find the aspect ratio
+	libvlc_media_parse_with_options(mMedia, libvlc_media_fetch_local, -1);
+	while (libvlc_media_get_parsed_status(mMedia) == 0)
+		;
+
+	unsigned track_count = 0;
+	libvlc_media_track_t** tracks = nullptr;
+	track_count = libvlc_media_tracks_get(mMedia, &tracks);
+
+	for (unsigned track = 0; track < track_count; ++track)
+	{
+		if (tracks[track] && tracks[track]->i_type == libvlc_track_video)
 		{
-			// Set the video that we are going to be playing so we don't attempt to restart it
-			mPlayingVideoPath = mVideoPath;
+			mVideoWidth  = tracks[track]->video->i_width;
+			mVideoHeight = tracks[track]->video->i_height;
+			break;
+		}
+	}
+	libvlc_media_tracks_release(tracks, track_count);
 
-			// Open the media
-			mMedia = libvlc_media_new_path(mVLC, path.c_str());
-			if (mMedia)
+	// Make sure we found a valid video track
+	if (!(mVideoWidth > 0 && mVideoHeight > 0))
+	{
+		// no video -> limpiar media
+		libvlc_media_release(mMedia);
+		mMedia = nullptr;
+		return;
+	}
+
+	if (mScreensaverMode)
+	{
+		std::string resolution = Settings::getInstance()->getString("VlcScreenSaverResolution");
+		if(resolution != "original")
+		{
+			float scale = 1.0f;
+			if (resolution == "low")    scale = 0.25f;
+			if (resolution == "medium") scale = 0.5f;
+			if (resolution == "high")   scale = 0.75f;
+
+			Vector2f resizeScale((Renderer::getScreenWidth() / (float)mVideoWidth) * scale,
+								 (Renderer::getScreenHeight() / (float)mVideoHeight) * scale);
+
+			if(resizeScale.x() < resizeScale.y())
 			{
-				unsigned track_count;
-				// Get the media metadata so we can find the aspect ratio
-				libvlc_media_parse_with_options(mMedia, libvlc_media_fetch_local, -1);
-				while (libvlc_media_get_parsed_status(mMedia) == 0)
-					;
-				libvlc_media_track_t** tracks;
-				track_count = libvlc_media_tracks_get(mMedia, &tracks);
-				for (unsigned track = 0; track < track_count; ++track)
-				{
-					if (tracks[track]->i_type == libvlc_track_video)
-					{
-						mVideoWidth = tracks[track]->video->i_width;
-						mVideoHeight = tracks[track]->video->i_height;
-						break;
-					}
-				}
-				libvlc_media_tracks_release(tracks, track_count);
-
-				// Make sure we found a valid video track
-				if ((mVideoWidth > 0) && (mVideoHeight > 0))
-				{
-					if (mScreensaverMode)
-					{
-						std::string resolution = Settings::getInstance()->getString("VlcScreenSaverResolution");
-						if(resolution != "original") {
-							float scale = 1;
-							if (resolution == "low")
-								// 25% of screen resolution
-								scale = 0.25;
-							if (resolution == "medium")
-								// 50% of screen resolution
-								scale = 0.5;
-							if (resolution == "high")
-								// 75% of screen resolution
-								scale = 0.75;
-
-							Vector2f resizeScale((Renderer::getScreenWidth() / (float)mVideoWidth) * scale, (Renderer::getScreenHeight() / (float)mVideoHeight) * scale);
-
-							if(resizeScale.x() < resizeScale.y())
-							{
-								mVideoWidth = (unsigned int) (mVideoWidth * resizeScale.x());
-								mVideoHeight = (unsigned int) (mVideoHeight * resizeScale.x());
-							}else{
-								mVideoWidth = (unsigned int) (mVideoWidth * resizeScale.y());
-								mVideoHeight = (unsigned int) (mVideoHeight * resizeScale.y());
-							}
-						}
-					}
-					else
-					{
-						remove(getTitlePath().c_str());
-					}
-					PowerSaver::pause();
-					setupContext();
-
-					// Setup the media player
-					mMediaPlayer = libvlc_media_player_new_from_media(mMedia);
-
-					setMuteMode();
-
-					libvlc_media_player_play(mMediaPlayer);
-					libvlc_video_set_callbacks(mMediaPlayer, lock, unlock, display, (void*)&mContext);
-					libvlc_video_set_format(mMediaPlayer, "RGBA", (int)mVideoWidth, (int)mVideoHeight, (int)mVideoWidth * 4);
-
-					// Update the playing state
-					mIsPlaying = true;
-					mFadeIn = 0.0f;
-				}
+				mVideoWidth  = (unsigned int)(mVideoWidth * resizeScale.x());
+				mVideoHeight = (unsigned int)(mVideoHeight * resizeScale.x());
+			}else{
+				mVideoWidth  = (unsigned int)(mVideoWidth * resizeScale.y());
+				mVideoHeight = (unsigned int)(mVideoHeight * resizeScale.y());
 			}
 		}
 	}
+	else
+	{
+		remove(getTitlePath().c_str());
+	}
+
+	PowerSaver::pause();
+	setupContext();
+
+	// Setup the media player
+	mMediaPlayer = libvlc_media_player_new_from_media(mMedia);
+	if (!mMediaPlayer)
+	{
+		freeContext();
+		PowerSaver::resume();
+		libvlc_media_release(mMedia);
+		mMedia = nullptr;
+		return;
+	}
+
+	setMuteMode();
+
+	// IMPORTANTE: set callbacks/format antes o inmediatamente después de play.
+	// Con algunos builds, setear antes es más seguro.
+	libvlc_video_set_callbacks(mMediaPlayer, lock, unlock, display, (void*)&mContext);
+	libvlc_video_set_format(mMediaPlayer, "RGBA", (int)mVideoWidth, (int)mVideoHeight, (int)mVideoWidth * 4);
+
+	libvlc_media_player_play(mMediaPlayer);
+
+	// ✅ Ducking ON: ya tenemos player, callbacks y play disparado.
+	notifyDucking(true);
+
+	// Update the playing state
+	mIsPlaying = true;
+	mFadeIn = 0.0f;
 }
 
 void VideoVlcComponent::stopVideo()
 {
+	// ✅ Ducking OFF siempre, aunque no haya player
+	notifyDucking(false);
+
 	mIsPlaying = false;
 	mStartDelayed = false;
+
 	// Release the media player so it stops calling back to us
 	if (mMediaPlayer)
 	{
 		libvlc_media_player_stop(mMediaPlayer);
 		libvlc_media_player_release(mMediaPlayer);
-		libvlc_media_release(mMedia);
-		mMediaPlayer = NULL;
-		freeContext();
-		PowerSaver::resume();
+		mMediaPlayer = nullptr;
 	}
+
+	if (mMedia)
+	{
+		libvlc_media_release(mMedia);
+		mMedia = nullptr;
+	}
+
+	freeContext();
+	PowerSaver::resume();
 }
 
 void VideoVlcComponent::setMuteMode()
 {
 	Settings *cfg = Settings::getInstance();
-	if (!cfg->getBool("VideoAudio") || (cfg->getBool("ScreenSaverVideoMute") && mScreensaverMode)) {
+	if (!cfg->getBool("VideoAudio") || (cfg->getBool("ScreenSaverVideoMute") && mScreensaverMode))
+	{
 		libvlc_media_add_option(mMedia, ":no-audio");
 	}
 }

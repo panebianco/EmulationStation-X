@@ -1,3 +1,4 @@
+// es-core/src/audio/BackgroundMusicManager.cpp
 #include "audio/BackgroundMusicManager.h"
 
 #include "Settings.h"
@@ -263,9 +264,6 @@ void BackgroundMusicManager::setVideoPlaying(bool playing)
     const int duck = clampInt((int)std::lround(base * mDuckFactor), 0, 128);
 
     mDuckTargetVol = mVideoPlaying ? duck : base;
-
-    // no pegamos un salto abrupto; se interpola en updateDucking()
-    // pero si no está inicializado, mantenemos coherencia
 }
 
 void BackgroundMusicManager::updateDucking(int deltaTimeMs)
@@ -273,15 +271,13 @@ void BackgroundMusicManager::updateDucking(int deltaTimeMs)
     if (!mMixerOpenedByUs)
         return;
 
-    // Interpolación suave: ~250ms para llegar al target
     const int target = clampInt(mDuckTargetVol, 0, 128);
     int cur = clampInt(mDuckCurrentVol, 0, 128);
 
     if (cur == target)
         return;
 
-    // velocidad: cuantos "steps" por segundo
-    // 128 niveles, en 0.25s => ~512 niveles/s
+    // ~250ms para llegar al target
     const float stepsPerMs = 512.0f / 1000.0f;
     int step = (int)std::lround(stepsPerMs * (float)deltaTimeMs);
     if (step < 1) step = 1;
@@ -306,6 +302,7 @@ void BackgroundMusicManager::onGameLaunched()
     mPendingResume = false;
     mResumeTimerMs = 0;
     mPendingIndex  = -1;
+    mPendingReopenOnResume = false;
     mPendingNextFromCallback.store(false);
 
     LOG(LogInfo) << "BGM - onGameLaunched() -> stop music";
@@ -316,7 +313,18 @@ void BackgroundMusicManager::onGameEnded()
 {
     mGameRunning = false;
 
-    if (!mEnabled || !mInitialized)
+    if (!mInitialized)
+        return;
+
+    // ✅ FIX: aunque BackgroundMusic esté OFF, revalidamos el mixer para que
+    // los sonidos de UI no queden con "Invalid audio device ID" al volver del juego.
+    if (mMixerOpenedByUs)
+        reopenMixer();
+    else
+        openMixer();
+
+    // Si la música está apagada, no hacemos resume.
+    if (!mEnabled)
         return;
 
     if (!mPlaylist.empty())
@@ -324,7 +332,9 @@ void BackgroundMusicManager::onGameEnded()
     else
         mPendingIndex = -1;
 
-    mPendingReopenOnResume = true;
+    // ya reabrimos arriba; no hace falta reabrir en resume
+    mPendingReopenOnResume = false;
+
     mPendingResume = true;
     mResumeTimerMs = mResumeDelayMs;
 
@@ -400,8 +410,6 @@ void BackgroundMusicManager::update(int deltaTimeMs)
     }
 
     // Watchdog anti-silencio:
-    // Si por cualquier motivo se cortó antes de terminar (WAV raro, decoder, etc.),
-    // reengancha solo.
     if (mEnabled && !mGameRunning && mMixerOpenedByUs && !mPendingResume)
     {
         if (!Mix_PlayingMusic() && !Mix_PausedMusic() && !mPlaylist.empty())
@@ -574,10 +582,10 @@ void BackgroundMusicManager::stopMusicInternal(bool fadeOut)
 
     LOG(LogInfo) << "BGM - stopMusicInternal(fadeOut=" << (fadeOut ? "1" : "0") << ")";
 
-    if (fadeOut)
-        Mix_FadeOutMusic(500);
-    else
-        Mix_HaltMusic();
+    // ✅ FIX seguro: no liberar Mix_Music mientras SDL_mixer podría seguir usando el puntero.
+    // Para evitar heisenbugs/crash, hacemos halt + free (fadeOut se ignora aquí).
+    (void)fadeOut;
+    Mix_HaltMusic();
 
     if (mCurrentMusic)
     {
