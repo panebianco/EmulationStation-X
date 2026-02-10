@@ -1,3 +1,4 @@
+// InputManager.cpp
 #include "InputManager.h"
 
 #include "utils/FileSystemUtil.h"
@@ -8,24 +9,17 @@
 #include "Window.h"
 #include "guis/GuiInfoPopup.h"
 #include "utils/StringUtil.h"
+#include "Settings.h"
+#include "InputConfig.h"
+
 #include <pugixml.hpp>
 #include <SDL.h>
 #include <iostream>
 #include <assert.h>
+#include <algorithm>
 
 #define KEYBOARD_GUID_STRING "-1"
 #define CEC_GUID_STRING      "-2"
-
-// SO HEY POTENTIAL POOR SAP WHO IS TRYING TO MAKE SENSE OF ALL THIS (by which I mean my future self)
-// There are like four distinct IDs used for joysticks (crazy, right?)
-// 1. Device index - this is the "lowest level" identifier, and is just the Nth joystick plugged in to the system (like /dev/js#).
-//    It can change even if the device is the same, and is only used to open joysticks (required to receive SDL events).
-// 2. SDL_JoystickID - this is an ID for each joystick that is supposed to remain consistent between plugging and unplugging.
-//    ES doesn't care if it does, though.
-// 3. "Device ID" - this is something I made up and is what InputConfig's getDeviceID() returns.
-//    This is actually just an SDL_JoystickID (also called instance ID), but -1 means "keyboard" instead of "error."
-// 4. Joystick GUID - this is some squashed version of joystick vendor, version, and a bunch of other device-specific things.
-//    It should remain the same across runs of the program/system restarts/device reordering and is what I use to identify which joystick to load.
 
 // hack for cec support
 int SDL_USER_CECBUTTONDOWN = -1;
@@ -33,7 +27,10 @@ int SDL_USER_CECBUTTONUP   = -1;
 
 InputManager* InputManager::mInstance = NULL;
 
-InputManager::InputManager() : mKeyboardInputConfig(NULL)
+InputManager::InputManager()
+	: mKeyboardInputConfig(NULL)
+	, mCECInputConfig(NULL)
+	, mSuppressHotplugPopups(false)
 {
 }
 
@@ -55,8 +52,12 @@ void InputManager::init()
 	if(initialized())
 		deinit();
 
+	// ✅ No mostrar popups durante el scan inicial (joysticks ya presentes)
+	mSuppressHotplugPopups = true;
+
 	SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS,
 		Settings::getInstance()->getBool("BackgroundJoystickInput") ? "1" : "0");
+
 	// Don't enable the HIDAPI drivers by default, it will break the existing configurations
 	// for a few controller types, since the names and the input mappings are different.
 #if !defined(_WIN32)
@@ -73,6 +74,9 @@ void InputManager::init()
 	{
 		addJoystickByDeviceIndex(i);
 	}
+
+	// ✅ A partir de aquí, sí: notificar hotplug real
+	mSuppressHotplugPopups = false;
 
 	mKeyboardInputConfig = new InputConfig(DEVICE_KEYBOARD, "Keyboard", KEYBOARD_GUID_STRING);
 	loadInputConfig(mKeyboardInputConfig);
@@ -97,6 +101,10 @@ void InputManager::addJoystickByDeviceIndex(int id)
 	SDL_JoystickID joyId = SDL_JoystickInstanceID(joy);
 	mJoysticks[joyId] = joy;
 
+	// ✅ Cachear nombre por instance id (para REMOVED seguro)
+	const char* nameC = SDL_JoystickName(joy);
+	mJoystickNameCache[joyId] = (nameC && nameC[0]) ? std::string(nameC) : std::string("Controller");
+
 	char guid[65];
 	SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joy), guid, 65);
 
@@ -117,7 +125,7 @@ void InputManager::addJoystickByDeviceIndex(int id)
 	// set up the prevAxisValues
 	int numAxes = SDL_JoystickNumAxes(joy);
 	mPrevAxisValues[joyId] = new int[numAxes];
-	std::fill(mPrevAxisValues[joyId], mPrevAxisValues[joyId] + numAxes, 0); //initialize array to 0
+	std::fill(mPrevAxisValues[joyId], mPrevAxisValues[joyId] + numAxes, 0); // initialize array to 0
 }
 
 void InputManager::removeJoystickByJoystickID(SDL_JoystickID joyId)
@@ -126,19 +134,31 @@ void InputManager::removeJoystickByJoystickID(SDL_JoystickID joyId)
 
 	// delete old prevAxisValues
 	auto axisIt = mPrevAxisValues.find(joyId);
-	delete[] axisIt->second;
-	mPrevAxisValues.erase(axisIt);
+	if(axisIt != mPrevAxisValues.end())
+	{
+		delete[] axisIt->second;
+		mPrevAxisValues.erase(axisIt);
+	}
 
 	// delete old InputConfig
 	auto it = mInputConfigs.find(joyId);
-	delete it->second;
-	mInputConfigs.erase(it);
+	if(it != mInputConfigs.end())
+	{
+		delete it->second;
+		mInputConfigs.erase(it);
+	}
 
 	// close the joystick
 	auto joyIt = mJoysticks.find(joyId);
-	LOG(LogInfo) << "Removed joystick '" << SDL_JoystickName(joyIt->second) << "' (instance ID: " << joyId << ")";
-	SDL_JoystickClose(joyIt->second);
-	mJoysticks.erase(joyIt);
+	if(joyIt != mJoysticks.end())
+	{
+		LOG(LogInfo) << "Removed joystick '" << SDL_JoystickName(joyIt->second) << "' (instance ID: " << joyId << ")";
+		SDL_JoystickClose(joyIt->second);
+		mJoysticks.erase(joyIt);
+	}
+
+	// ✅ limpiar cache al final
+	mJoystickNameCache.erase(joyId);
 }
 
 void InputManager::deinit()
@@ -163,6 +183,9 @@ void InputManager::deinit()
 		delete[] iter->second;
 	}
 	mPrevAxisValues.clear();
+
+	mJoystickNameCache.clear();
+	mSuppressHotplugPopups = false;
 
 	if(mKeyboardInputConfig != NULL)
 	{
@@ -192,7 +215,7 @@ int InputManager::getAxisCountByDevice(SDL_JoystickID id)
 int InputManager::getButtonCountByDevice(SDL_JoystickID id)
 {
 	if(id == DEVICE_KEYBOARD)
-		return 120; //it's a lot, okay.
+		return 120; // it's a lot, okay.
 	else if(id == DEVICE_CEC)
 #ifdef HAVE_CECLIB
 		return CEC::CEC_USER_CONTROL_CODE_MAX;
@@ -219,7 +242,7 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 	switch(ev.type)
 	{
 	case SDL_JOYAXISMOTION:
-		//if it switched boundaries
+		// if it switched boundaries
 		if((abs(ev.jaxis.value) > DEADZONE) != (abs(mPrevAxisValues[ev.jaxis.which][ev.jaxis.axis]) > DEADZONE))
 		{
 			int normValue;
@@ -276,29 +299,53 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 		break;
 
 	case SDL_JOYDEVICEADDED:
-		addJoystickByDeviceIndex(ev.jdevice.which); // ev.jdevice.which is a device index
+	{
+		// ev.jdevice.which is a device index
+		int deviceIndex = ev.jdevice.which;
 
-			// ★ Notificación (opcional): mando conectado
-			if (window != nullptr)
+		addJoystickByDeviceIndex(deviceIndex);
+
+		// ✅ Notificar SOLO hotplug real (no durante init/scan)
+		if (!mSuppressHotplugPopups && window != nullptr)
+		{
+			std::string joyName = "Controller";
+
+#if SDL_VERSION_ATLEAST(2,0,4)
+			SDL_JoystickID instanceId = SDL_JoystickGetDeviceInstanceID(deviceIndex);
+			auto it = mJoystickNameCache.find(instanceId);
+			if (it != mJoystickNameCache.end() && !it->second.empty())
+				joyName = it->second;
+			else
+#endif
 			{
-				const char* joyNameC = SDL_JoystickNameForIndex(ev.jdevice.which);
-				std::string joyName = joyNameC ? std::string(joyNameC) : std::string("Controller");
-				window->setInfoPopup(new GuiInfoPopup(window, std::string("★ Connected: ") + joyName, 4000));
+				const char* joyNameC = SDL_JoystickNameForIndex(deviceIndex);
+				if (joyNameC && joyNameC[0]) joyName = joyNameC;
 			}
+
+			window->setInfoPopup(new GuiInfoPopup(window, std::string("★ Connected: ") + joyName, 2500));
+		}
 		return true;
+	}
 
 	case SDL_JOYDEVICEREMOVED:
-		// ★ Notificación (opcional): mando desconectado
-		if (window != nullptr)
+	{
+		// ev.jdevice.which is an SDL_JoystickID (instance ID)
+		SDL_JoystickID instanceId = ev.jdevice.which;
+
+		// ✅ Popup ANTES de remover/cerrar
+		if (!mSuppressHotplugPopups && window != nullptr)
 		{
-			SDL_Joystick* joy = SDL_JoystickFromInstanceID(ev.jdevice.which);
-			const char* joyNameC = joy ? SDL_JoystickName(joy) : nullptr;
-			std::string joyName = joyNameC ? std::string(joyNameC) : std::string("Controller");
-			window->setInfoPopup(new GuiInfoPopup(window, std::string("★ Disconnected: ") + joyName, 4000));
+			std::string joyName = "Controller";
+			auto it = mJoystickNameCache.find(instanceId);
+			if (it != mJoystickNameCache.end() && !it->second.empty())
+				joyName = it->second;
+
+			window->setInfoPopup(new GuiInfoPopup(window, std::string("☆ Disconnected: ") + joyName, 2500));
 		}
 
-		removeJoystickByJoystickID(ev.jdevice.which); // ev.jdevice.which is an SDL_JoystickID (instance ID)
-		return false;
+		removeJoystickByJoystickID(instanceId);
+		return true;
+	}
 	}
 
 	if((ev.type == (unsigned int)SDL_USER_CECBUTTONDOWN) || (ev.type == (unsigned int)SDL_USER_CECBUTTONUP))
@@ -339,8 +386,6 @@ bool InputManager::loadInputConfig(InputConfig* config)
 	return true;
 }
 
-//used in an "emergency" where no keyboard config could be loaded from the inputmanager config file
-//allows the user to select to reconfigure in menus if this happens without having to delete es_input.cfg manually
 void InputManager::loadDefaultKBConfig()
 {
 	InputConfig* cfg = getInputConfigByDevice(DEVICE_KEYBOARD);

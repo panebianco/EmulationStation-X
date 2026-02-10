@@ -1,3 +1,4 @@
+// InputManager.h
 #pragma once
 #ifndef ES_CORE_INPUT_MANAGER_H
 #define ES_CORE_INPUT_MANAGER_H
@@ -5,12 +6,13 @@
 #include <SDL_joystick.h>
 #include <map>
 #include <string>
+#include <unordered_map>
 
 class InputConfig;
 class Window;
 union SDL_Event;
 
-//you should only ever instantiate one of these, by the way
+// you should only ever instantiate one of these, by the way
 class InputManager
 {
 private:
@@ -28,6 +30,12 @@ private:
 	InputConfig* mCECInputConfig;
 
 	std::map<SDL_JoystickID, int*> mPrevAxisValues;
+
+	// ✅ Cache: instanceID -> nombre (para REMOVED seguro)
+	std::unordered_map<SDL_JoystickID, std::string> mJoystickNameCache;
+
+	// ✅ Evita popups durante el scan inicial al arrancar
+	bool mSuppressHotplugPopups;
 
 	bool initialized() const;
 
