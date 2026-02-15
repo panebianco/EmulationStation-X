@@ -8,7 +8,18 @@
 #include "PowerSaver.h"
 #include "Window.h"
 
+// ✅ ES-X locale
+#include "LocaleES.h"
+
+#include <sstream>
+#include <cstdio>
+
 #define HOLD_TIME 1000
+
+static inline std::string tr(const char* key)
+{
+	return es_translate(std::string(key));
+}
 
 GuiDetectDevice::GuiDetectDevice(Window* window, bool firstRun, const std::function<void()>& doneCallback) : GuiComponent(window), mFirstRun(firstRun),
 	mBackground(window, ":/frame.png"), mGrid(window, Vector2i(1, 5))
@@ -21,7 +32,7 @@ GuiDetectDevice::GuiDetectDevice(Window* window, bool firstRun, const std::funct
 	addChild(&mGrid);
 
 	// title
-	mTitle = std::make_shared<TextComponent>(mWindow, firstRun ? "WELCOME" : "CONFIGURE INPUT",
+	mTitle = std::make_shared<TextComponent>(mWindow, firstRun ? tr("WELCOME") : tr("CONFIGURE INPUT"),
 		Font::get(FONT_SIZE_LARGE), 0x555555FF, ALIGN_CENTER);
 	mGrid.setEntry(mTitle, Vector2i(0, 0), false, true, Vector2i(1, 1), GridFlags::BORDER_BOTTOM);
 
@@ -30,17 +41,26 @@ GuiDetectDevice::GuiDetectDevice(Window* window, bool firstRun, const std::funct
 	int numDevices = InputManager::getInstance()->getNumJoysticks();
 
 	if(numDevices > 0)
-		deviceInfo << numDevices << " GAMEPAD" << (numDevices > 1 ? "S" : "") << " DETECTED";
+	{
+		// ✅ Traducción segura con placeholder numérico
+		// Clave: "%d GAMEPAD(S) DETECTED"
+		char buf[128];
+		std::snprintf(buf, sizeof(buf), tr("%d GAMEPAD(S) DETECTED").c_str(), numDevices);
+		deviceInfo << buf;
+	}
 	else
-		deviceInfo << "NO GAMEPADS DETECTED";
+	{
+		deviceInfo << tr("NO GAMEPADS DETECTED");
+	}
+
 	mDeviceInfo = std::make_shared<TextComponent>(mWindow, deviceInfo.str(), Font::get(FONT_SIZE_SMALL), 0x999999FF, ALIGN_CENTER);
 	mGrid.setEntry(mDeviceInfo, Vector2i(0, 1), false, true);
 
 	// message
-	mMsg1 = std::make_shared<TextComponent>(mWindow, "HOLD A BUTTON ON YOUR DEVICE TO CONFIGURE IT.", Font::get(FONT_SIZE_SMALL), 0x777777FF, ALIGN_CENTER);
+	mMsg1 = std::make_shared<TextComponent>(mWindow, tr("HOLD A BUTTON ON YOUR DEVICE TO CONFIGURE IT."), Font::get(FONT_SIZE_SMALL), 0x777777FF, ALIGN_CENTER);
 	mGrid.setEntry(mMsg1, Vector2i(0, 2), false, true);
 
-	const char* msg2str = firstRun ? "PRESS F4 TO QUIT AT ANY TIME." : "PRESS ESC TO CANCEL.";
+	const std::string msg2str = firstRun ? tr("PRESS F4 TO QUIT AT ANY TIME.") : tr("PRESS ESC TO CANCEL.");
 	mMsg2 = std::make_shared<TextComponent>(mWindow, msg2str, Font::get(FONT_SIZE_SMALL), 0x777777FF, ALIGN_CENTER);
 	mGrid.setEntry(mMsg2, Vector2i(0, 3), false, true);
 
@@ -59,10 +79,8 @@ void GuiDetectDevice::onSizeChanged()
 	// grid
 	mGrid.setSize(mSize);
 	mGrid.setRowHeightPerc(0, mTitle->getFont()->getHeight() / mSize.y());
-	//mGrid.setRowHeightPerc(1, mDeviceInfo->getFont()->getHeight() / mSize.y());
 	mGrid.setRowHeightPerc(2, mMsg1->getFont()->getHeight() / mSize.y());
 	mGrid.setRowHeightPerc(3, mMsg2->getFont()->getHeight() / mSize.y());
-	//mGrid.setRowHeightPerc(4, mDeviceHeld->getFont()->getHeight() / mSize.y());
 }
 
 bool GuiDetectDevice::input(InputConfig* config, Input input)
@@ -77,7 +95,7 @@ bool GuiDetectDevice::input(InputConfig* config, Input input)
 		return true;
 	}
 
-	if(input.type == TYPE_BUTTON || input.type == TYPE_KEY ||input.type == TYPE_CEC_BUTTON)
+	if(input.type == TYPE_BUTTON || input.type == TYPE_KEY || input.type == TYPE_CEC_BUTTON)
 	{
 		if(input.value && mHoldingConfig == NULL)
 		{
@@ -85,7 +103,8 @@ bool GuiDetectDevice::input(InputConfig* config, Input input)
 			mHoldingConfig = config;
 			mHoldTime = HOLD_TIME;
 			mDeviceHeld->setText(Utils::String::toUpper(config->getDeviceName()));
-		}else if(!input.value && mHoldingConfig == config)
+		}
+		else if(!input.value && mHoldingConfig == config)
 		{
 			// cancel
 			mHoldingConfig = NULL;
