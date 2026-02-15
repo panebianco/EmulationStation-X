@@ -7,6 +7,9 @@
 #include "utils/FileSystemUtil.h"
 #include "renderers/Renderer.h"
 
+// Busy overlay (ya existe y ya anima busy_0..3.svg)
+#include "components/BusyComponent.h"
+
 // Popup concreto (implementa Window::InfoPopup)
 #include "guis/GuiInfoPopup.h"
 
@@ -55,6 +58,13 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	, mInnerY(0.0f)
 	, mInnerW(0.0f)
 	, mInnerH(0.0f)
+	, mBusy(nullptr)
+	, mBusyVisible(false)
+	, mJobRunning(false)
+	, mJobDone(false)
+	, mJobOk(false)
+	, mJobRefreshCatalogAfter(false)
+	, mJobDoneMsg("")
 {
 	const std::string home = Utils::FileSystem::getHomePath();
 
@@ -122,18 +132,49 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	mRepoLabel.setPosition(rightX, repoY);
 	mRepoLabel.setSize(rightW, rightH * 0.16f);
 
-	// ✅ Catálogo: actualizar al abrir (snapshot ZIP, sin .git)
-	updateCatalogZip();
+	// ============================================================
+	// Busy overlay (como CHILD para que no “duerma” sin input)
+	// ============================================================
+	mBusy.reset(new BusyComponent(mWindow));
+	mBusy->setPosition(Vector3f(0.0f, 0.0f, 0.0f));
+	mBusy->setSize(Vector2f(sw, sh));
+	addChild(mBusy.get());         // ✅ clave: update/render como parte del árbol
+	setBusyVisible(false);
 
+	// ============================================================
+	// Cargar lo que haya ya en disco (sin bloquear)
+	// ============================================================
 	loadThemes();
 	rebuildList();
 
-	// este menú “maneja” la lista manualmente
+	// Este menú “maneja” la lista manualmente
 	mList.onFocusGained();
 
 	updatePreview();
 	updateFooter();
 	updateHelpPrompts();
+
+	// ============================================================
+	// Actualizar catálogo en background (sin congelar UI)
+	// ============================================================
+	startJob("Updating theme catalog...",
+		[this]() { return updateCatalogZipSilent(); },
+		"Catalog ready.",
+		"Catalog update failed.",
+		true /*refreshCatalogAfter*/);
+}
+
+GuiThemeBrowser::~GuiThemeBrowser()
+{
+	if (mJobThread.joinable())
+		mJobThread.join();
+}
+
+void GuiThemeBrowser::setBusyVisible(bool v)
+{
+	mBusyVisible = v;
+	if (mBusy)
+		mBusy->setVisible(v);   // ✅ nativo, ya existe en tu GuiComponent
 }
 
 void GuiThemeBrowser::showPopup(const std::string& msg, int durationMs)
@@ -149,21 +190,17 @@ int GuiThemeBrowser::runCmd(const std::string& cmd)
 
 bool GuiThemeBrowser::hasCommand(const std::string& cmd) const
 {
-	// “command -v” es bastante portable en sh/bash
 	const std::string c = "sh -c \"command -v " + cmd + " >/dev/null 2>&1\"";
 	return (std::system(c.c_str()) == 0);
 }
 
 // ============================================================
-// Catálogo: snapshot ZIP (sin .git), estable y tamaño constante
+// Catálogo ZIP (SILENT)
 // ============================================================
-bool GuiThemeBrowser::updateCatalogZip()
+bool GuiThemeBrowser::updateCatalogZipSilent()
 {
-	// Repo ZIP (branch main)
-	// Ajustá si cambiás de repo/branch.
 	const std::string zipUrl = "https://github.com/Renetrox/esx-theme-catalog/archive/refs/heads/main.zip";
 
-	// Necesitamos unzip + (curl o wget)
 	const bool hasUnzip = hasCommand("unzip");
 	const bool hasCurl  = hasCommand("curl");
 	const bool hasWget  = hasCommand("wget");
@@ -172,22 +209,15 @@ bool GuiThemeBrowser::updateCatalogZip()
 	{
 		LOG(LogWarning) << "GuiThemeBrowser: missing deps for catalog zip update. unzip=" << hasUnzip
 		                << " curl=" << hasCurl << " wget=" << hasWget;
-		// No spamear popups si el usuario no tiene deps: uno corto.
-		showPopup("Catalog update skipped (missing unzip/curl/wget).", 3000);
 		return false;
 	}
 
-	const std::string esxDir = Utils::FileSystem::getParent(mCatalogDir); // ~/.emulationstation/esx
+	const std::string esxDir = Utils::FileSystem::getParent(mCatalogDir);
 	Utils::FileSystem::createDirectory(esxDir);
 
 	const std::string zipPath = esxDir + "/theme-catalog.zip";
-
-	// GitHub zip extrae: <repo>-main/
 	const std::string extracted = esxDir + "/esx-theme-catalog-main";
 
-	showPopup("Updating theme catalog...", 2500);
-
-	// Descargar ZIP
 	std::string dlCmd;
 	if (hasCurl)
 		dlCmd = "curl -L -o " + quote(zipPath) + " " + quote(zipUrl);
@@ -196,12 +226,8 @@ bool GuiThemeBrowser::updateCatalogZip()
 
 	int rc = runCmd(dlCmd);
 	if (rc != 0 || !Utils::FileSystem::exists(zipPath))
-	{
-		showPopup("Catalog download failed.", 4000);
 		return false;
-	}
 
-	// Limpiar destino previo y extraer
 	runCmd("rm -rf " + quote(extracted));
 	runCmd("rm -rf " + quote(mCatalogDir));
 
@@ -209,18 +235,11 @@ bool GuiThemeBrowser::updateCatalogZip()
 	runCmd("rm -f " + quote(zipPath));
 
 	if (rc != 0 || !Utils::FileSystem::exists(extracted))
-	{
-		showPopup("Catalog extract failed.", 4000);
 		return false;
-	}
 
-	// Mover a theme-catalog (nombre estable)
 	rc = runCmd("mv " + quote(extracted) + " " + quote(mCatalogDir));
 	if (rc != 0 || !Utils::FileSystem::exists(mCatalogDir))
-	{
-		showPopup("Catalog install failed.", 4000);
 		return false;
-	}
 
 	return true;
 }
@@ -231,17 +250,11 @@ void GuiThemeBrowser::loadThemes()
 
 	const std::string iniPath = mPreviewDir + "/themes.ini";
 	if (!fileExists(iniPath))
-	{
-		LOG(LogWarning) << "GuiThemeBrowser: themes.ini not found: " << iniPath;
 		return;
-	}
 
 	std::ifstream f(iniPath);
 	if (!f.is_open())
-	{
-		LOG(LogError) << "GuiThemeBrowser: failed to open: " << iniPath;
 		return;
-	}
 
 	ThemeEntry current;
 	bool inSection = false;
@@ -326,7 +339,6 @@ void GuiThemeBrowser::rebuildList()
 
 		ComponentListRow row;
 
-		// Badge simple
 		std::string label = installed ? "☑  " : "☐  ";
 		label += (e.title.empty() ? e.id : e.title);
 
@@ -335,7 +347,6 @@ void GuiThemeBrowser::rebuildList()
 			Font::get(FONT_SIZE_MEDIUM), 0xFFFFFFFF, ALIGN_LEFT
 		);
 
-		// Importante: no invertir al seleccionar (evita que la barra tape el texto)
 		row.addElement(title, false);
 
 		row.makeAcceptInputHandler([this, i]()
@@ -420,26 +431,16 @@ void GuiThemeBrowser::updateFooter()
 	mFooter.setText(s);
 }
 
-// ============================================================
-// Temas: snapshot (sin .git). Update = reinstalar limpio.
-// ============================================================
-bool GuiThemeBrowser::downloadOrUpdate(const ThemeEntry& e)
+bool GuiThemeBrowser::downloadOrUpdateSilent(const ThemeEntry& e)
 {
 	if (e.repo.empty())
-	{
-		showPopup("No repo URL for this theme.", 4000);
 		return false;
-	}
 
 	Utils::FileSystem::createDirectory(mThemesDir);
 
 	const std::string dst = mThemesDir + "/" + e.folder;
 	const bool installed = Utils::FileSystem::exists(dst);
 
-	showPopup(installed ? "Updating theme..." : "Downloading theme...", 2000);
-
-	// Snapshot mode: para estabilidad, siempre (re)instala limpio.
-	// Si está instalado, borrar carpeta y volver a clonar.
 	if (installed)
 		runCmd("rm -rf " + quote(dst));
 
@@ -448,43 +449,101 @@ bool GuiThemeBrowser::downloadOrUpdate(const ThemeEntry& e)
 
 	if (rc == 0)
 	{
-		// Quitar .git para que NO crezca y no ocupe disco
 		runCmd("rm -rf " + quote(dst + "/.git"));
-		showPopup("Theme ready.", 3500);
 		return true;
 	}
 
-	showPopup("Download/Update failed.", 5000);
 	return false;
 }
 
-bool GuiThemeBrowser::uninstallTheme(const ThemeEntry& e)
+bool GuiThemeBrowser::uninstallThemeSilent(const ThemeEntry& e)
 {
 	const std::string dst = mThemesDir + "/" + e.folder;
 
 	if (!Utils::FileSystem::exists(dst))
-	{
-		showPopup("Theme is not installed.", 3000);
 		return false;
-	}
 
 	const std::string cmd = "rm -rf " + quote(dst);
 	const int rc = runCmd(cmd);
 
-	if (rc == 0 && !Utils::FileSystem::exists(dst))
+	return (rc == 0 && !Utils::FileSystem::exists(dst));
+}
+
+void GuiThemeBrowser::startJob(const std::string& busyMsg, std::function<bool()> fn,
+                              const std::string& okMsg, const std::string& failMsg,
+                              bool refreshCatalogAfter)
+{
+	if (mJobRunning)
+		return;
+
+	mJobRunning = true;
+	mJobDone = false;
+	mJobOk = false;
+	mJobRefreshCatalogAfter = refreshCatalogAfter;
+
+	setBusyVisible(true);
+	showPopup(busyMsg, 1200);
+
+	if (mJobThread.joinable())
+		mJobThread.join();
+
+	mJobThread = std::thread([this, fn, okMsg, failMsg]() {
+		const bool ok = fn();
+
+		{
+			std::lock_guard<std::mutex> lk(mJobMutex);
+			mJobOk = ok;
+			mJobDoneMsg = ok ? okMsg : failMsg;
+		}
+
+		mJobDone = true;
+		mJobRunning = false;
+	});
+}
+
+void GuiThemeBrowser::finishJobIfDone()
+{
+	if (!mJobDone)
+		return;
+
+	if (mJobThread.joinable())
+		mJobThread.join();
+
+	setBusyVisible(false);
+
+	std::string msg;
+	bool ok = false;
+	bool refreshCatalog = false;
+
 	{
-		showPopup("Theme removed.", 3500);
-		return true;
+		std::lock_guard<std::mutex> lk(mJobMutex);
+		msg = mJobDoneMsg;
+		ok = mJobOk;
+		refreshCatalog = mJobRefreshCatalogAfter;
 	}
 
-	showPopup("Remove failed.", 5000);
-	return false;
+	showPopup(msg, ok ? 2500 : 4500);
+
+	if (refreshCatalog)
+	{
+		loadThemes();
+		rebuildList();
+	}
+	else
+	{
+		rebuildList();
+	}
+
+	mJobDone = false;
 }
 
 bool GuiThemeBrowser::input(InputConfig* config, Input input)
 {
 	if (input.value == 0)
 		return false;
+
+	if (mJobRunning)
+		return true;
 
 	if (config->isMappedTo("b", input) || config->isMappedTo("back", input))
 	{
@@ -513,24 +572,34 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 
 	if (config->isMappedTo("a", input) || config->isMappedTo("start", input))
 	{
-		const ThemeEntry& cur = mThemes[mLastSelectedIndex];
-		downloadOrUpdate(cur);
-		rebuildList();
+		const ThemeEntry cur = mThemes[mLastSelectedIndex];
+		const bool installed = isInstalled(cur);
+
+		startJob(installed ? "Updating theme..." : "Downloading theme...",
+			[this, cur]() { return downloadOrUpdateSilent(cur); },
+			"Theme ready.",
+			"Download/Update failed.",
+			false);
+
 		return true;
 	}
 
 	if (config->isMappedTo("x", input) || config->isMappedTo("delete", input))
 	{
-		const ThemeEntry& cur = mThemes[mLastSelectedIndex];
-		if (isInstalled(cur))
-		{
-			uninstallTheme(cur);
-			rebuildList();
-		}
-		else
+		const ThemeEntry cur = mThemes[mLastSelectedIndex];
+
+		if (!isInstalled(cur))
 		{
 			showPopup("Not installed.", 2500);
+			return true;
 		}
+
+		startJob("Removing theme...",
+			[this, cur]() { return uninstallThemeSilent(cur); },
+			"Theme removed.",
+			"Remove failed.",
+			false);
+
 		return true;
 	}
 
@@ -542,13 +611,17 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 
 void GuiThemeBrowser::update(int deltaTime)
 {
+	// ✅ Actualiza children (incluyendo Busy) por estar en el árbol
 	GuiComponent::update(deltaTime);
+
 	mFrame.update(deltaTime);
 	mList.update(deltaTime);
 	mPreview.update(deltaTime);
 	mRepoLabel.update(deltaTime);
 	mHeader.update(deltaTime);
 	mFooter.update(deltaTime);
+
+	finishJobIfDone();
 }
 
 void GuiThemeBrowser::render(const Transform4x4f& parentTrans)
@@ -562,6 +635,9 @@ void GuiThemeBrowser::render(const Transform4x4f& parentTrans)
 	mPreview.render(trans);
 	mRepoLabel.render(trans);
 	mFooter.render(trans);
+
+	// ✅ Renderizar children (Busy incluido, y respeta setVisible)
+	renderChildren(trans);
 }
 
 // ============================================================
