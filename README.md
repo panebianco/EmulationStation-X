@@ -1,251 +1,189 @@
 # EmulationStation-X (ES-X)
+
+<p align="left">
+  <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg" />
+  <img alt="Platform: ARM" src="https://img.shields.io/badge/Platform-ARM-informational.svg" />
+  <img alt="RetroPie Compatible" src="https://img.shields.io/badge/RetroPie-Compatible-red.svg" />
+</p>
+
 <img width="1280" height="720" alt="LOGO" src="https://github.com/user-attachments/assets/e8560813-41dd-4ad8-bf01-ecc6e03e922c" />
+
 [YouTube demo](https://www.youtube.com/watch?v=E0kRlrkbLo0)
 
-EmulationStation-X (ES-X) is a personal fork of EmulationStation focused on modern theming, runtime customization, and creator-driven UI control, while remaining compatible with RetroPie.
+## What is ES-X?
 
-ES-X is inspired by modern frontends such as ES-DE, Batocera, and Recalbox, but follows a different philosophy:
-👉 extend the engine, not replace it.
+EmulationStation-X (ES-X) is a stable, creator-focused evolution of the original EmulationStation engine, built specifically for RetroPie systems.
 
-ES-X is experimental as a project, but stable as a platform.
-Core features are usable today, while new capabilities evolve carefully to avoid breaking compatibility.
+It started from a simple need: create better themes without leaving RetroPie.
 
-🎯 Purpose
+ES-X does not replace EmulationStation. It extends it.
 
-ES-X does not aim to replace EmulationStation.
+It preserves RetroPie compatibility, ARM performance, and familiar structure, while expanding what themes and UI systems can achieve.
 
-It exists as a sandbox for innovation, focused on:
+## Philosophy
 
-Extending the theming engine without hacks
+ES-X follows a clear direction:
 
-Giving theme creators real control through variables
+- Modernize without fragmenting the ecosystem
+- Empower theme creators
+- Keep performance ARM-friendly
+- Expand carefully, not aggressively
 
-Adding runtime localization (no recompilation)
+Inspired by projects such as ES-DE, Batocera, and Recalbox, ES-X adapts selected ideas to fit RetroPie’s architecture — not to imitate them, but to expand creative possibilities within a different ecosystem.
 
-Exploring modern UI & audio ideas safely
+## Why ES-X Exists
 
-Staying RetroPie-friendly by design
+Classic EmulationStation is stable and lightweight. But for theme creators, achieving modern layouts often requires duplication, structural compromises, or engine-level workarounds.
 
-Think of ES-X as:
+ES-X reduces that friction.
 
-“What EmulationStation could do if themes were systems, not skins.”
+It treats themes not as static skins, but as configurable systems.
 
-✨ Highlights
+- **Users** benefit from improved visuals and runtime flexibility.
+- **Creators** benefit from a cleaner and more modular foundation.
 
-🌍 Runtime language system (.ini, no recompilation)
+## Who ES-X Is For / Not For
 
-🎨 Theme Options (variable-driven layouts & styles)
+### ES-X is for:
 
-🧩 Advanced theme variables (scale, spacing, opacity, layout logic)
+- Theme creators who want advanced control without engine hacks
+- RetroPie users who want modern visuals while keeping compatibility
+- Contributors interested in careful, production-oriented evolution
 
-🖌️ Text borders & shadows (engine-level)
+### ES-X is not for:
 
-🎶 Background music & navigation sounds (menu-controlled)
+- Replacing RetroPie’s ecosystem with a fully different frontend
+- Breaking compatibility for quick experimentation
+- Feature bloat without long-term ARM stability
 
-🌙 Dark menu mode
+## Core Systems (Production-Ready)
 
-🔊 Sound tags compatible with ES-DE / Batocera (partial)
+### 🌍 Runtime Language System (.ini)
 
-🛠️ Designed for theme creators first
+- Full UI translation without recompilation
+- Dynamic loading at runtime
+- Community-friendly structure
+- Located in: `~/.emulationstation/lang/`
 
-🖼 Preview
-<table>
-  <tr>
-    <td align="center">
-      <strong>Theme Options</strong><br/>
-      <img width="450" height="768" src="https://github.com/user-attachments/assets/7de22896-7b6b-43fb-910e-700d56ddb11d" alt="Theme options preview" />
-    </td>
-    <td align="center">
-      <strong>Language Demo</strong><br/>
-      <img width="450" height="768" src="https://github.com/user-attachments/assets/6e37ffc7-9c35-450e-b274-72d31b12a4f5" alt="Language demo preview" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <strong>Variable Grid</strong><br/>
-      <img width="450" height="252" src="https://github.com/user-attachments/assets/f4912b70-b738-46d7-8767-1d36995bdb6c" alt="Grid layout preview" />
-    </td>
-    <td align="center">
-      <strong>Menu Styling</strong><br/>
-      <img width="450" height="252" src="https://github.com/user-attachments/assets/4d9add99-955b-4b05-9b1f-37597fda2f1b" alt="Menu styling preview" />
-    </td>
-  </tr>
-</table>
+Stable and actively used.
 
-🔑 Current Feature Status
+### 🎨 Theme Options System
 
-Feature	Status
+The heart of ES-X:
 
-Runtime language system (.ini)	✅ Stable
+- `theme.xml` → draws the UI
+- `theme.ini` → defines options
+- ES-X → binds both at runtime
 
-Menu, popup & scraper translation	✅ Stable
+This enables:
 
-Theme variables (scale, spacing, opacity)	✅ Available
+- Multiple layouts from a single theme
+- Performance-friendly variants
+- Console-style customization
+- Zero duplication
 
-Theme Options (INI-driven)	✅ Available
+Themes become configurable systems, not fixed presets.
 
-Text borders & shadows	✅ Available
+See: `THEME_OPTIONS.md`
 
-Dark menu mode	✅ Available
+### 🧩 Extended Theme Engine
 
-Background music (SDL_mixer)	🟡 Available / evolving
+- True `zIndex` layering
+- Advanced scale, spacing, and opacity controls
+- Text borders & shadows (engine-level)
+- Improved carousel flexibility
+- Safe metadata fallback handling
 
-Menu sounds (scroll / select / back)	🟡 Available / evolving
+Designed to remain compatible with classic themes.
 
-ES-DE / Batocera sound tags	🟡 Partial
+### 🔊 Background Music & Audio System
 
-Advanced audio mixing / ducking	🔄 In progress
+- SDL_mixer-based background music manager
+- Stable shuffle model
+- Automatic pause on game launch
+- Resume with next track
+- Safe handling of corrupted audio files
+- Ducking when video is playing
+- Navigation sounds (scroll / select / back)
 
-User profiles / avatars	❌ Not part of ES-X
+Built for long-term stability on ARM devices.
 
-🧩 Theme Options (Core Concept)
+## Designed for Theme Creators
 
-Theme Options are the heart of ES-X.
+ES-X prioritizes clarity of mental model.
 
-A modern ES-X theme is not a fixed skin, but a configurable system.
+Compared to traditional EmulationStation workflows:
 
-Key idea
+- Layering is predictable
+- Layout variants are modular
+- Localization is externalized
+- Visual logic is separated from configuration
 
-theme.xml → draws the UI
+The goal is not maximum complexity. The goal is accessible expressiveness.
 
-theme.ini → defines options & decisions
+Beautiful themes should not require engine hacks.
 
-ES-X → connects both at runtime
+## Current Feature Status
 
-The XML does not decide.
-The INI does not draw.
-ES-X binds them together.
+| Feature | Status |
+|---|---|
+| Runtime language system | ✅ Stable |
+| Theme variables | ✅ Available |
+| Theme Options system | ✅ Stable |
+| Text borders & shadows | ✅ Stable |
+| Dark menu mode | ✅ Stable |
+| Background music | ✅ Stable |
+| Navigation sounds | ✅ Stable |
+| Audio ducking | ✅ Stable |
+| Controller overlay | 🔄 Planned |
+| Network indicator | 🔄 Planned |
 
-This allows:
+Core systems are stable for daily use. New capabilities are introduced carefully to preserve compatibility and performance.
 
-multiple layouts with one XML
+## Installation
 
-performance-friendly variants
+### Recommended (RetroPie Module)
 
-console-like UX customization
+https://github.com/Renetrox/EmulationStation-X-Module-for-retropie
 
-zero duplication
+- ✔ Handles dependencies
+- ✔ Correct build flags
+- ✔ Clean RetroPie integration
 
-📘 See: THEME_OPTIONS.md for full documentation and real examples
-(Mini, ArtBook, Alekfull).
+### Manual Build (Advanced)
 
-🌍 Language System (Runtime)
-
-Languages are stored in:
-
-~/.emulationstation/lang/
-
-
-Example:
-
-[MAIN]
-
-MAIN MENU=MAIN MENU
-
-YES=YES
-
-BACK=BACK
-
-CANCEL=CANCEL
-
-
-✔ No recompilation
-✔ Editable by users
-✔ Loaded dynamically at runtime
-
-🎨 Theme Engine Extensions
-
-Available
-
-<logoScale>1.1</logoScale>
-<scaledLogoSpacing>0.20</scaledLogoSpacing>
-<minLogoOpacity>0.25</minLogoOpacity>
-
-<textBorderColor>000000</textBorderColor>
-<textShadowColor>000000</textShadowColor>
-<textShadowOffset>2 2</textShadowOffset>
-
-
-Engine-level features — not hacks — designed to stay compatible with existing themes.
-
-Planned / Proposed
-
-<centerLogoOffsetY>
-<centerLogoPos>
-<zIndexOffset>
-
-🔊 Audio & Music System
-
-SDL_mixer-based background music
-
-Menu-controlled playback
-
-Navigation sounds (scroll / select / back)
-
-Tag structure inspired by Batocera / ES-DE
-
-The base is stable; advanced behavior is added carefully to preserve reliability.
-
----
-🧩 Installation Notes (Important)
-
-ES-X uses git submodules (e.g. pugixml).
-
-When building manually, clone recursively or initialize submodules before running CMake.
-
-🚀 Installation
-✅ Option A — Recommended (RetroPie)
-
-Use the official RetroPie module:
-
-👉 https://github.com/Renetrox/EmulationStation-X-Module-for-retropie
-
-✔ Handles dependencies
-✔ Correct build flags
-✔ Clean RetroPie integration
-
-⚙️ Option B — Manual Build (Advanced)
-
-sudo apt update
-sudo apt install build-essential cmake libsdl2-dev libsdl2-mixer-dev \
-libboost-dev libfreeimage-dev libfreetype6-dev libcurl4-openssl-dev \
-libvlc-dev libvlccore-dev libasound2-dev
-
+```bash
 git clone --recursive https://github.com/Renetrox/EmulationStation-X.git
-
 cd EmulationStation-X
-
 mkdir build && cd build
-
 cmake ..
-
 make -j4
+```
 
+If cloned without submodules:
 
-If already cloned without submodules:
-
+```bash
 git submodule update --init --recursive
+```
+
+## Roadmap Focus
+
+- Full language coverage
+- Expanded theme-driven layout control
+- Controller & network overlays
+- Creator-oriented documentation
+- Continued refinement without breaking RetroPie stability
+
+## Author
+
+**Dino René Caballero Márquez (Renetrox)**  
+Educator • RetroPie Enthusiast • Theme Developer  
+Paraguay
+
+## License
+
+MIT (same as original EmulationStation).
 
 ---
-🧭 Roadmap
-Focus
-Full language coverage
-More theme-driven layout control
-Audio refinement & mixing
-Theme creator documentation
-Careful experimentation without breaking stability
 
-👤 Author
-
-- Dino René Caballero Márquez (Renetrox)
-- Educator • RetroPie Enthusiast • Theme Developer
-- Paraguay
-- GitHub: @Renetrox
-
----
-📜 License
-
-Same license as the original EmulationStation (MIT).
-
-Accessibility is not just using it —
-it’s reading it, hearing it, and shaping it your way.
+Accessibility is not just using it — it is understanding it, hearing it, and shaping it your way.
