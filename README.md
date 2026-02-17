@@ -12,9 +12,16 @@
 
 
 ## Example Theme Gallery
+<img width="1366" height="768" alt="Captura de pantalla_2026-01-09_19-20-24" src="https://github.com/user-attachments/assets/07912879-ca8d-4122-a640-d32cd15c6fd9" />
+
+## Multilingual scaper
 <img width="1366" height="768" alt="Captura de pantalla_2025-12-01_12-24-53" src="https://github.com/user-attachments/assets/83dedb20-1c32-432b-8495-24d2f6fca3a7" />
+
+## Example Theme Options
 <img width="1366" height="768" alt="Captura de pantalla_2025-12-05_07-07-19" src="https://github.com/user-attachments/assets/06f4504c-ea88-4088-953c-7b61d3726ca7" />
+
 <img width="1366" height="768" alt="Captura de pantalla_2025-12-31_12-58-30" src="https://github.com/user-attachments/assets/6980ece3-29b9-42ac-ac95-dfda9f15c095" />
+
 <img width="1366" height="768" alt="Captura de pantalla_2025-12-15_13-20-32" src="https://github.com/user-attachments/assets/1f12408e-4004-4334-be2f-2bb138da43b7" />
 
 
