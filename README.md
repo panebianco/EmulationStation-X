@@ -10,6 +10,29 @@
 
 [YouTube demo](https://www.youtube.com/watch?v=E0kRlrkbLo0)
 
+
+## Example Theme Gallery
+
+<table>
+  <tr>
+    <td><img src="docs/examples/01-alekfull-nx.png" alt="Alekfull NX selector" width="100%" /></td>
+    <td><img src="docs/examples/02-language-menu.png" alt="Language menu" width="100%" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/examples/03-scraper-result.png" alt="Scraper result" width="100%" /></td>
+    <td><img src="docs/examples/04-theme-options.png" alt="Theme options" width="100%" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/examples/05-color-scheme.png" alt="Color scheme menu" width="100%" /></td>
+    <td><img src="docs/examples/06-game-list-retrowave.png" alt="Game list retrowave" width="100%" /></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/examples/07-spiderman-theme.png" alt="Spiderman inspired theme" width="100%" /></td>
+  </tr>
+</table>
+
+> Place your 7 sample screenshots in `docs/examples/` using the same filenames shown above to render this gallery.
+
 ## What is ES-X?
 
 EmulationStation-X (ES-X) is a stable, creator-focused evolution of the original EmulationStation engine, built specifically for RetroPie systems.
