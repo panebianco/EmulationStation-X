@@ -1,3 +1,4 @@
+// ComponentGrid.h
 #pragma once
 #ifndef ES_CORE_COMPONENTS_COMPONENT_GRID_H
 #define ES_CORE_COMPONENTS_COMPONENT_GRID_H
@@ -5,6 +6,8 @@
 #include "math/Vector2i.h"
 #include "renderers/Renderer.h"
 #include "GuiComponent.h"
+
+#include <functional>
 
 namespace GridFlags
 {
@@ -30,6 +33,9 @@ namespace GridFlags
 class ComponentGrid : public GuiComponent
 {
 public:
+	// ✅ Nuevo (opcional): si el cursor intenta salir del grid, el padre puede manejar el input
+	using PastBoundaryCallback = std::function<bool(InputConfig* config, Input input)>;
+
 	ComponentGrid(Window* window, const Vector2i& gridDimensions);
 	virtual ~ComponentGrid();
 
@@ -50,8 +56,8 @@ public:
 	float getColWidth(int col);
 	float getRowHeight(int row);
 
-	void setColWidthPerc(int col, float width, bool update = true); // if update is false, will not call an onSizeChanged() which triggers a (potentially costly) repositioning + resizing of every element
-	void setRowHeightPerc(int row, float height, bool update = true); // if update is false, will not call an onSizeChanged() which triggers a (potentially costly) repositioning + resizing of every element
+	void setColWidthPerc(int col, float width, bool update = true);
+	void setRowHeightPerc(int row, float height, bool update = true);
 
 	bool moveCursor(Vector2i dir);
 	void setCursorTo(const std::shared_ptr<GuiComponent>& comp);
@@ -59,7 +65,7 @@ public:
 	inline std::shared_ptr<GuiComponent> getSelectedComponent()
 	{
 		const GridEntry* e = getCellAt(mCursor);
-		if(e)
+		if (e)
 			return e->component;
 		else
 			return nullptr;
@@ -69,6 +75,9 @@ public:
 	void onFocusGained() override;
 
 	virtual std::vector<HelpPrompt> getHelpPrompts() override;
+
+	// ✅ Nuevo (opcional)
+	void setPastBoundaryCallback(PastBoundaryCallback cb) { mPastBoundaryCallback = std::move(cb); }
 
 private:
 	class GridEntry
@@ -88,10 +97,7 @@ private:
 			pos(p), dim(d), component(cmp), canFocus(f), resize(r), updateType(u), border(b)
 		{};
 
-		operator bool() const
-		{
-			return component != NULL;
-		}
+		operator bool() const { return component != NULL; }
 	};
 
 	float* mRowHeights;
@@ -112,6 +118,9 @@ private:
 
 	void onCursorMoved(Vector2i from, Vector2i to);
 	Vector2i mCursor;
+
+	// ✅ Nuevo (opcional)
+	PastBoundaryCallback mPastBoundaryCallback;
 };
 
 #endif // ES_CORE_COMPONENTS_COMPONENT_GRID_H
