@@ -1,371 +1,367 @@
 Themes
 
 EmulationStation-X (ES-X) loads a theme for each system.
-A theme is a collection of views, each view defines elements, and each element has properties.
 
-A theme is usually stored in a theme.xml file.
+A theme is simply:
 
-Theme lookup order
+A collection of views
 
-For each system, ES-X will try to load a theme.xml in this order:
+Each view contains elements
 
-System path (per-system theme):
+Each element has properties
+
+Most themes are defined in:
+
+theme.xml
+
+That’s the visual structure.
+
+But ES-X is built so themes can stay simple even as they grow.
+
+Theme Lookup Order
+
+For each system, ES-X searches for theme.xml in this order:
+
+1️⃣ System path (per-system theme)
 
 [SYSTEM_PATH]/theme.xml
 
-Theme set in the user folder:
+2️⃣ User theme set
 
 [HOME]/.emulationstation/themes/[CURRENT_THEME_SET]/[SYSTEM_THEME]/theme.xml
 
-Theme set in the system folder:
+3️⃣ System theme set
 
 /etc/emulationstation/themes/[CURRENT_THEME_SET]/[SYSTEM_THEME]/theme.xml
 
-If more than one exists, the first match wins (system path overrides home theme set, home overrides /etc).
+If multiple exist, the first match wins.
+
+Priority:
+
+System path → Home theme set → /etc theme set
+
+This allows:
+
+Per-system overrides
+
+User customization
+
+Clean separation of global vs local themes
 
 What is [SYSTEM_THEME]?
 
-[SYSTEM_THEME] is taken from the system’s <theme> tag in es_systems.cfg.
-If <theme> is not set, ES-X uses the system <name>.
+It comes from the <theme> tag in es_systems.cfg.
+
+If <theme> is not defined, ES-X uses the system <name>.
 
 What is [CURRENT_THEME_SET]?
 
-[CURRENT_THEME_SET] is selected in UI Settings.
-If not set or missing, ES-X uses the first available theme set.
+Selected in UI Settings.
 
-Theme set folder structure
+If missing, ES-X loads the first available theme set.
 
-A theme set is a folder containing per-system theme folders plus optional shared resources.
+Theme Set Folder Structure
 
-Example:
+A theme set is just a structured folder:
 
 themes/
   my_theme_set/
     snes/
       theme.xml
-      my_background.jpg
 
     nes/
       theme.xml
-      my_header.svg
 
-    common_resources/
-      scroll_sound.wav
+    _inc/
+      backgrounds/
+      logos/
+      audio/
 
-    theme.xml   (default theme)
+    theme.xml   ← optional fallback
 
+The root theme.xml acts as a default if a system folder is missing.
 
-The theme.xml at the root of the theme set can act as a default theme if a system theme folder is missing.
+Simple structure.
+No hidden complexity.
 
-Core concepts
+Core Concepts
 Views
 
-A view is a screen type inside ES-X.
-
-Example:
+A view represents a screen type:
 
 <view name="detailed">
   ...
 </view>
 
-
-The name attribute can contain multiple views separated by whitespace and/or commas:
+Multiple views can share the same structure:
 
 <view name="system, basic, detailed, grid">
   ...
 </view>
-
 Elements
 
-An element is a UI component: image, text, list, video, carousel, etc.
+Elements are UI components:
+
+image
+
+text
+
+video
+
+carousel
+
+textlist
+
+imagegrid
+
+rating
+
+datetime
+
+helpsystem
 
 You can:
 
-A) Modify an existing element
+Modify an existing element
 <text name="md_description">
   <color>FFFFFF</color>
 </text>
-
-B) Create an extra element
-
-Extra elements must use extra="true" and a unique name:
-
-<image name="e_background_overlay" extra="true">
-  <path>./my_overlay.png</path>
+Create a new element
+<image name="e_overlay" extra="true">
+  <path>./overlay.png</path>
 </image>
 
+Extra elements render in order.
+Define backgrounds first.
 
-Extra elements are drawn in the order they appear, so define backgrounds first.
+You only define what you want to change.
 
 Properties
 
-A property is a tag inside an element:
+Properties define behavior:
 
 <pos>0.1 0.2</pos>
 <color>FFFFFFFF</color>
 
+You don’t need to define every property.
+Only override what matters.
 
-You do not need to specify every property.
-
-Advanced features
+Required & Advanced Tags
 <formatVersion>
 
-Every theme must define <formatVersion>.
+Required:
 
 <formatVersion>4</formatVersion>
-
 <resolution>
 
-Themes can optionally define a resolution so you can use pixel values instead of normalized values.
+Optional pixel-based positioning:
 
 <resolution>1920 1080</resolution>
 
+ES-X normalizes coordinates automatically.
 
-When resolution is set, ES-X will divide RESOLUTION_* values to normalize them.
-
-Note: Parenting of elements is not available when using a resolution other than 1 1.
+⚠ Parenting is not supported when resolution ≠ 1 1.
 
 <include>
 
-You can include one theme file into another:
+Merge multiple theme files:
 
-<include>./../all_themes.xml</include>
+<include>./shared.xml</include>
 
+Clean modular structure.
+Reusable components.
 
-Included properties get merged, and the current file can override values.
+zIndex Rendering Order
 
-z-index rendering order
+zIndex controls layering.
 
-ES-X supports zIndex to control draw order.
-Lower values draw first; higher values draw last.
+Lower values → drawn first
+Higher values → drawn on top
 
-Typical defaults (examples):
-
-system view
-
-Extra elements (extra="true") → 10
-
-carousel name="systemcarousel" → 40
-
-text name="systemInfo" → 50
-
-basic/detailed/grid/video
-
-background → 0
-
-Extra elements → 10
-
-textlist / imagegrid → 20
-
-media (md_image, md_video) → 30
-
-metadata → 40
-
-logo/logoText → 50
-
+Typical System View
+Element	zIndex
+Extra elements	10
+systemcarousel	40
+systemInfo	50
+Gamelist Views
+Element	zIndex
+background	0
+Extra	10
+list/grid	20
+media	30
+metadata	40
+logo	50
 Variables
 
-Variables can be used in properties and paths.
+Variables simplify reuse and scaling.
 
-System variables
+System Variables
 
-Derived from es_systems.cfg and runtime data:
+Available automatically:
 
 ${system.name}
-
 ${system.fullName}
-
 ${system.theme}
-
 ${system.gameCount}
-
-${system.displayedGameCount}
-
-${system.favoriteCount}
-
-${system.mostPlayedCount}
-
-${system.mostPlayedName}
-
-${system.mostPlayedFull}
-
 ${system.mostPlayedImage}
 
 Example:
 
-<text>${system.fullName}</text>
 <path>./_inc/consoles/${system.theme}.png</path>
-
-Theme-defined variables
-
-You can define variables inside a theme:
-
+Theme-Defined Variables
 <variables>
   <themeColor>8b0000</themeColor>
 </variables>
 
-
 Usage:
 
 <color>${themeColor}c0</color>
+ES-X Extensions
+Carousel (System View)
+<carousel name="systemcarousel">
+  <logoScale>1.32</logoScale>
+  <minLogoOpacity>0.94</minLogoOpacity>
+  <scaledLogoSpacing>1</scaledLogoSpacing>
+</carousel>
 
-ES-X extensions
+Important properties:
 
-This section documents features commonly used by modern ES-X themes.
-
-Carousel (system view)
-
-The system carousel displays system logos (or text) and supports customization.
-
-Example:
-
-<feature supported="carousel">
-  <view name="system">
-    <carousel name="systemcarousel">
-      <type>horizontal</type>
-      <pos>0.08 0.11</pos>
-      <size>1.55 0.40</size>
-
-      <logoAlignment>top</logoAlignment>
-      <logoSize>0.21 0.23</logoSize>
-      <logoScale>1.32</logoScale>
-
-      <maxLogoCount>12</maxLogoCount>
-
-      <!-- Opacity and spacing -->
-      <minLogoOpacity>0.94</minLogoOpacity>
-      <scaledLogoSpacing>1</scaledLogoSpacing>
-    </carousel>
-  </view>
-</feature>
-
-Carousel properties (important ones)
-
-type: scroll direction (horizontal, vertical, horizontal_wheel, vertical_wheel)
-
-pos, size, origin: position and size
-
-logoSize: base logo size
-
-logoScale: scale applied to the selected logo
-
-logoAlignment: alignment inside carousel (top/bottom/center for horizontal)
-
-maxLogoCount: how many logos appear
-
-Opacity and spacing (the ones you asked)
+logoScale
 
 minLogoOpacity
-Controls how transparent the non-selected logos can be.
-
-Closer to 1.0 → almost solid
-
-Lower values → more “depth” / fading
 
 scaledLogoSpacing
-Controls spacing behavior when the selected logo is scaled.
 
-Higher values → more separation (prevents crowding when center logo grows)
+Depth and spacing are fully adjustable without touching core code.
 
-Lower values → tighter, more compact row
-
-Navigation sounds (Batocera/ES-DE style)
-
-Themes can define navigation sounds using:
-
+Navigation Sounds
 <feature supported="navigationsounds">
   <view name="all">
-    <sound name="systembrowse"><path>./_inc/audio/systembrowse.wav</path></sound>
-    <sound name="quicksysselect"><path>./_inc/audio/quicksysselect.wav</path></sound>
-    <sound name="select"><path>./_inc/audio/select.wav</path></sound>
-    <sound name="back"><path>./_inc/audio/back.wav</path></sound>
-    <sound name="scroll"><path>./_inc/audio/scroll.wav</path></sound>
-    <sound name="favorite"><path>./_inc/audio/favorite.wav</path></sound>
-    <sound name="launch"><path>./_inc/audio/launch.wav</path></sound>
+    <sound name="scroll">
+      <path>./audio/scroll.wav</path>
+    </sound>
   </view>
 </feature>
 
-
-Only .wav files are supported for <sound>.
+Only .wav supported.
 
 Theme Options (ES-X)
 
-ES-X can expose theme-defined options in the UI (Theme Options).
-These options allow users to switch layouts or behaviors without editing XML.
+This is where ES-X becomes truly flexible.
 
-Common examples:
+Themes can expose configurable options in the UI:
 
 Layout selection (ps4 / ps3 / lite)
 
-Artwork source selection (boxart / image / marquee / thumbnail)
+Artwork source selection
 
-Performance mode toggles
+Performance toggles
 
-If a theme defines no options, the Theme Options menu can be hidden.
+Density modes
+
+If no options are defined, the Theme Options menu can be hidden.
 
 theme.ini (ES-X)
 
-ES-X supports an optional theme.ini alongside theme.xml.
+theme.ini is optional — but powerful.
 
-Purpose:
+It allows you to:
 
-Keep layout-specific positions and values in one place
+Centralize configuration
 
-Avoid duplicating XML blocks
+Avoid XML duplication
 
-Provide “knobs” for theme options (variables the theme can reuse)
+Control layout variations
 
-Lookup order
-
-theme.ini follows the same lookup idea as theme.xml (system folder first, then theme sets).
+Define user-selectable options
 
 Syntax
+[section]
+key=value
 
-INI key/value style:
+Comments:
 
-Sections: [section]
+; comment
+# comment
+Using INI values in theme.xml
 
-Keys: key=value
-
-Comments: ; or #
-
-Using values in theme.xml
-
-Keys from theme.ini are exposed as ${variables}.
-
-Example:
+Keys become variables:
 
 <pos>${systemNamePos}</pos>
 <maxSize>${mostPlayedMaxSize}</maxSize>
+Layout Section Pattern
 
-Layout sections
-
-A common pattern is:
+Common structure:
 
 [layout.ps4]
-
 [layout.ps3]
-
 [layout.lite]
 
-And a Theme Option chooses which layout section is active.
+Theme Options selects which section becomes active.
+
+Why This Architecture Matters
+
+ES-X separates:
+
+theme.xml   → structure
+theme.ini   → configuration
+Theme Options → user experience
+
+This makes themes:
+
+Easier to maintain
+
+Easier to expand
+
+Easier to reuse
+
+Easier to adapt to different hardware
+
+Modern themes are not about complexity.
+
+They are about flexibility without chaos.
 
 Reference
-Property types
+Property Types
 
-RESOLUTION_RECT: top left bottom right
+RESOLUTION_RECT
 
-RESOLUTION_PAIR: x y (pos/size)
+RESOLUTION_PAIR
 
-RESOLUTION_FLOAT: 0.03 etc
+RESOLUTION_FLOAT
 
-NORMALIZED_PAIR: 0..1 percentages
+NORMALIZED_PAIR
 
-PATH: ./relative/path or ~ expanded
+PATH
 
-STRING, COLOR (RGB/RGBA), FLOAT, BOOLEAN
+STRING
 
-Common element types
+COLOR
 
-image, text, textlist, video, carousel, rating, datetime, helpsystem, sound, ninepatch, imagegrid
+FLOAT
 
+BOOLEAN
+
+Common Element Types
+
+image
+
+text
+
+textlist
+
+video
+
+carousel
+
+rating
+
+datetime
+
+helpsystem
+
+sound
+
+ninepatch
+
+imagegrid
