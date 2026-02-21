@@ -24,6 +24,8 @@
 
 <img width="1366" height="768" alt="Captura de pantalla_2025-12-15_13-20-32" src="https://github.com/user-attachments/assets/1f12408e-4004-4334-be2f-2bb138da43b7" />
 
+## Example Grid view
+![Captura de pantalla_2026-02-21_19-08-28](https://github.com/user-attachments/assets/69a2e14c-927e-4c53-b697-f76fc4384752)
 
 
 
