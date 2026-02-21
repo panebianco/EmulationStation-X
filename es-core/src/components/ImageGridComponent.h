@@ -472,6 +472,21 @@ void ImageGridComponent<T>::onCursorChanged(const CursorState& state)
 			mStartPosition = (col - centralCol) * dimOpposite;
 	}
 
+	// ===========================
+	// ✅ FIX: clamp start position cuando NO hay loop
+	// ===========================
+	if (!isScrollLoop())
+	{
+		const int minStart = 0;
+		const int maxStart = lastScroll * dimOpposite;
+
+		if (mStartPosition < minStart)
+			mStartPosition = minStart;
+
+		if (mStartPosition > maxStart)
+			mStartPosition = maxStart;
+	}
+
 	auto lastCursor = mLastCursor;
 	mLastCursor = mCursor;
 
