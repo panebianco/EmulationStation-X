@@ -115,6 +115,20 @@ See: `THEME_OPTIONS.md`
 
 Designed to remain compatible with classic themes.
 
+### 🎮 Enhanced Grid Layout Control
+
+ES-X now provides improved control over the Grid view, allowing themes to:
+
+Create single-line horizontal carousel layouts
+
+Center and scale the selected item cleanly
+
+Adjust spacing and composition via theme XML
+
+Design modern console-style interfaces without engine hacks
+
+This enhances creative freedom while keeping ES-X lightweight.
+
 ### 🔊 Background Music & Audio System
 
 - SDL_mixer-based background music manager
