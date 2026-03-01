@@ -16,6 +16,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
+#include <cstdio>   // popen/pclose
 
 static inline std::string trim(const std::string& s)
 {
@@ -65,6 +66,8 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	, mJobOk(false)
 	, mJobRefreshCatalogAfter(false)
 	, mJobDoneMsg("")
+	, mUpdateStop(false)
+	, mUpdateDirty(false)
 {
 	const std::string home = Utils::FileSystem::getHomePath();
 
@@ -122,15 +125,21 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	const float rightW = (mInnerW * 0.46f);
 	const float rightH = (mInnerH - topPad - bottomPad);
 
-	// Preview (arriba)
-	mPreview.setPosition(rightX, rightY);
-	mPreview.setResize(rightW, rightH * 0.82f);
-	mPreview.setOrigin(0.0f, 0.0f);
+	// ============================================================
+	// Preview (FICHA / FIT - sin distorsión)
+	// ============================================================
+	const float previewFrac = 0.65f;
+	const float pvW = rightW;
+	const float pvH = rightH * previewFrac;
+
+	mPreview.setOrigin(0.5f, 0.5f);
+	mPreview.setPosition(rightX + pvW * 0.5f, rightY + pvH * 0.5f);
+	mPreview.setMaxSize(pvW, pvH);
 
 	// Repo debajo de la imagen
-	const float repoY = rightY + (rightH * 0.82f) + 8.0f;
+	const float repoY = rightY + pvH + 10.0f;
 	mRepoLabel.setPosition(rightX, repoY);
-	mRepoLabel.setSize(rightW, rightH * 0.16f);
+	mRepoLabel.setSize(rightW, rightH - pvH);
 
 	// ============================================================
 	// Busy overlay (como CHILD para que no “duerma” sin input)
@@ -138,7 +147,7 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	mBusy.reset(new BusyComponent(mWindow));
 	mBusy->setPosition(Vector3f(0.0f, 0.0f, 0.0f));
 	mBusy->setSize(Vector2f(sw, sh));
-	addChild(mBusy.get());         // ✅ clave: update/render como parte del árbol
+	addChild(mBusy.get());
 	setBusyVisible(false);
 
 	// ============================================================
@@ -147,12 +156,14 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 	loadThemes();
 	rebuildList();
 
-	// Este menú “maneja” la lista manualmente
 	mList.onFocusGained();
 
 	updatePreview();
 	updateFooter();
 	updateHelpPrompts();
+
+	// ✅ Lanza chequeo de updates (no bloquea)
+	startUpdateCheck();
 
 	// ============================================================
 	// Actualizar catálogo en background (sin congelar UI)
@@ -166,6 +177,8 @@ GuiThemeBrowser::GuiThemeBrowser(Window* window)
 
 GuiThemeBrowser::~GuiThemeBrowser()
 {
+	stopUpdateCheck();
+
 	if (mJobThread.joinable())
 		mJobThread.join();
 }
@@ -174,7 +187,7 @@ void GuiThemeBrowser::setBusyVisible(bool v)
 {
 	mBusyVisible = v;
 	if (mBusy)
-		mBusy->setVisible(v);   // ✅ nativo, ya existe en tu GuiComponent
+		mBusy->setVisible(v);
 }
 
 void GuiThemeBrowser::showPopup(const std::string& msg, int durationMs)
@@ -192,6 +205,29 @@ bool GuiThemeBrowser::hasCommand(const std::string& cmd) const
 {
 	const std::string c = "sh -c \"command -v " + cmd + " >/dev/null 2>&1\"";
 	return (std::system(c.c_str()) == 0);
+}
+
+// Captura stdout (para git ls-remote / rev-parse)
+bool GuiThemeBrowser::runCmdCapture(const std::string& cmd, std::string& out) const
+{
+	out.clear();
+
+	FILE* pipe = popen(cmd.c_str(), "r");
+	if (!pipe)
+		return false;
+
+	char buffer[256];
+	std::ostringstream ss;
+
+	while (fgets(buffer, sizeof(buffer), pipe) != nullptr)
+		ss << buffer;
+
+	int rc = pclose(pipe);
+	if (rc != 0)
+		return false;
+
+	out = trim(ss.str());
+	return !out.empty();
 }
 
 // ============================================================
@@ -314,6 +350,166 @@ bool GuiThemeBrowser::isInstalled(const ThemeEntry& e) const
 	return Utils::FileSystem::exists(dst);
 }
 
+// -----------------------------
+// Update states (NEW)
+// -----------------------------
+GuiThemeBrowser::UpdateState GuiThemeBrowser::getUpdateStateFor(const ThemeEntry& e) const
+{
+	std::lock_guard<std::mutex> lk(mUpdateMutex);
+	auto it = mUpdateStates.find(e.folder);
+	if (it == mUpdateStates.end())
+		return UpdateState::UNKNOWN;
+	return it->second;
+}
+
+void GuiThemeBrowser::setUpdateStateFor(const ThemeEntry& e, UpdateState st)
+{
+	{
+		std::lock_guard<std::mutex> lk(mUpdateMutex);
+		mUpdateStates[e.folder] = st;
+	}
+	mUpdateDirty = true;
+}
+
+std::string GuiThemeBrowser::getThemeLocalCommitPath(const ThemeEntry& e) const
+{
+	return mThemesDir + "/" + e.folder + "/.esx_commit";
+}
+
+std::string GuiThemeBrowser::getThemeLocalRepoPath(const ThemeEntry& e) const
+{
+	return mThemesDir + "/" + e.folder + "/.esx_repo";
+}
+
+bool GuiThemeBrowser::readTextFile(const std::string& path, std::string& out) const
+{
+	out.clear();
+	std::ifstream f(path);
+	if (!f.is_open())
+		return false;
+
+	std::ostringstream ss;
+	ss << f.rdbuf();
+	out = trim(ss.str());
+	return !out.empty();
+}
+
+bool GuiThemeBrowser::writeTextFile(const std::string& path, const std::string& text) const
+{
+	std::ofstream f(path, std::ios::trunc);
+	if (!f.is_open())
+		return false;
+
+	f << text << "\n";
+	return true;
+}
+
+bool GuiThemeBrowser::getInstalledCommit(const ThemeEntry& e, std::string& outCommit) const
+{
+	return readTextFile(getThemeLocalCommitPath(e), outCommit);
+}
+
+bool GuiThemeBrowser::saveInstalledInfo(const ThemeEntry& e, const std::string& repo, const std::string& commit) const
+{
+	const std::string dst = mThemesDir + "/" + e.folder;
+	if (!Utils::FileSystem::exists(dst))
+		return false;
+
+	bool ok1 = writeTextFile(getThemeLocalRepoPath(e), repo);
+	bool ok2 = writeTextFile(getThemeLocalCommitPath(e), commit);
+	return ok1 && ok2;
+}
+
+bool GuiThemeBrowser::getRemoteHeadCommit(const std::string& repoUrl, std::string& outCommit) const
+{
+	outCommit.clear();
+	// HEAD apunta a la rama default del repo (simple y universal)
+	// git ls-remote <url> HEAD  -> "<hash>\tHEAD"
+	std::string cmd = "sh -c " + quote("git ls-remote " + quote(repoUrl) + " HEAD 2>/dev/null");
+	std::string out;
+	if (!runCmdCapture(cmd, out))
+		return false;
+
+	// parse: primer token antes de tab/espacio
+	std::istringstream iss(out);
+	std::string hash;
+	iss >> hash;
+	if (hash.size() < 7)
+		return false;
+
+	outCommit = hash;
+	return true;
+}
+
+void GuiThemeBrowser::startUpdateCheck()
+{
+	stopUpdateCheck();
+
+	mUpdateStop = false;
+	mUpdateDirty = false;
+
+	// Poner UNKNOWN para instalados; no molesta para no instalados
+	{
+		std::lock_guard<std::mutex> lk(mUpdateMutex);
+		mUpdateStates.clear();
+		for (const auto& e : mThemes)
+		{
+			if (isInstalled(e))
+				mUpdateStates[e.folder] = UpdateState::UNKNOWN;
+		}
+	}
+
+	mUpdateThread = std::thread([this]() { updateCheckWorker(); });
+}
+
+void GuiThemeBrowser::stopUpdateCheck()
+{
+	mUpdateStop = true;
+	if (mUpdateThread.joinable())
+		mUpdateThread.join();
+}
+
+void GuiThemeBrowser::updateCheckWorker()
+{
+	// Chequea solo instalados, y solo una vez por “carga/refresco”
+	for (const auto& e : mThemes)
+	{
+		if (mUpdateStop)
+			return;
+
+		if (!isInstalled(e))
+			continue;
+
+		// si no hay repo en catalogo, no hay qué chequear
+		if (e.repo.empty())
+		{
+			setUpdateStateFor(e, UpdateState::ERROR);
+			continue;
+		}
+
+		std::string localCommit;
+		if (!getInstalledCommit(e, localCommit))
+		{
+			// Tema instalado antes de esta feature: no sabemos versión
+			// (podés elegir marcar UNKNOWN o asumir “update available”; yo lo dejo UNKNOWN)
+			setUpdateStateFor(e, UpdateState::UNKNOWN);
+			continue;
+		}
+
+		std::string remoteCommit;
+		if (!getRemoteHeadCommit(e.repo, remoteCommit))
+		{
+			setUpdateStateFor(e, UpdateState::ERROR);
+			continue;
+		}
+
+		if (remoteCommit == localCommit)
+			setUpdateStateFor(e, UpdateState::UP_TO_DATE);
+		else
+			setUpdateStateFor(e, UpdateState::UPDATE_AVAILABLE);
+	}
+}
+
 void GuiThemeBrowser::rebuildList()
 {
 	mList.clear();
@@ -337,9 +533,23 @@ void GuiThemeBrowser::rebuildList()
 		const ThemeEntry& e = mThemes[i];
 		const bool installed = isInstalled(e);
 
+		// NEW: icono update
+		std::string upd = "";
+		if (installed)
+		{
+			switch (getUpdateStateFor(e))
+			{
+			case UpdateState::UPDATE_AVAILABLE: upd = "⟳  "; break; // update disponible
+			case UpdateState::UP_TO_DATE:       upd = "   "; break;
+			case UpdateState::ERROR:            upd = "?  "; break;
+			case UpdateState::UNKNOWN:          upd = "   "; break;
+			}
+		}
+
 		ComponentListRow row;
 
 		std::string label = installed ? "☑  " : "☐  ";
+		label += upd;
 		label += (e.title.empty() ? e.id : e.title);
 
 		auto title = std::make_shared<TextComponent>(
@@ -444,12 +654,29 @@ bool GuiThemeBrowser::downloadOrUpdateSilent(const ThemeEntry& e)
 	if (installed)
 		runCmd("rm -rf " + quote(dst));
 
+	// clone
 	const std::string cmd = "git clone --depth 1 " + quote(e.repo) + " " + quote(dst);
 	int rc = runCmd(cmd);
 
 	if (rc == 0)
 	{
+		// NEW: capturar commit antes de borrar .git
+		std::string head;
+		{
+			// git -C "<dst>" rev-parse HEAD
+			std::string out;
+			std::string c = "sh -c " + quote("git -C " + quote(dst) + " rev-parse HEAD 2>/dev/null");
+			if (runCmdCapture(c, out))
+				head = trim(out);
+		}
+
+		// limpiar .git como siempre
 		runCmd("rm -rf " + quote(dst + "/.git"));
+
+		// NEW: guardar info instalada
+		if (!head.empty())
+			saveInstalledInfo(e, e.repo, head);
+
 		return true;
 	}
 
@@ -528,10 +755,14 @@ void GuiThemeBrowser::finishJobIfDone()
 	{
 		loadThemes();
 		rebuildList();
+		// NEW: re-chequear updates después de refrescar catálogo
+		startUpdateCheck();
 	}
 	else
 	{
 		rebuildList();
+		// NEW: si instalaste/actualizaste, re-chequear
+		startUpdateCheck();
 	}
 
 	mJobDone = false;
@@ -611,7 +842,6 @@ bool GuiThemeBrowser::input(InputConfig* config, Input input)
 
 void GuiThemeBrowser::update(int deltaTime)
 {
-	// ✅ Actualiza children (incluyendo Busy) por estar en el árbol
 	GuiComponent::update(deltaTime);
 
 	mFrame.update(deltaTime);
@@ -620,6 +850,13 @@ void GuiThemeBrowser::update(int deltaTime)
 	mRepoLabel.update(deltaTime);
 	mHeader.update(deltaTime);
 	mFooter.update(deltaTime);
+
+	// NEW: si el thread marcó cambios de update state, refrescar lista 1 vez
+	if (mUpdateDirty)
+	{
+		mUpdateDirty = false;
+		rebuildList();
+	}
 
 	finishJobIfDone();
 }
@@ -636,7 +873,6 @@ void GuiThemeBrowser::render(const Transform4x4f& parentTrans)
 	mRepoLabel.render(trans);
 	mFooter.render(trans);
 
-	// ✅ Renderizar children (Busy incluido, y respeta setVisible)
 	renderChildren(trans);
 }
 
