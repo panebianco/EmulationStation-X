@@ -13,13 +13,18 @@
 #include "LocaleESHook.h"   // ← traducción (es_translate)
 
 GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchParams>& searches, bool approveResults) :
-	GuiComponent(window), mBackground(window, ":/frame.png"), mGrid(window, Vector2i(1, 5)),
+	GuiComponent(window),
+	mBackground(window, ":/frame.png"),
+	mGrid(window, Vector2i(1, 5)),
 	mSearchQueue(searches)
 {
 	assert(mSearchQueue.size());
 
 	addChild(&mBackground);
 	addChild(&mGrid);
+
+	// ✅ Evitar que Window entre en sleep/idle mientras scrapea (evita que se "congele" el busy sin input)
+	mWindow->setAllowSleep(false);
 
 	PowerSaver::pause();
 	mIsProcessing = true;
@@ -61,16 +66,18 @@ GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchP
 		mWindow,
 		approveResults ? ScraperSearchComponent::ALWAYS_ACCEPT_MATCHING_CRC
 		               : ScraperSearchComponent::ALWAYS_ACCEPT_FIRST_RESULT);
+
 	mSearchComp->setAcceptCallback(std::bind(&GuiScraperMulti::acceptResult, this, std::placeholders::_1));
 	mSearchComp->setSkipCallback(std::bind(&GuiScraperMulti::skip, this));
 	mSearchComp->setCancelCallback(std::bind(&GuiScraperMulti::finish, this));
+
 	mGrid.setEntry(
 		mSearchComp,
 		Vector2i(0, 3),
 		mSearchComp->getSearchType() != ScraperSearchComponent::ALWAYS_ACCEPT_FIRST_RESULT,
 		true);
 
-	std::vector< std::shared_ptr<ButtonComponent> > buttons;
+	std::vector<std::shared_ptr<ButtonComponent>> buttons;
 
 	if (approveResults)
 	{
@@ -79,7 +86,7 @@ GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchP
 			mWindow,
 			es_translate("INPUT"),
 			es_translate("SEARCH"),
-			[&] {
+			[this] {
 				mSearchComp->openInputScreen(mSearchQueue.front());
 				mGrid.resetCursor();
 			}));
@@ -89,7 +96,7 @@ GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchP
 			mWindow,
 			es_translate("SKIP"),
 			es_translate("SKIP"),
-			[&] {
+			[this] {
 				skip();
 				mGrid.resetCursor();
 			}));
@@ -115,6 +122,14 @@ GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchP
 
 GuiScraperMulti::~GuiScraperMulti()
 {
+	// ✅ Pase lo que pase, restaurar sleep (por si se destruye sin pasar por finish())
+	if (mWindow)
+		mWindow->setAllowSleep(true);
+
+	// Si estaba procesando, restaurar PowerSaver también (seguro)
+	if (mIsProcessing)
+		PowerSaver::resume();
+
 	// view type probably changed (basic -> detailed)
 	for (auto it = SystemData::sSystemVector.cbegin(); it != SystemData::sSystemVector.cend(); it++)
 		ViewController::get()->reloadGameListView(*it, false);
@@ -144,8 +159,8 @@ void GuiScraperMulti::doNextSearch()
 
 	// subtítulo: "GAME X OF Y - NOMBRE.EXT"
 	std::stringstream ss;
-	std::string gameLabel = es_translate("GAME");
-	std::string ofLabel   = es_translate("OF");
+	const std::string gameLabel = es_translate("GAME");
+	const std::string ofLabel   = es_translate("OF");
 
 	ss << gameLabel << " " << (mCurrentGame + 1)
 	   << " " << ofLabel << " " << mTotalGames
@@ -180,6 +195,10 @@ void GuiScraperMulti::skip()
 
 void GuiScraperMulti::finish()
 {
+	// ✅ Si ya terminó, no repetir (evita doble resume / doble popup si entra por cancel+algo raro)
+	if (!mIsProcessing)
+		return;
+
 	std::stringstream ss;
 
 	if (mTotalSuccessful == 0)
@@ -205,14 +224,18 @@ void GuiScraperMulti::finish()
 		}
 	}
 
+	// ✅ Restaurar estados antes de cerrar
+	mIsProcessing = false;
+	PowerSaver::resume();
+
+	if (mWindow)
+		mWindow->setAllowSleep(true);
+
 	mWindow->pushGui(new GuiMsgBox(
 		mWindow,
 		ss.str(),
 		es_translate("OK"),
-		[&] { delete this; }));
-
-	mIsProcessing = false;
-	PowerSaver::resume();
+		[this] { delete this; }));
 }
 
 std::vector<HelpPrompt> GuiScraperMulti::getHelpPrompts()

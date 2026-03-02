@@ -14,6 +14,7 @@
 #include <fstream>
 #include <cstring>
 #include <sstream>
+#include <cctype>
 
 // Vistas soportadas
 std::vector<std::string> ThemeData::sSupportedViews { { "system" }, { "basic" }, { "detailed" }, { "grid" }, { "video" }, { "all" } };
@@ -285,8 +286,8 @@ namespace
 		if (lower == "gameliststyle") outVars["gameListStyle"] = value;
 	}
 
-	void loadExternalThemeVariables(const std::string& themeXmlPath,
-	                               std::map<std::string, std::string>& outVars)
+	static void loadExternalThemeVariables(const std::string& themeXmlPath,
+	                                      std::map<std::string, std::string>& outVars)
 	{
 		std::string activeLayoutSetting = Settings::getInstance()->getString("ThemeLayout");
 		bool hasActiveLayout = !activeLayoutSetting.empty();
@@ -306,7 +307,7 @@ namespace
 			if (!Utils::FileSystem::exists(cfgPath))
 				continue;
 
-			// If ThemeLayout is empty, try infer from LAYOUT= in this ini
+			// Si ThemeLayout está vacío, inferir desde LAYOUT= (top-level)
 			if (!hasActiveLayout)
 			{
 				std::string inferred = readTopIniValueLocal(cfgPath, "LAYOUT");
@@ -352,6 +353,10 @@ namespace
 				std::string value = Utils::String::trim(line.substr(eqPos + 1));
 
 				if (key.empty())
+					continue;
+
+				// Evitar contaminar variables con el selector de layout
+				if (Utils::String::toLower(key) == "layout")
 					continue;
 
 				bool isGlobalSection =
@@ -643,19 +648,19 @@ void ThemeData::loadFile(std::map<std::string, std::string> sysDataMap, const st
 		}
 	}
 
-	// 2) variables del XML principal primero (defaults del theme)
+	// 2) defaults del XML principal
 	parseVariables(root);
 
-	// ✅ 3) CARGAR theme.ini ANTES de procesar includes (CLAVE para Ruckage/ArtBook)
+	// 3) theme.ini antes de includes (clave para Ruckage/ArtBook)
 	loadExternalThemeVariables(path, mVariables);
 
-	// 4) language vars (pueden pisar defaults también)
+	// 4) language vars del XML principal
 	parseLanguageVariables(root);
 
-	// 5) ahora sí: includes de variables, ya con theme.ini aplicado
+	// 5) includes (variables/language)
 	parseIncludesVariables(root);
 
-	// 6) includes/views/features
+	// 6) includes (views/features) + root views/features
 	parseIncludesViewsAndFeatures(root);
 	parseViews(root);
 	parseFeatures(root);
@@ -862,10 +867,9 @@ void ThemeData::parseElement(const pugi::xml_node& root, const std::map<std::str
 			if (!ResourceManager::getInstance()->fileExists(path))
 			{
 				std::stringstream ss;
-				ss << "  Warning " << error.msg;
-				ss << "could not find file \"" << node.text().get() << "\" ";
+				ss << "ThemeData: could not find file \"" << node.text().get() << "\" ";
 				if (node.text().get() != path)
-					ss << "(which resolved to \"" << path << "\") ";
+					ss << "(resolved to \"" << path << "\") ";
 				LOG(LogWarning) << ss.str();
 			}
 			element.properties[node.name()] = path;
@@ -968,22 +972,15 @@ std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData
 		const std::string& t = elem.type;
 
 		if (t == "image")
-		{
 			comp = new ImageComponent(window);
-		}
 		else if (t == "text")
-		{
-			// ScrollableTextComponent deshabilitado: siempre TextComponent.
-			// (autoScroll/autoScrollDelay se mantienen en el parser solo por compatibilidad.)
-			comp = new TextComponent(window);
-		}
+			comp = new TextComponent(window); // ScrollableTextComponent deshabilitado
 
 		if (!comp)
 			continue;
 
 		comp->setDefaultZIndex(10);
 		comp->applyTheme(theme, view, *it, ThemeFlags::ALL);
-
 		comps.push_back(comp);
 	}
 

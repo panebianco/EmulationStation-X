@@ -52,15 +52,18 @@ void BusyComponent::onSizeChanged()
 	const float middleSpacerWidth = 0.01f * Renderer::getScreenWidth();
 	const float textHeight = mText->getFont()->getLetterHeight();
 
+	// Recalcular ancho del texto
 	mText->setSize(0, textHeight);
 	const float textWidth = mText->getSize().x() + 4;
 
-	mGrid.setColWidthPerc(1, textHeight / mSize.x()); // animation is square
+	// animation is square
+	mGrid.setColWidthPerc(1, textHeight / mSize.x());
 	mGrid.setColWidthPerc(2, middleSpacerWidth / mSize.x());
 	mGrid.setColWidthPerc(3, textWidth / mSize.x());
 
 	mGrid.setRowHeightPerc(1, textHeight / mSize.y());
 
+	// Ajustar el frame al contenido real
 	mBackground.fitTo(
 		Vector2f(
 			mGrid.getColWidth(1) + mGrid.getColWidth(2) + mGrid.getColWidth(3),
@@ -73,9 +76,8 @@ void BusyComponent::onSizeChanged()
 
 void BusyComponent::reset()
 {
-	// Si tu AnimatedImageComponent no tiene reset(), dejalo así.
-	// Si querés reiniciar igual sin reset(), podés hacer:
-	// mAnimation->load(&BUSY_ANIMATION_DEF);
-	// (eso reinicia frames/timer)
-	// mAnimation->reset();
+	// ✅ Reinicia la animación sin depender de AnimatedImageComponent::reset()
+	// Recargar el AnimationDef reinicia frame/timer en prácticamente todos los forks.
+	if (mAnimation)
+		mAnimation->load(&BUSY_ANIMATION_DEF);
 }
