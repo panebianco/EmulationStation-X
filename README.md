@@ -25,7 +25,7 @@
 <img width="1366" height="768" alt="Captura de pantalla_2025-12-15_13-20-32" src="https://github.com/user-attachments/assets/1f12408e-4004-4334-be2f-2bb138da43b7" />
 
 ## Example Grid view
-![Captura de pantalla_2026-02-26_20-04-10](https://github.com/user-attachments/assets/824d1d32-9ee2-42bb-be27-a5144efdf8c8)
+![Captura de pantalla_2026-03-02_13-12-38](https://github.com/user-attachments/assets/59498641-bc9f-4923-903d-c0f1f5121655)
 
 
 
@@ -120,17 +120,21 @@ Designed to remain compatible with classic themes.
 
 ### 🎮 Enhanced Grid Layout Control
 
-ES-X now provides improved control over the Grid view, allowing themes to:
+ES-X expands Grid view flexibility, enabling themes to:
 
-Create single-line horizontal carousel layouts
+Create single-row horizontal layouts with carousel-like behavior
 
-Center and scale the selected item cleanly
+Scale and highlight the selected item with clean visual separation
 
-Adjust spacing and composition via theme XML
+Control spacing, composition, and visual emphasis directly via theme XML
 
-Design modern console-style interfaces without engine hacks
+Define custom gridtile frames using backgroundImage, allowing themed borders and overlays per state (default / selected)
 
-This enhances creative freedom while keeping ES-X lightweight.
+Build modern console-style interfaces without modifying the engine core
+
+Gridtile rendering has also been stabilized to prevent unintended image alpha modulation, ensuring selected items display with full opacity and accurate color reproduction.
+
+All enhancements preserve performance, compatibility, and the lightweight architecture of classic EmulationStation.
 
 ### 🔊 Background Music & Audio System
 
