@@ -8,8 +8,10 @@
 #include "resources/Font.h"
 #include "GuiComponent.h"
 #include "Sound.h"
+#include "Window.h"
 #include <memory>
 #include <string>
+#include <vector>
 
 class AnimatedImageComponent;
 class SystemData;
@@ -27,16 +29,11 @@ struct SystemViewData
 	std::shared_ptr<GuiComponent> logo;
 	std::vector<GuiComponent*> backgroundExtras;
 
-	// ─────────────────────────────────────────────
 	// InfoButton (temable)
-	// ─────────────────────────────────────────────
 	GuiComponent* infoButton = nullptr;          // idle
 	GuiComponent* infoButtonSelected = nullptr;  // focus
 
-	// ─────────────────────────────────────────────
 	// Descripción resuelta desde ThemeData:
-	// <text name="system-description" extra="true"><visible>false</visible>...
-	// ─────────────────────────────────────────────
 	bool hasDescription = false;
 	std::string descriptionText;
 };
@@ -68,8 +65,8 @@ class SystemView : public IList<SystemViewData, SystemData*>
 public:
 	SystemView(Window* window);
 
-	virtual void onShow() override;
-	virtual void onHide() override;
+	void onShow() override;
+	void onHide() override;
 
 	void goToSystem(SystemData* system, bool animate);
 
@@ -80,7 +77,7 @@ public:
 	void onThemeChanged(const std::shared_ptr<ThemeData>& theme);
 
 	std::vector<HelpPrompt> getHelpPrompts() override;
-	virtual HelpStyle getHelpStyle() override;
+	HelpStyle getHelpStyle() override;
 
 protected:
 	void onCursorChanged(const CursorState& state) override;

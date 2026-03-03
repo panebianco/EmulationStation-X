@@ -35,7 +35,6 @@ const int logoBuffersRight[] = {  1,  2,  5 };
 // ─────────────────────────────────────────────
 static inline bool looksLikeUnresolvedPlaceholder(const std::string& s)
 {
-	// Si todavía hay ${...} es que faltó variable y no queremos abrir visor con eso
 	return (s.find("${") != std::string::npos);
 }
 
@@ -60,7 +59,6 @@ static inline std::string getResolvedThemeText(const std::shared_ptr<ThemeData>&
 }
 
 // Crea un componente desde el tema para un key (image/text).
-// Devuelve nullptr si no existe o si el tipo no es image/text.
 static inline GuiComponent* makeThemedGuiComponent(Window* window,
                                                    const std::shared_ptr<ThemeData>& theme,
                                                    const std::string& view,
@@ -74,17 +72,11 @@ static inline GuiComponent* makeThemedGuiComponent(Window* window,
 	GuiComponent* comp = nullptr;
 
 	if (elem->type == "image")
-	{
 		comp = new ImageComponent(window);
-	}
 	else if (elem->type == "text")
-	{
 		comp = new TextComponent(window);
-	}
 	else
-	{
 		return nullptr;
-	}
 
 	comp->setDefaultZIndex(10);
 	comp->applyTheme(theme, view, key, ThemeFlags::ALL);
@@ -154,7 +146,6 @@ void SystemView::populate()
 
 			if(!e.data.logo)
 			{
-				// no logo in theme; use text
 				TextComponent* text = new TextComponent(
 					mWindow,
 					(*it)->getName(),
@@ -225,17 +216,13 @@ void SystemView::populate()
 			e.data.hasDescription  = !e.data.descriptionText.empty();
 
 			// ─────────────────────────────────────────────
-			// infoButton (idle/focused) totalmente temable:
-			// - infoButton
-			// - infoButtonSelected
-			// Sólo se muestran si hay descripción válida
+			// infoButton (idle/focused) temable
 			// ─────────────────────────────────────────────
 			if (e.data.hasDescription)
 			{
 				GuiComponent* idle = makeThemedGuiComponent(mWindow, theme, "system", "infoButton");
 				GuiComponent* sel  = makeThemedGuiComponent(mWindow, theme, "system", "infoButtonSelected");
 
-				// Si solo existe uno, igual funciona (sin crash)
 				if (idle)
 				{
 					e.data.infoButton = idle;
@@ -244,7 +231,7 @@ void SystemView::populate()
 				if (sel)
 				{
 					e.data.infoButtonSelected = sel;
-					e.data.infoButtonSelected->setVisible(false); // empieza apagado
+					e.data.infoButtonSelected->setVisible(false);
 					e.data.backgroundExtras.push_back(sel);
 				}
 			}
@@ -264,7 +251,6 @@ void SystemView::populate()
 
 	if(mEntries.size() == 0)
 	{
-		// Something is wrong, there is not a single system to show, check if UI mode is not full
 		if(!UIModeController::getInstance()->isUIModeFull())
 		{
 			Settings::getInstance()->setString("UIMode", "Full");
@@ -278,6 +264,19 @@ void SystemView::populate()
 
 	// Reset foco al reconstruir
 	mInfoFocus = false;
+
+	// ─────────────────────────────────────────────
+	// FIX (wheel stability): si repoblamos, dejar offsets/animaciones en estado estable
+	// ─────────────────────────────────────────────
+	cancelAnimation(0);
+	cancelAnimation(1);
+	cancelAnimation(2);
+
+	mCamOffset = (float)mCursor;
+	mExtrasCamOffset = (float)mCursor;
+	mExtrasFadeOpacity = 0.0f;
+
+	setInfoFocus(false);
 }
 
 void SystemView::onShow()
@@ -302,7 +301,6 @@ void SystemView::goToSystem(SystemData* system, bool animate)
 inline void playSystemScrollSound(SystemData* sys,
                                   const std::shared_ptr<Sound>& scrollFromCarousel)
 {
-	// 1) prioridad: sonido definido en <carousel scrollSound="...">
 	if (scrollFromCarousel)
 	{
 		scrollFromCarousel->play();
@@ -316,13 +314,9 @@ inline void playSystemScrollSound(SystemData* sys,
 	if (!theme)
 		return;
 
-	// 2) Intentar esquema tipo Batocera: "systembrowse" → scroll de carrusel
 	auto snd = NavigationSounds::getFromTheme(theme, "systembrowse");
 	if (!snd)
-	{
-		// 3) fallback genérico "scroll"
 		snd = NavigationSounds::getFromTheme(theme, "scroll");
-	}
 
 	if (snd)
 		snd->play();
@@ -336,7 +330,6 @@ bool SystemView::selectedHasInfo() const
 	if (mEntries.empty()) return false;
 	const SystemViewData& d = mEntries.at(mCursor).data;
 
-	// Debe existir descripción válida y al menos un botón temado
 	if (!d.hasDescription) return false;
 	return (d.infoButton != nullptr || d.infoButtonSelected != nullptr);
 }
@@ -348,11 +341,9 @@ void SystemView::setInfoFocus(bool focus)
 	if (mEntries.empty()) return;
 	SystemViewData& d = mEntries.at(mCursor).data;
 
-	// Si no hay botones, nada que alternar
 	if (!d.infoButton && !d.infoButtonSelected)
 		return;
 
-	// Si falta uno de los dos, el otro queda visible según convenga
 	if (d.infoButton)
 		d.infoButton->setVisible(!mInfoFocus);
 
@@ -373,19 +364,10 @@ bool SystemView::input(InputConfig* config, Input input)
 			return true;
 		}
 
-		// ─────────────────────────────────────────────
-		// Navegación por foco:
-		// - Carrusel horizontal: ↓ entra al botón, ↑ vuelve.
-		// - Carrusel vertical:   → entra al botón, ← vuelve.
-		// Además: en foco INFO:
-		//   - A = abrir visor (mismo botón que entrar al sistema)
-		//   - B/Back = salir del foco (mismo botón que salir/volver)
-		// ─────────────────────────────────────────────
 		const bool carouselIsVertical = (mCarousel.type == VERTICAL || mCarousel.type == VERTICAL_WHEEL);
 
 		if (!mInfoFocus)
 		{
-			// entrar al botón
 			if (selectedHasInfo())
 			{
 				if (!carouselIsVertical && config->isMappedLike("down", input))
@@ -402,15 +384,12 @@ bool SystemView::input(InputConfig* config, Input input)
 		}
 		else
 		{
-			// (1) salir del foco con el mismo botón de volver/salir
-			// En ES normalmente es "b". Si tu build usa "back", lo aceptamos también.
 			if (config->isMappedTo("b", input) || config->isMappedTo("back", input))
 			{
 				setInfoFocus(false);
 				return true;
 			}
 
-			// (2) volver al carrusel por dirección (además del botón back)
 			if (!carouselIsVertical && config->isMappedLike("up", input))
 			{
 				setInfoFocus(false);
@@ -422,7 +401,6 @@ bool SystemView::input(InputConfig* config, Input input)
 				return true;
 			}
 
-			// (3) A abre visor (mismo botón que entrar al sistema)
 			if (config->isMappedTo("a", input))
 			{
 				if (!mEntries.empty())
@@ -437,7 +415,6 @@ bool SystemView::input(InputConfig* config, Input input)
 				return true;
 			}
 
-			// (4) Mientras estamos en el botón, no navegar sistemas con d-pad
 			if (config->isMappedLike("left", input) ||
 				config->isMappedLike("right", input) ||
 				config->isMappedLike("up", input) ||
@@ -446,7 +423,6 @@ bool SystemView::input(InputConfig* config, Input input)
 				return true;
 			}
 
-			// (5) Evitar acciones globales (ej. random en X) mientras el foco está en INFO
 			if (config->isMappedTo("x", input))
 				return true;
 
@@ -497,7 +473,6 @@ bool SystemView::input(InputConfig* config, Input input)
 
 		if(config->isMappedTo("a", input))
 		{
-			// Si el foco está en INFO, este A NO entra al sistema
 			if (mInfoFocus)
 				return true;
 
@@ -535,7 +510,6 @@ bool SystemView::input(InputConfig* config, Input input)
 			return true;
 		}
 
-		// X: en carrusel sigue funcionando como antes (random)
 		if(config->isMappedTo("x", input))
 		{
 			setInfoFocus(false);
@@ -760,7 +734,6 @@ std::vector<HelpPrompt> SystemView::getHelpPrompts()
 		prompts.push_back(HelpPrompt("a", loc.translate("SELECT")));
 		prompts.push_back(HelpPrompt("x", loc.translate("RANDOM")));
 
-		// Si existe infoButton y hay descripción, sugerir entrada al botón
 		if (selectedHasInfo())
 		{
 			if (carouselIsVertical)
@@ -771,13 +744,9 @@ std::vector<HelpPrompt> SystemView::getHelpPrompts()
 	}
 	else
 	{
-		// En foco de botón: A abre visor (mismo botón de entrar)
 		prompts.push_back(HelpPrompt("a", "INFO"));
-
-		// Salir con el mismo botón de volver/salir
 		prompts.push_back(HelpPrompt("b", loc.translate("BACK")));
 
-		// Además, volver al carrusel por dirección
 		if (carouselIsVertical)
 			prompts.push_back(HelpPrompt("left", loc.translate("BACK")));
 		else
@@ -855,7 +824,6 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 		mCarousel.colorEnd,
 		mCarousel.colorGradientHorizontal);
 
-	// draw logos
 	Vector2f logoSpacing(0.0f, 0.0f);
 	float xOff = 0.0f;
 	float yOff = 0.0f;
@@ -863,9 +831,8 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 	switch(mCarousel.type)
 	{
 	case VERTICAL_WHEEL:
-		logoSpacing[1] = mCarousel.logoSize.y();
+		// IMPORTANT: mantener comportamiento de la versión "rueda ok"
 		yOff = (mCarousel.size.y() - mCarousel.logoSize.y()) / 2.f - (mCamOffset * logoSpacing[1]);
-
 		if(mCarousel.logoAlignment == ALIGN_LEFT)
 			xOff = mCarousel.logoSize.x() / 10.f;
 		else if(mCarousel.logoAlignment == ALIGN_RIGHT)
@@ -891,9 +858,8 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 		break;
 
 	case HORIZONTAL_WHEEL:
-		logoSpacing[0] = mCarousel.logoSize.x();
+		// IMPORTANT: mantener comportamiento de la versión "rueda ok"
 		xOff = (mCarousel.size.x() - mCarousel.logoSize.x()) / 2.f - (mCamOffset * logoSpacing[0]);
-
 		if(mCarousel.logoAlignment == ALIGN_TOP)
 			yOff = mCarousel.logoSize.y() / 10.f;
 		else if(mCarousel.logoAlignment == ALIGN_BOTTOM)
@@ -1077,13 +1043,18 @@ void SystemView::renderExtras(const Transform4x4f& trans, float lower, float upp
 				Vector2i((int)extrasTrans.translation()[0], (int)extrasTrans.translation()[1]),
 				Vector2i((int)mSize.x(), (int)mSize.y()));
 
-			SystemViewData data = mEntries.at(index).data;
+			// ─────────────────────────────────────────────
+			// FIX: NO copiar SystemViewData (evita estados raros con infoButton/wheel)
+			// ─────────────────────────────────────────────
+			const SystemViewData& data = mEntries.at(index).data;
+
 			for(unsigned int j = 0; j < data.backgroundExtras.size(); j++)
 			{
 				GuiComponent* extra = data.backgroundExtras[j];
 				if(extra->getZIndex() >= lower && extra->getZIndex() < upper)
 					extra->render(extrasTrans);
 			}
+
 			Renderer::popClipRect();
 		}
 	}
