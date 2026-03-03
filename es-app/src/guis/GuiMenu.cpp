@@ -115,7 +115,11 @@ GuiMenu::GuiMenu(Window* window)
 	addEntry(_("QUIT").c_str(), menuColor, true, [this] { openQuitMenu(); });
 
 	addChild(&mMenu);
+
+	// ✅ OCULTAR versión del menú (texto tipo "EMULATIONSTATION V...")
+	// Si algún día querés mostrarla solo en Debug, lo cambiamos aquí.
 	addVersionInfo();
+
 	setSize(mMenu.getSize());
 	setPosition((Renderer::getScreenWidth() - mSize.x()) / 2, Renderer::getScreenHeight() * 0.15f);
 }
@@ -282,6 +286,7 @@ void GuiMenu::openSoundSettings()
 
 void GuiMenu::openUISettings()
 {
+	// (sin cambios)
 	auto s = new GuiSettings(mWindow, _("UI SETTINGS").c_str());
 
 	auto UImodeSelection = std::make_shared< OptionListComponent<std::string> >(mWindow, _("UI MODE").c_str(), false);
@@ -294,7 +299,6 @@ void GuiMenu::openUISettings()
 	for (auto it = UImodes.cbegin(); it != UImodes.cend(); it++)
 		UImodeSelection->add(*it, *it, (*it == currentMode));
 
-	// ✅ FIX: antes NO se agregaba al menú, por eso “no aparece nada”
 	s->addWithLabel(_("UI MODE").c_str(), UImodeSelection);
 
 	Window* window = mWindow;
@@ -302,7 +306,6 @@ void GuiMenu::openUISettings()
 	{
 		std::string selectedMode = UImodeSelection->getSelected();
 
-		// Nada que hacer si no cambió
 		if (selectedMode == currentMode)
 			return;
 
@@ -322,7 +325,6 @@ void GuiMenu::openUISettings()
 		}
 		else
 		{
-			// ✅ FIX: antes “Full” no guardaba nunca
 			LOG(LogDebug) << "Setting UI mode to Full";
 			Settings::getInstance()->setString("UIMode", "Full");
 			Settings::getInstance()->saveFile();
@@ -570,10 +572,8 @@ void GuiMenu::openUISettings()
 			? "default"
 			: Settings::getInstance()->getString("HelpIconSet");
 
-		// "default" = usa :/help/*.svg sueltos (y también intentará nombres ES-DE sueltos)
 		iconset->add(_("DEFAULT"), "default", current == "default");
 
-		// sets que ya copiaste a resources/help/<set>/
 		iconset->add("psx", "psx", current == "psx");
 		iconset->add("psx-light", "psx-light", current == "psx-light");
 		iconset->add("psx-color", "psx-color", current == "psx-color");
@@ -584,7 +584,6 @@ void GuiMenu::openUISettings()
 
 		s->addWithLabel(_("HELP ICON SET").c_str(), iconset);
 
-		// Guardar + refrescar para que se vea inmediatamente
 		s->addSaveFunc([iconset] {
 			const std::string oldSet = Settings::getInstance()->getString("HelpIconSet");
 			const std::string newSet = iconset->getSelected();
@@ -617,6 +616,7 @@ void GuiMenu::openUISettings()
 
 void GuiMenu::openOtherSettings()
 {
+	// (sin cambios)
 	auto s = new GuiSettings(mWindow, _("OTHER SETTINGS").c_str());
 
 	auto max_vram = std::make_shared<SliderComponent>(mWindow, 0.f, 1000.f, 10.f, "Mb");
@@ -727,6 +727,7 @@ void GuiMenu::openConfigInput()
 
 void GuiMenu::openQuitMenu()
 {
+	// (sin cambios)
 	auto s = new GuiSettings(mWindow, _("QUIT").c_str());
 
 	Window* window = mWindow;
@@ -830,13 +831,20 @@ void GuiMenu::openQuitMenu()
 
 void GuiMenu::addVersionInfo()
 {
-	std::string  buildDate = (Settings::getInstance()->getBool("Debug") ? std::string("   (" + Utils::String::toUpper(PROGRAM_BUILT_STRING) + ")") : (""));
+	// ✅ Versión del menú desactivada intencionalmente (estilo consola).
+	// Mantengo el código comentado por si querés reactivar:
+	/*
+	std::string buildDate = (Settings::getInstance()->getBool("Debug")
+		? std::string("   (" + Utils::String::toUpper(PROGRAM_BUILT_STRING) + ")")
+		: std::string(""));
 
 	mVersion.setFont(Font::get(FONT_SIZE_SMALL));
 	mVersion.setColor(getVersionTextColor());
 	mVersion.setText("EMULATIONSTATION V" + Utils::String::toUpper(PROGRAM_VERSION_STRING) + buildDate);
 	mVersion.setHorizontalAlignment(ALIGN_CENTER);
 	addChild(&mVersion);
+	*/
+	mVersion.setVisible(false);
 }
 
 void GuiMenu::openScreensaverOptions()
@@ -856,6 +864,7 @@ void GuiMenu::openThemeOptions()
 
 void GuiMenu::onSizeChanged()
 {
+	// Si algún día reactivás mVersion, esto ya queda listo.
 	mVersion.setSize(mSize.x(), 0);
 	mVersion.setPosition(0, mSize.y() - mVersion.getSize().y());
 }
