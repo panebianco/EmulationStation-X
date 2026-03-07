@@ -19,6 +19,9 @@ public:
     void setEnabled(bool enabled);
     bool isEnabled() const { return mEnabled; }
 
+    // ✅ nuevo: aplicar volumen en tiempo real (0..100)
+    void setVolume(int percent);
+
     void onGameLaunched();
     void onGameEnded();
 
