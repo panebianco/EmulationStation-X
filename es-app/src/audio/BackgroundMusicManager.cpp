@@ -12,10 +12,9 @@
 #include <algorithm>
 #include <random>
 #include <cmath>
-#include <vector>
 
 // -----------------------------
-//  Helpers (C++11 safe)
+// Helpers (C++11 safe)
 // -----------------------------
 static inline int clampInt(int v, int lo, int hi)
 {
@@ -62,7 +61,6 @@ static inline std::vector<std::string> getThemeMusicDirectories()
 
 	const std::string home = Utils::FileSystem::getHomePath();
 
-	// Rutas típicas de temas en ES / RetroPie / ES-X
 	addUniqueDir(dirs, home + "/.emulationstation/themes/" + themeSet + "/music");
 	addUniqueDir(dirs, home + "/.emulationstation/themes/" + themeSet + "/_inc/music");
 
@@ -86,8 +84,45 @@ static inline std::vector<std::string> getGlobalMusicDirectories()
 	return dirs;
 }
 
+static inline std::string getExtensionLower(const std::string& path)
+{
+	return Utils::String::toLower(Utils::FileSystem::getExtension(path));
+}
+
+static inline bool isSupportedAudioPath(const std::string& path)
+{
+	const std::string ext = getExtensionLower(path);
+	return (ext == ".mp3" || ext == ".ogg" || ext == ".flac" || ext == ".wav" || ext == ".mod");
+}
+
+static bool directoryHasAudioFiles(const std::string& path)
+{
+	if (!Utils::FileSystem::exists(path) || !Utils::FileSystem::isDirectory(path))
+		return false;
+
+	const Utils::FileSystem::stringList content = Utils::FileSystem::getDirContent(path);
+	for (Utils::FileSystem::stringList::const_iterator it = content.begin(); it != content.end(); ++it)
+	{
+		if (!Utils::FileSystem::isDirectory(*it) && isSupportedAudioPath(*it))
+			return true;
+	}
+
+	return false;
+}
+
+static std::vector<std::string> filterDirsWithAudio(const std::vector<std::string>& dirs)
+{
+	std::vector<std::string> out;
+	for (std::vector<std::string>::const_iterator it = dirs.begin(); it != dirs.end(); ++it)
+	{
+		if (directoryHasAudioFiles(*it))
+			out.push_back(*it);
+	}
+	return out;
+}
+
 // =============================
-//  Singleton
+// Singleton
 // =============================
 BackgroundMusicManager* BackgroundMusicManager::sInstance = nullptr;
 
@@ -99,13 +134,15 @@ BackgroundMusicManager& BackgroundMusicManager::getInstance()
 }
 
 // =============================
-//  Ctor / Dtor
+// Ctor / Dtor
 // =============================
 BackgroundMusicManager::BackgroundMusicManager()
 	: mInitialized(false)
 	, mEnabled(true)
 	, mGameRunning(false)
 	, mMixerOpenedByUs(false)
+	, mPlaylist()
+	, mLastPlayed()
 	, mCurrentIndex(-1)
 	, mCurrentMusic(nullptr)
 	, mNowPlayingText("")
@@ -116,12 +153,13 @@ BackgroundMusicManager::BackgroundMusicManager()
 	, mPendingIndex(-1)
 	, mPendingReopenOnResume(false)
 	, mPendingNextFromCallback(false)
-	// ducking
 	, mVideoPlaying(false)
 	, mBaseVolume(96)
 	, mDuckFactor(0.35f)
 	, mDuckTargetVol(96)
 	, mDuckCurrentVol(96)
+	, mLastResolvedConfig()
+	, mPlaylistReloadGuardMs(0)
 {
 	mEnabled = Settings::getInstance()->getBool("BackgroundMusic");
 	mBaseVolume = computeBaseMusicVolume();
@@ -135,7 +173,7 @@ BackgroundMusicManager::~BackgroundMusicManager()
 }
 
 // =============================
-//  Popup helpers
+// Popup helpers
 // =============================
 bool BackgroundMusicManager::songNameChanged()
 {
@@ -163,7 +201,7 @@ void BackgroundMusicManager::setNowPlaying(const std::string& fullPath)
 }
 
 // =============================
-//  Mixer open/close/reopen
+// Mixer open/close/reopen
 // =============================
 bool BackgroundMusicManager::openMixer()
 {
@@ -181,8 +219,6 @@ bool BackgroundMusicManager::openMixer()
 	Mix_HookMusicFinished(&BackgroundMusicManager::musicFinishedCallbackStatic);
 
 	mMixerOpenedByUs = true;
-
-	// aplicar volumen actual (con ducking actual)
 	applyMusicVolumeImmediate(clampInt(mDuckCurrentVol, 0, 128));
 
 	LOG(LogInfo) << "BGM - Mixer OPEN (owned)";
@@ -225,7 +261,7 @@ bool BackgroundMusicManager::reopenMixer()
 }
 
 // =============================
-//  Init / Shutdown
+// Init / Shutdown
 // =============================
 void BackgroundMusicManager::init()
 {
@@ -254,11 +290,14 @@ void BackgroundMusicManager::shutdown()
 	mLastPlayed.clear();
 	mCurrentIndex = -1;
 
+	mLastResolvedConfig = ResolvedMusicConfig();
+	mPlaylistReloadGuardMs = 0;
+
 	LOG(LogInfo) << "BGM - Shutdown";
 }
 
 // =============================
-//  Enable / Disable
+// Enable / Disable
 // =============================
 void BackgroundMusicManager::setEnabled(bool enabled)
 {
@@ -291,6 +330,7 @@ void BackgroundMusicManager::setEnabled(bool enabled)
 	if (!openMixer())
 		return;
 
+	mLastResolvedConfig = ResolvedMusicConfig();
 	buildPlaylist();
 
 	if (!mPlaylist.empty())
@@ -298,7 +338,7 @@ void BackgroundMusicManager::setEnabled(bool enabled)
 }
 
 // =============================
-//  ✅ Volumen en tiempo real
+// Volumen en tiempo real
 // =============================
 void BackgroundMusicManager::setVolume(int percent)
 {
@@ -310,7 +350,6 @@ void BackgroundMusicManager::setVolume(int percent)
 	const int duck = clampInt((int)std::lround(mBaseVolume * mDuckFactor), 0, 128);
 	mDuckTargetVol = mVideoPlaying ? duck : mBaseVolume;
 
-	// aplicar de inmediato
 	mDuckCurrentVol = mDuckTargetVol;
 	applyMusicVolumeImmediate(mDuckCurrentVol);
 
@@ -318,11 +357,10 @@ void BackgroundMusicManager::setVolume(int percent)
 }
 
 // =============================
-//  Ducking
+// Ducking
 // =============================
 int BackgroundMusicManager::computeBaseMusicVolume() const
 {
-	// Si todavía no existe en settings, usar 75 por defecto.
 	const std::string raw = Settings::getInstance()->getString("BackgroundMusicVolume");
 	const int pct = raw.empty()
 		? 75
@@ -345,8 +383,6 @@ void BackgroundMusicManager::setVideoPlaying(bool playing)
 
 	mBaseVolume = computeBaseMusicVolume();
 	const int base = clampInt(mBaseVolume, 0, 128);
-
-	// objetivo: cuando hay video, bajar a base * duckFactor
 	const int duck = clampInt((int)std::lround(base * mDuckFactor), 0, 128);
 
 	mDuckTargetVol = mVideoPlaying ? duck : base;
@@ -363,7 +399,6 @@ void BackgroundMusicManager::updateDucking(int deltaTimeMs)
 	if (cur == target)
 		return;
 
-	// ~250ms para llegar al target
 	const float stepsPerMs = 512.0f / 1000.0f;
 	int step = (int)std::lround(stepsPerMs * (float)deltaTimeMs);
 	if (step < 1) step = 1;
@@ -376,7 +411,7 @@ void BackgroundMusicManager::updateDucking(int deltaTimeMs)
 }
 
 // =============================
-//  Game hooks
+// Game hooks
 // =============================
 void BackgroundMusicManager::onGameLaunched()
 {
@@ -402,14 +437,11 @@ void BackgroundMusicManager::onGameEnded()
 	if (!mInitialized)
 		return;
 
-	// ✅ FIX: aunque BackgroundMusic esté OFF, revalidamos el mixer para que
-	// los sonidos de UI no queden con "Invalid audio device ID" al volver del juego.
 	if (mMixerOpenedByUs)
 		reopenMixer();
 	else
 		openMixer();
 
-	// Si la música está apagada, no hacemos resume.
 	if (!mEnabled)
 		return;
 
@@ -420,9 +452,7 @@ void BackgroundMusicManager::onGameEnded()
 	else
 		mPendingIndex = -1;
 
-	// ya reabrimos arriba; no hace falta reabrir en resume
 	mPendingReopenOnResume = false;
-
 	mPendingResume = true;
 	mResumeTimerMs = mResumeDelayMs;
 
@@ -430,14 +460,20 @@ void BackgroundMusicManager::onGameEnded()
 }
 
 // =============================
-//  Update (main thread)
+// Update (main thread)
 // =============================
 void BackgroundMusicManager::update(int deltaTimeMs)
 {
 	if (!mInitialized)
 		return;
 
-	// Refrescar volumen base desde settings por si cambió en menú
+	if (mPlaylistReloadGuardMs > 0)
+	{
+		mPlaylistReloadGuardMs -= deltaTimeMs;
+		if (mPlaylistReloadGuardMs < 0)
+			mPlaylistReloadGuardMs = 0;
+	}
+
 	mBaseVolume = computeBaseMusicVolume();
 	{
 		const int base = clampInt(mBaseVolume, 0, 128);
@@ -445,10 +481,8 @@ void BackgroundMusicManager::update(int deltaTimeMs)
 		mDuckTargetVol = mVideoPlaying ? duck : base;
 	}
 
-	// Ducking siempre (si hay mixer)
 	updateDucking(deltaTimeMs);
 
-	// Si la canción terminó, el callback marca el flag.
 	if (mPendingNextFromCallback.exchange(false))
 	{
 		LOG(LogInfo) << "BGM - update: pendingNext -> playNext()";
@@ -456,7 +490,6 @@ void BackgroundMusicManager::update(int deltaTimeMs)
 			playNext();
 	}
 
-	// Resume post-game con delay
 	if (mPendingResume)
 	{
 		if (mGameRunning || !mEnabled)
@@ -504,10 +537,12 @@ void BackgroundMusicManager::update(int deltaTimeMs)
 		}
 	}
 
-	// Watchdog anti-silencio:
 	if (mEnabled && !mGameRunning && mMixerOpenedByUs && !mPendingResume)
 	{
-		if (!Mix_PlayingMusic() && !Mix_PausedMusic() && !mPlaylist.empty())
+		if (mPlaylistReloadGuardMs <= 0 &&
+			!Mix_PlayingMusic() &&
+			!Mix_PausedMusic() &&
+			!mPlaylist.empty())
 		{
 			LOG(LogWarning) << "BGM - watchdog: music stopped unexpectedly -> playNext()";
 			playNext();
@@ -516,50 +551,174 @@ void BackgroundMusicManager::update(int deltaTimeMs)
 }
 
 // =============================
-//  Playlist
+// Playlist / source resolution
 // =============================
-void BackgroundMusicManager::buildPlaylist()
+const char* BackgroundMusicManager::resolvedSourceToString(ResolvedMusicSource src) const
 {
-	mPlaylist.clear();
-	mLastPlayed.clear();
-	mCurrentIndex = -1;
-
-	const std::string source = getMusicSourceSetting();
-	bool themeHasTracks = false;
-
-	// THEME
-	if (source == "theme" || source == "auto")
+	switch (src)
 	{
-		const std::vector<std::string> themeDirs = getThemeMusicDirectories();
+		case RESOLVED_SOURCE_THEME:  return "theme";
+		case RESOLVED_SOURCE_GLOBAL: return "global";
+		default:                     return "none";
+	}
+}
 
-		for (std::vector<std::string>::const_iterator it = themeDirs.begin(); it != themeDirs.end(); ++it)
-			buildPlaylistFromPath(*it);
+bool BackgroundMusicManager::vectorEquals(const std::vector<std::string>& a,
+										  const std::vector<std::string>& b) const
+{
+	if (a.size() != b.size())
+		return false;
 
-		themeHasTracks = !mPlaylist.empty();
+	for (size_t i = 0; i < a.size(); ++i)
+	{
+		if (a[i] != b[i])
+			return false;
 	}
 
-	// GLOBAL
-	if (source == "global" || (source == "auto" && !themeHasTracks))
-	{
-		const std::vector<std::string> globalDirs = getGlobalMusicDirectories();
+	return true;
+}
 
-		for (std::vector<std::string>::const_iterator it = globalDirs.begin(); it != globalDirs.end(); ++it)
-			buildPlaylistFromPath(*it);
+bool BackgroundMusicManager::resolvedConfigEquals(const ResolvedMusicConfig& a,
+												  const ResolvedMusicConfig& b) const
+{
+	return a.requestedMode == b.requestedMode &&
+		   a.resolvedSource == b.resolvedSource &&
+		   a.themeSet == b.themeSet &&
+		   vectorEquals(a.dirs, b.dirs);
+}
+
+BackgroundMusicManager::ResolvedMusicConfig BackgroundMusicManager::resolveMusicConfig() const
+{
+	ResolvedMusicConfig cfg;
+	cfg.requestedMode = getMusicSourceSetting();
+	cfg.resolvedSource = RESOLVED_SOURCE_NONE;
+	cfg.themeSet = Settings::getInstance()->getString("ThemeSet");
+	cfg.dirs.clear();
+
+	const std::vector<std::string> themeDirsAll = getThemeMusicDirectories();
+	const std::vector<std::string> globalDirsAll = getGlobalMusicDirectories();
+
+	const std::vector<std::string> themeDirs = filterDirsWithAudio(themeDirsAll);
+	const std::vector<std::string> globalDirs = filterDirsWithAudio(globalDirsAll);
+
+	if (cfg.requestedMode == "theme")
+	{
+		if (!themeDirs.empty())
+		{
+			cfg.resolvedSource = RESOLVED_SOURCE_THEME;
+			cfg.dirs = themeDirs;
+		}
+		else
+		{
+			cfg.resolvedSource = RESOLVED_SOURCE_NONE;
+		}
 	}
-
-	if (!mPlaylist.empty())
+	else if (cfg.requestedMode == "global")
 	{
-		static std::mt19937 rng{ std::random_device{}() };
-		std::uniform_int_distribution<int> dist(0, (int)mPlaylist.size() - 1);
-		mCurrentIndex = dist(rng);
-
-		LOG(LogInfo) << "BGM - Playlist ready (" << mPlaylist.size()
-					 << " tracks) | source=" << source;
+		if (!globalDirs.empty())
+		{
+			cfg.resolvedSource = RESOLVED_SOURCE_GLOBAL;
+			cfg.dirs = globalDirs;
+		}
+		else
+		{
+			cfg.resolvedSource = RESOLVED_SOURCE_NONE;
+		}
 	}
 	else
 	{
-		LOG(LogInfo) << "BGM - Playlist empty | source=" << source;
+		if (!themeDirs.empty())
+		{
+			cfg.resolvedSource = RESOLVED_SOURCE_THEME;
+			cfg.dirs = themeDirs;
+		}
+		else if (!globalDirs.empty())
+		{
+			cfg.resolvedSource = RESOLVED_SOURCE_GLOBAL;
+			cfg.dirs = globalDirs;
+		}
+		else
+		{
+			cfg.resolvedSource = RESOLVED_SOURCE_NONE;
+		}
 	}
+
+	return cfg;
+}
+
+void BackgroundMusicManager::buildPlaylist()
+{
+	const ResolvedMusicConfig cfg = resolveMusicConfig();
+	const bool sourceChanged = !resolvedConfigEquals(cfg, mLastResolvedConfig);
+
+	if (!sourceChanged && !mPlaylist.empty())
+	{
+		LOG(LogInfo) << "BGM - Playlist unchanged | requested=" << cfg.requestedMode
+					 << " | resolved=" << resolvedSourceToString(cfg.resolvedSource)
+					 << " | tracks=" << mPlaylist.size();
+		return;
+	}
+
+	if (!sourceChanged && mPlaylist.empty())
+		LOG(LogInfo) << "BGM - Playlist rebuild forced because current playlist is empty";
+
+	std::vector<std::string> newPlaylist;
+
+	for (std::vector<std::string>::const_iterator it = cfg.dirs.begin(); it != cfg.dirs.end(); ++it)
+	{
+		const Utils::FileSystem::stringList content = Utils::FileSystem::getDirContent(*it);
+		for (Utils::FileSystem::stringList::const_iterator e = content.begin(); e != content.end(); ++e)
+		{
+			if (!Utils::FileSystem::isDirectory(*e) && isValidAudioFile(*e))
+			{
+				if (std::find(newPlaylist.begin(), newPlaylist.end(), *e) == newPlaylist.end())
+					newPlaylist.push_back(*e);
+			}
+		}
+	}
+
+	const bool playlistChanged = !vectorEquals(newPlaylist, mPlaylist);
+
+	if (sourceChanged || playlistChanged)
+	{
+		LOG(LogInfo) << "BGM - Rebuilding playlist | requested=" << cfg.requestedMode
+					 << " | resolved=" << resolvedSourceToString(cfg.resolvedSource)
+					 << " | theme=" << (cfg.themeSet.empty() ? "<none>" : cfg.themeSet);
+	}
+
+	if (sourceChanged)
+	{
+		mLastPlayed.clear();
+		mCurrentIndex = -1;
+
+		if (mMixerOpenedByUs && (Mix_PlayingMusic() || Mix_PausedMusic() || mCurrentMusic))
+			stopMusicInternal(false);
+	}
+
+	mPlaylist.swap(newPlaylist);
+
+	if (!mPlaylist.empty())
+	{
+		if (mCurrentIndex < 0 || mCurrentIndex >= (int)mPlaylist.size())
+		{
+			static std::mt19937 rng{ std::random_device{}() };
+			std::uniform_int_distribution<int> dist(0, (int)mPlaylist.size() - 1);
+			mCurrentIndex = dist(rng);
+		}
+
+		LOG(LogInfo) << "BGM - Playlist ready (" << mPlaylist.size()
+					 << " tracks) | requested=" << cfg.requestedMode
+					 << " | resolved=" << resolvedSourceToString(cfg.resolvedSource);
+	}
+	else
+	{
+		mCurrentIndex = -1;
+		LOG(LogInfo) << "BGM - Playlist empty | requested=" << cfg.requestedMode
+					 << " | resolved=" << resolvedSourceToString(cfg.resolvedSource);
+	}
+
+	mLastResolvedConfig = cfg;
+	mPlaylistReloadGuardMs = 1200;
 }
 
 void BackgroundMusicManager::buildPlaylistFromPath(const std::string& path)
@@ -567,12 +726,13 @@ void BackgroundMusicManager::buildPlaylistFromPath(const std::string& path)
 	if (!Utils::FileSystem::exists(path) || !Utils::FileSystem::isDirectory(path))
 		return;
 
-	for (const auto& e : Utils::FileSystem::getDirContent(path))
+	const Utils::FileSystem::stringList content = Utils::FileSystem::getDirContent(path);
+	for (Utils::FileSystem::stringList::const_iterator it = content.begin(); it != content.end(); ++it)
 	{
-		if (!Utils::FileSystem::isDirectory(e) && isValidAudioFile(e))
+		if (!Utils::FileSystem::isDirectory(*it) && isValidAudioFile(*it))
 		{
-			if (std::find(mPlaylist.begin(), mPlaylist.end(), e) == mPlaylist.end())
-				mPlaylist.push_back(e);
+			if (std::find(mPlaylist.begin(), mPlaylist.end(), *it) == mPlaylist.end())
+				mPlaylist.push_back(*it);
 		}
 	}
 }
@@ -584,7 +744,7 @@ bool BackgroundMusicManager::isValidAudioFile(const std::string& path) const
 }
 
 // =============================
-//  Shuffle inteligente
+// Shuffle inteligente
 // =============================
 void BackgroundMusicManager::addLastPlayed(const std::string& song)
 {
@@ -614,16 +774,18 @@ int BackgroundMusicManager::pickNextIndex()
 	int tries = 0;
 	int idx = mCurrentIndex;
 
-	do {
+	do
+	{
 		idx = dist(rng);
 		tries++;
-	} while (tries < 20 && wasPlayedRecently(mPlaylist[idx]));
+	}
+	while (tries < 20 && wasPlayedRecently(mPlaylist[idx]));
 
 	return idx;
 }
 
 // =============================
-//  Playback
+// Playback
 // =============================
 void BackgroundMusicManager::playCurrent()
 {
@@ -665,7 +827,6 @@ void BackgroundMusicManager::playCurrent()
 		LOG(LogInfo) << "BGM - Playing: " << song;
 		setNowPlaying(song);
 
-		// Aplicar volumen actual (ducking) antes de play
 		applyMusicVolumeImmediate(clampInt(mDuckCurrentVol, 0, 128));
 
 		if (Mix_PlayMusic(mCurrentMusic, 0) != 0)
@@ -690,7 +851,7 @@ void BackgroundMusicManager::playCurrent()
 }
 
 // =============================
-//  Controls
+// Controls
 // =============================
 void BackgroundMusicManager::playNext()
 {
@@ -708,8 +869,6 @@ void BackgroundMusicManager::stopMusicInternal(bool fadeOut)
 
 	LOG(LogInfo) << "BGM - stopMusicInternal(fadeOut=" << (fadeOut ? "1" : "0") << ")";
 
-	// ✅ FIX seguro: no liberar Mix_Music mientras SDL_mixer podría seguir usando el puntero.
-	// Para evitar heisenbugs/crash, hacemos halt + free (fadeOut se ignora aquí).
 	(void)fadeOut;
 	Mix_HaltMusic();
 
@@ -721,7 +880,7 @@ void BackgroundMusicManager::stopMusicInternal(bool fadeOut)
 }
 
 // =============================
-//  Callback
+// Callback
 // =============================
 void BackgroundMusicManager::musicFinishedCallbackStatic()
 {
@@ -734,8 +893,6 @@ void BackgroundMusicManager::musicFinishedCallback()
 	if (mGameRunning || !mEnabled)
 		return;
 
-	// OJO: esto se ejecuta desde el thread interno de mixer.
-	// Solo seteamos un flag atómico.
 	LOG(LogInfo) << "BGM - callback: music finished (pendingNext=1)";
 	mPendingNextFromCallback.store(true);
 }

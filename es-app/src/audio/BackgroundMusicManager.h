@@ -19,7 +19,7 @@ public:
     void setEnabled(bool enabled);
     bool isEnabled() const { return mEnabled; }
 
-    // ✅ nuevo: aplicar volumen en tiempo real (0..100)
+    // aplicar volumen en tiempo real (0..100)
     void setVolume(int percent);
 
     void onGameLaunched();
@@ -39,6 +39,30 @@ public:
     void setVideoPlaying(bool playing);
 
 private:
+    enum ResolvedMusicSource
+    {
+        RESOLVED_SOURCE_NONE = 0,
+        RESOLVED_SOURCE_THEME,
+        RESOLVED_SOURCE_GLOBAL
+    };
+
+    struct ResolvedMusicConfig
+    {
+        std::string requestedMode;          // auto / theme / global
+        ResolvedMusicSource resolvedSource; // none / theme / global
+        std::string themeSet;
+        std::vector<std::string> dirs;
+
+        ResolvedMusicConfig()
+            : requestedMode("")
+            , resolvedSource(RESOLVED_SOURCE_NONE)
+            , themeSet("")
+            , dirs()
+        {
+        }
+    };
+
+private:
     BackgroundMusicManager();
     ~BackgroundMusicManager();
 
@@ -47,10 +71,17 @@ private:
     void closeMixer();
     bool reopenMixer();
 
-    // Playlist
+    // Playlist / source resolution
     void buildPlaylist();
     void buildPlaylistFromPath(const std::string& path);
     bool isValidAudioFile(const std::string& path) const;
+
+    ResolvedMusicConfig resolveMusicConfig() const;
+    bool resolvedConfigEquals(const ResolvedMusicConfig& a,
+                              const ResolvedMusicConfig& b) const;
+    bool vectorEquals(const std::vector<std::string>& a,
+                      const std::vector<std::string>& b) const;
+    const char* resolvedSourceToString(ResolvedMusicSource src) const;
 
     // Shuffle inteligente
     void addLastPlayed(const std::string& song);
@@ -106,4 +137,10 @@ private:
     float mDuckFactor;        // 0..1 (ej: 0.35)
     int   mDuckTargetVol;     // 0..128
     int   mDuckCurrentVol;    // 0..128
+
+    // Estado de fuente resuelta
+    ResolvedMusicConfig mLastResolvedConfig;
+
+    // Guard para evitar que el watchdog meta mano justo tras recargar playlist
+    int mPlaylistReloadGuardMs;
 };
