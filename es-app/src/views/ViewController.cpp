@@ -180,7 +180,12 @@ void ViewController::playViewTransition()
 	if(target == -mCamera.translation() && !isAnimationPlaying(0))
 		return;
 
-	std::string transition_style = Settings::getInstance()->getString("TransitionStyle");
+	std::string transition_style = Settings::getInstance()->getString("ListTransitionStyle");
+	if (transition_style.empty())
+		transition_style = Settings::getInstance()->getString("TransitionStyle");
+	if (transition_style.empty())
+		transition_style = "fade";
+
 	if(transition_style == "fade")
 	{
 		// fade
@@ -293,7 +298,12 @@ void ViewController::launch(FileData* game, Vector3f center)
 	// 🔊 NUEVO: avisar que se lanza un juego (detener música de fondo)
 	BackgroundMusicManager::getInstance().onGameLaunched();
 
-	std::string transition_style = Settings::getInstance()->getString("TransitionStyle");
+	std::string transition_style = Settings::getInstance()->getString("LaunchTransitionStyle");
+	if (transition_style.empty())
+		transition_style = Settings::getInstance()->getString("TransitionStyle");
+	if (transition_style.empty())
+		transition_style = "instant";
+
 	if(transition_style == "fade")
 	{
 		// fade out, launch game, fade back in
@@ -314,7 +324,9 @@ void ViewController::launch(FileData* game, Vector3f center)
 				mCurrentView->onShow();
 			}
 		});
-	} else if (transition_style == "slide"){
+	}
+	else if (transition_style == "slide")
+	{
 		// move camera to zoom in on center + fade out, launch game, come back in
 		setAnimation(new LaunchAnimation(mCamera, mFadeOpacity, center, 1500), 0, [this, origCamera, center, game]
 		{
@@ -331,7 +343,9 @@ void ViewController::launch(FileData* game, Vector3f center)
 				mCurrentView->onShow();
 			}
 		});
-	} else { // instant
+	}
+	else
+	{ // instant
 		setAnimation(new LaunchAnimation(mCamera, mFadeOpacity, center, 10), 0, [this, origCamera, center, game]
 		{
 			game->launchGame(mWindow);

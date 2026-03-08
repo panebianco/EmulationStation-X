@@ -104,7 +104,11 @@ void Settings::setDefaults()
 	mIntMap["MaxVRAM"] = 100;
 #endif
 
+	// Compatibilidad antigua + nuevas transiciones separadas
 	mStringMap["TransitionStyle"] = "fade";
+	mStringMap["ListTransitionStyle"] = "fade";
+	mStringMap["LaunchTransitionStyle"] = "instant";
+
 	mStringMap["ThemeSet"] = "";
 	mStringMap["ScreenSaverBehavior"] = "dim";
 	mStringMap["Scraper"] = "TheGamesDB";
@@ -336,6 +340,24 @@ void Settings::processBackwardCompatibility()
 	renameSetting<std::map<std::string,std::string>>(mStringMap,
 		std::string("SlideshowScreenSaverImageDir"),
 		std::string("SlideshowScreenSaverMediaDir"));
+
+	// Compatibilidad: si existía el setting viejo, propagarlo a los nuevos
+	auto itTransition = mStringMap.find("TransitionStyle");
+	if (itTransition != mStringMap.end())
+	{
+		if (mStringMap.find("ListTransitionStyle") == mStringMap.end())
+			mStringMap["ListTransitionStyle"] = itTransition->second;
+
+		if (mStringMap.find("LaunchTransitionStyle") == mStringMap.end())
+			mStringMap["LaunchTransitionStyle"] = itTransition->second;
+	}
+
+	// Seguridad extra por si faltan
+	if (mStringMap["ListTransitionStyle"].empty())
+		mStringMap["ListTransitionStyle"] = "fade";
+
+	if (mStringMap["LaunchTransitionStyle"].empty())
+		mStringMap["LaunchTransitionStyle"] = "instant";
 }
 
 #define SETTINGS_GETSET(type, mapName, getMethodName, setMethodName) \
@@ -356,4 +378,3 @@ SETTINGS_GETSET(bool, mBoolMap, getBool, setBool);
 SETTINGS_GETSET(int, mIntMap, getInt, setInt);
 SETTINGS_GETSET(float, mFloatMap, getFloat, setFloat);
 SETTINGS_GETSET(const std::string&, mStringMap, getString, setString);
-

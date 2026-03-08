@@ -196,9 +196,9 @@ void GuiMenu::openSoundSettings()
 			bgm_volume->setValue((float)currentBgmVol);
 			s->addWithLabel(_("BACKGROUND MUSIC VOLUME").c_str(), bgm_volume);
 			s->addSaveFunc([bgm_volume] {
-	int newVol = (int)Math::round(bgm_volume->getValue());
-	BackgroundMusicManager::getInstance().setVolume(newVol);
-});
+				int newVol = (int)Math::round(bgm_volume->getValue());
+				BackgroundMusicManager::getInstance().setVolume(newVol);
+			});
 		}
 
 		{
@@ -408,24 +408,60 @@ void GuiMenu::openUISettings()
 		Settings::getInstance()->setBool("MoveCarousel", move_carousel->getState());
 	});
 
-	auto transition_style = std::make_shared<OptionListComponent<std::string>>(mWindow, _("TRANSITION STYLE").c_str(), false);
 	std::vector<std::string> transitions;
 	transitions.push_back("fade");
 	transitions.push_back("slide");
 	transitions.push_back("instant");
-	for (auto it = transitions.cbegin(); it != transitions.cend(); it++)
-		transition_style->add(*it, *it, Settings::getInstance()->getString("TransitionStyle") == *it);
-	s->addWithLabel(_("TRANSITION STYLE").c_str(), transition_style);
-	s->addSaveFunc([transition_style] {
-		if (Settings::getInstance()->getString("TransitionStyle") == "instant"
-			&& transition_style->getSelected() != "instant"
-			&& PowerSaver::getMode() == PowerSaver::INSTANT)
-		{
-			Settings::getInstance()->setString("PowerSaverMode", "default");
-			PowerSaver::init();
-		}
-		Settings::getInstance()->setString("TransitionStyle", transition_style->getSelected());
-	});
+
+	{
+		auto list_transition_style = std::make_shared<OptionListComponent<std::string>>(mWindow, _("LIST TRANSITION STYLE").c_str(), false);
+
+		std::string currentListTransition = Settings::getInstance()->getString("ListTransitionStyle");
+		if (currentListTransition.empty())
+			currentListTransition = Settings::getInstance()->getString("TransitionStyle");
+		if (currentListTransition.empty())
+			currentListTransition = "fade";
+
+		for (auto it = transitions.cbegin(); it != transitions.cend(); it++)
+			list_transition_style->add(*it, *it, currentListTransition == *it);
+
+		s->addWithLabel(_("LIST TRANSITION STYLE").c_str(), list_transition_style);
+		s->addSaveFunc([list_transition_style] {
+			std::string oldValue = Settings::getInstance()->getString("ListTransitionStyle");
+			if (oldValue.empty())
+				oldValue = Settings::getInstance()->getString("TransitionStyle");
+			if (oldValue.empty())
+				oldValue = "fade";
+
+			if (oldValue == "instant"
+				&& list_transition_style->getSelected() != "instant"
+				&& PowerSaver::getMode() == PowerSaver::INSTANT)
+			{
+				Settings::getInstance()->setString("PowerSaverMode", "default");
+				PowerSaver::init();
+			}
+
+			Settings::getInstance()->setString("ListTransitionStyle", list_transition_style->getSelected());
+		});
+	}
+
+	{
+		auto launch_transition_style = std::make_shared<OptionListComponent<std::string>>(mWindow, _("GAME LAUNCH TRANSITION").c_str(), false);
+
+		std::string currentLaunchTransition = Settings::getInstance()->getString("LaunchTransitionStyle");
+		if (currentLaunchTransition.empty())
+			currentLaunchTransition = Settings::getInstance()->getString("TransitionStyle");
+		if (currentLaunchTransition.empty())
+			currentLaunchTransition = "instant";
+
+		for (auto it = transitions.cbegin(); it != transitions.cend(); it++)
+			launch_transition_style->add(*it, *it, currentLaunchTransition == *it);
+
+		s->addWithLabel(_("GAME LAUNCH TRANSITION").c_str(), launch_transition_style);
+		s->addSaveFunc([launch_transition_style] {
+			Settings::getInstance()->setString("LaunchTransitionStyle", launch_transition_style->getSelected());
+		});
+	}
 
 	{
 		auto menu_dark = std::make_shared<SwitchComponent>(mWindow);
@@ -687,6 +723,8 @@ void GuiMenu::openOtherSettings()
 		if (Settings::getInstance()->getString("PowerSaverMode") != "instant" && power_saver->getSelected() == "instant")
 		{
 			Settings::getInstance()->setString("TransitionStyle", "instant");
+			Settings::getInstance()->setString("ListTransitionStyle", "instant");
+			Settings::getInstance()->setString("LaunchTransitionStyle", "instant");
 			Settings::getInstance()->setBool("MoveCarousel", false);
 			Settings::getInstance()->setBool("EnableSounds", false);
 		}
