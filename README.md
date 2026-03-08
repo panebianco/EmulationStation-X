@@ -148,6 +148,15 @@ All enhancements preserve performance, compatibility, and the lightweight archit
 
 Built for long-term stability on ARM devices.
 
+### 🎬 Refined Transition System
+ES-X separates navigation transitions from game launch transitions.
+
+This keeps the system carousel visually stable while allowing smoother
+animations within game lists and during game launch.
+
+Inspired by modern console UI design, this produces a more balanced
+navigation experience without excessive motion.
+
 ## Designed for Theme Creators
 
 ES-X prioritizes clarity of mental model.
