@@ -481,6 +481,21 @@ void GuiMenu::openUISettings()
 		});
 	}
 
+	{
+		std::string currentClockFormat = Settings::getInstance()->getString("ClockFormat");
+		if (currentClockFormat.empty())
+			currentClockFormat = "24H";
+
+		auto clock_format = std::make_shared<OptionListComponent<std::string>>(mWindow, _("CLOCK FORMAT").c_str(), false);
+		clock_format->add("24H", "24H", currentClockFormat == "24H");
+		clock_format->add("12H", "12H", currentClockFormat == "12H");
+
+		s->addWithLabel(_("CLOCK FORMAT").c_str(), clock_format);
+		s->addSaveFunc([clock_format] {
+			Settings::getInstance()->setString("ClockFormat", clock_format->getSelected());
+		});
+	}
+
 	auto themeSets = ThemeData::getThemeSets();
 
 	if (!themeSets.empty())

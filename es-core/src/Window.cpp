@@ -304,10 +304,19 @@ void Window::update(int deltaTime)
 			localtime_r(&t, &tmNow);
 #endif
 
-			std::ostringstream os;
-			os << std::put_time(&tmNow, "%H:%M");
+			const std::string clockFormat = Settings::getInstance()->getString("ClockFormat");
 
-			const std::string newText = os.str();
+			std::ostringstream os;
+			if (clockFormat == "12H")
+				os << std::put_time(&tmNow, "%I:%M %p");
+			else
+				os << std::put_time(&tmNow, "%H:%M");
+
+			std::string newText = os.str();
+
+			// Para 12H, quitar cero inicial: "06:32 PM" -> "6:32 PM"
+			if (clockFormat == "12H" && newText.size() > 0 && newText[0] == '0')
+				newText.erase(0, 1);
 
 			if (newText != mClockLastText)
 			{
