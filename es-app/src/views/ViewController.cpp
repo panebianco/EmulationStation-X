@@ -466,6 +466,11 @@ std::shared_ptr<SystemView> ViewController::getSystemListView()
 	mSystemListView = std::shared_ptr<SystemView>(new SystemView(mWindow));
 	addChild(mSystemListView.get());
 	mSystemListView->setPosition(0, (float)Renderer::getScreenHeight());
+
+	// Aplicar theme del reloj usando el primer sistema disponible como referencia
+	if (!SystemData::sSystemVector.empty() && SystemData::sSystemVector.front() != nullptr)
+		mWindow->applyClockTheme(SystemData::sSystemVector.front()->getTheme());
+
 	return mSystemListView;
 }
 
@@ -658,6 +663,12 @@ void ViewController::reloadAll(bool themeChanged)
 	}else{
 		goToSystemView(SystemData::sSystemVector.front());
 	}
+
+	// Aplicar theme del reloj según sistema actual
+	if (mState.getSystem() != nullptr)
+		mWindow->applyClockTheme(mState.getSystem()->getTheme());
+	else if (!SystemData::sSystemVector.empty() && SystemData::sSystemVector.front() != nullptr)
+		mWindow->applyClockTheme(SystemData::sSystemVector.front()->getTheme());
 
 	updateHelpPrompts();
 }

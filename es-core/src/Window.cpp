@@ -4,6 +4,7 @@
 #include "components/ImageComponent.h"
 #include "resources/Font.h"
 #include "resources/TextureResource.h"
+#include "ThemeData.h"
 #include "Log.h"
 #include "Scripting.h"
 
@@ -118,7 +119,56 @@ bool Window::init()
 	mClockTextCache.reset();
 	mClockOutlineCache.reset();
 
+	// Fallback font
+	if (!mDefaultFonts.empty())
+		mClockFont = mDefaultFonts.at(1);
+
 	return true;
+}
+
+void Window::applyClockTheme(const std::shared_ptr<ThemeData>& theme)
+{
+	// defaults / fallback
+	mClockDefined = false;
+	mClockPos = Vector2f(0.98f, 0.05f);
+	mClockOrigin = Vector2f(1.0f, 0.0f);
+	mClockColor = 0xFFFFFFFF;
+	mClockOutlineColor = 0x000000FF;
+	mClockFont = mDefaultFonts.empty() ? std::shared_ptr<Font>() : mDefaultFonts.at(1);
+
+	if (!theme)
+		return;
+
+	const ThemeData::ThemeElement* elem = theme->getElement("screen", "clock", "text");
+
+	if (!elem)
+		return;
+
+	mClockDefined = true;
+
+	if (elem->has("pos"))
+		mClockPos = elem->get<Vector2f>("pos");
+
+	if (elem->has("origin"))
+		mClockOrigin = elem->get<Vector2f>("origin");
+
+	if (elem->has("color"))
+		mClockColor = elem->get<unsigned int>("color");
+
+	// Ahora sí soporta fuente y tamaño desde el tema
+	if (elem->has("fontPath") || elem->has("fontSize"))
+	{
+		mClockFont = Font::getFromTheme(
+			elem,
+			ThemeFlags::FONT_PATH | ThemeFlags::FONT_SIZE,
+			mDefaultFonts.at(1));
+	}
+
+	// force cache rebuild
+	mClockTimeAccum = 0;
+	mClockLastText.clear();
+	mClockTextCache.reset();
+	mClockOutlineCache.reset();
 }
 
 void Window::deinit()
@@ -227,49 +277,59 @@ void Window::update(int deltaTime)
 	if (mScreenSaver)
 		mScreenSaver->update(deltaTime);
 
-	// ============================================================
-	// Clock overlay (safe) - update once per second
-	// Controlled by Settings bool: "ShowClock"
-	// NOTE: no ThemeData/SystemData access from es-core.
-	// ============================================================
-	const bool showClock = Settings::getInstance()->getBool("ShowClock");
-	if (showClock)
+	if (!Settings::getInstance()->getBool("ShowClock"))
+	{
+		if (mClockTextCache)
+		{
+			mClockTimeAccum = 0;
+			mClockLastText.clear();
+			mClockTextCache.reset();
+			mClockOutlineCache.reset();
+		}
+	}
+	else
 	{
 		mClockTimeAccum += deltaTime;
+
 		if (mClockTimeAccum >= 1000 || mClockTextCache == nullptr)
 		{
 			mClockTimeAccum = 0;
 
-			// Build HH:MM (24h)
 			std::time_t t = std::time(nullptr);
 			std::tm tmNow;
+
 #if defined(_WIN32)
 			localtime_s(&tmNow, &t);
 #else
 			localtime_r(&t, &tmNow);
 #endif
+
 			std::ostringstream os;
 			os << std::put_time(&tmNow, "%H:%M");
+
 			const std::string newText = os.str();
 
 			if (newText != mClockLastText)
 			{
 				mClockLastText = newText;
 
-				// Border is ALWAYS black (design decision)
-				mClockOutlineCache.reset(mDefaultFonts.at(1)->buildTextCache(mClockLastText, 0.f, 0.f, 0x000000FF));
-				// Main text (for now white; later can be overridden by style passed from es-app)
-				mClockTextCache.reset(mDefaultFonts.at(1)->buildTextCache(mClockLastText, 0.f, 0.f, 0xFFFFFFFF));
+				std::shared_ptr<Font> font = mClockFont ? mClockFont : mDefaultFonts.at(1);
+
+				mClockOutlineCache.reset(
+					font->buildTextCache(
+						mClockLastText,
+						0.f,
+						0.f,
+						mClockOutlineColor));
+
+				mClockTextCache.reset(
+					font->buildTextCache(
+						mClockLastText,
+						0.f,
+						0.f,
+						mClockColor));
 			}
 		}
-	}
-	else
-	{
-		// If disabled, free cache
-		mClockTimeAccum = 0;
-		mClockLastText.clear();
-		mClockTextCache.reset();
-		mClockOutlineCache.reset();
 	}
 }
 
@@ -310,34 +370,35 @@ void Window::render()
 	// or not because it may perform a fade on transition
 	renderScreenSaver();
 
-	// ============================================================
-	// Global overlays (ES-DE style)
-	// - Clock only when ShowClock = true
-	// - Hide overlays when screensaver active
-	// ============================================================
 	const bool showClock = Settings::getInstance()->getBool("ShowClock");
 	if (showClock && !mRenderScreenSaver && mClockTextCache && mClockOutlineCache)
 	{
-		// Top-right placement with padding
-		const float pad = 20.0f;
-		const float x = Math::round((float)Renderer::getScreenWidth() - mClockTextCache->metrics.size.x() - pad);
-		const float y = Math::round(pad);
+		float x = Renderer::getScreenWidth() * mClockPos.x();
+		float y = Renderer::getScreenHeight() * mClockPos.y();
 
-		// 1px outline (4 directions) using the outline cache (black)
+		float w = mClockTextCache->metrics.size.x();
+		float h = mClockTextCache->metrics.size.y();
+
+		x -= w * mClockOrigin.x();
+		y -= h * mClockOrigin.y();
+
+		std::shared_ptr<Font> font = mClockFont ? mClockFont : mDefaultFonts.at(1);
+
+		// 1px outline (4 directions)
 		static const int off[4][2] = { {-1,0}, {1,0}, {0,-1}, {0,1} };
 		for (int i = 0; i < 4; i++)
 		{
 			Transform4x4f t = Transform4x4f::Identity();
 			t = t.translate(Vector3f(x + (float)off[i][0], y + (float)off[i][1], 0.0f));
 			Renderer::setMatrix(t);
-			mDefaultFonts.at(1)->renderTextCache(mClockOutlineCache.get());
+			font->renderTextCache(mClockOutlineCache.get());
 		}
 
 		// Main text
 		Transform4x4f t = Transform4x4f::Identity();
 		t = t.translate(Vector3f(x, y, 0.0f));
 		Renderer::setMatrix(t);
-		mDefaultFonts.at(1)->renderTextCache(mClockTextCache.get());
+		font->renderTextCache(mClockTextCache.get());
 	}
 
 	// Info popup always on top

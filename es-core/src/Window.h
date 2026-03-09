@@ -1,10 +1,11 @@
 #pragma once
 #ifndef ES_CORE_WINDOW_H
-#define ES_CORE_WInDOW_H
+#define ES_CORE_WINDOW_H
 
 #include "HelpPrompt.h"
 #include "InputConfig.h"
 #include "Settings.h"
+#include "math/Vector2f.h"
 
 #include <memory>
 #include <string>
@@ -67,7 +68,7 @@ public:
 
 	void renderLoadingScreen(std::string text, float percent = -1, unsigned char opacity = 255);
 
-	void renderHelpPromptsEarly(); // used to render HelpPrompts before a fade
+	void renderHelpPromptsEarly();
 	void setHelpPrompts(const std::vector<HelpPrompt>& prompts, const HelpStyle& style);
 
 	void setScreenSaver(ScreenSaver* screenSaver) { mScreenSaver = screenSaver; }
@@ -78,11 +79,13 @@ public:
 	bool cancelScreenSaver();
 	void renderScreenSaver();
 
+	// Clock theme integration
+	void applyClockTheme(const std::shared_ptr<class ThemeData>& theme);
+
 private:
 	void onSleep();
 	void onWake();
 
-	// Returns true if at least one component on the stack is processing
 	bool isProcessing();
 
 	HelpComponent*	mHelp;
@@ -93,7 +96,7 @@ private:
 
 	std::vector<GuiComponent*> mGuiStack;
 
-	std::vector< std::shared_ptr<Font> > mDefaultFonts;
+	std::vector<std::shared_ptr<Font>> mDefaultFonts;
 
 	int mFrameTimeElapsed;
 	int mFrameCountElapsed;
@@ -110,12 +113,24 @@ private:
 	bool mRenderedHelpPrompts;
 
 	// =========================
-	// Clock overlay (global)
+	// Clock overlay (theme-driven)
 	// =========================
-	int mClockTimeAccum;
+
+	bool mClockDefined = false;
+
+	int mClockTimeAccum = 0;
 	std::string mClockLastText;
+
 	std::unique_ptr<TextCache> mClockTextCache;
 	std::unique_ptr<TextCache> mClockOutlineCache;
+
+	Vector2f mClockPos = {0.98f, 0.05f};
+	Vector2f mClockOrigin = {1.0f, 0.0f};
+
+	unsigned int mClockColor = 0xFFFFFFFF;
+	unsigned int mClockOutlineColor = 0x000000FF;
+
+	std::shared_ptr<Font> mClockFont;
 };
 
-#endif // ES_CORE_WINDOW_H
+#endif
