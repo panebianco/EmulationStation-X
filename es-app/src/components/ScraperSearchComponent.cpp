@@ -8,7 +8,7 @@
 #include "components/TextComponent.h"
 
 #include "guis/GuiMsgBox.h"
-#include "guis/GuiTextEditPopup.h"
+#include "guis/GuiTextEditKeyboardPopup.h"
 
 #include "resources/Font.h"
 #include "utils/StringUtil.h"
@@ -111,7 +111,9 @@ void ScraperSearchComponent::onSizeChanged()
 	if(mSearchType == ALWAYS_ACCEPT_FIRST_RESULT)
 	{
 		mGrid.setRowHeightPerc(2, 0.2f);
-	}else{
+	}
+	else
+	{
 		mGrid.setRowHeightPerc(1, 0.505f);
 	}
 
@@ -196,7 +198,9 @@ void ScraperSearchComponent::updateViewStyle()
 		// show description on the right
 		mGrid.setEntry(mDescContainer, Vector2i(3, 0), false, false, Vector2i(1, 3), GridFlags::BORDER_TOP | GridFlags::BORDER_BOTTOM);
 		mResultDesc->setSize(mDescContainer->getSize().x(), 0);
-	}else{
+	}
+	else
+	{
 		// fake row where name would be
 		mGrid.setEntry(std::make_shared<GuiComponent>(mWindow), Vector2i(1, 0), false, true, Vector2i(2, 1), GridFlags::BORDER_TOP);
 
@@ -265,7 +269,9 @@ void ScraperSearchComponent::onSearchDone(const std::vector<ScraperSearchResult>
 			mResultList->addRow(row);
 			mGrid.resetCursor();
 		}
-	}else{
+	}
+	else
+	{
 		ComponentListRow row;
 		for(size_t i = 0; i < results.size(); i++)
 		{
@@ -286,7 +292,8 @@ void ScraperSearchComponent::onSearchDone(const std::vector<ScraperSearchResult>
 			mSkipCallback();
 		else
 			returnResult(mScraperResults.front());
-	}else if(mSearchType == ALWAYS_ACCEPT_MATCHING_CRC)
+	}
+	else if(mSearchType == ALWAYS_ACCEPT_MATCHING_CRC)
 	{
 		// TODO
 	}
@@ -342,7 +349,9 @@ void ScraperSearchComponent::updateInfoPane()
 		mMD_Genre->setText(Utils::String::toUpper(res.mdl.get("genre")));
 		mMD_Players->setText(Utils::String::toUpper(res.mdl.get("players")));
 		mGrid.onSizeChanged();
-	}else{
+	}
+	else
+	{
 		mResultName->setText("");
 		mResultDesc->setText("");
 		mResultThumbnail->setImage("");
@@ -427,7 +436,8 @@ void ScraperSearchComponent::update(int deltaTime)
 			ScraperSearchResult result = mMDResolveHandle->getResult();
 			mMDResolveHandle.reset();
 			returnResult(result);
-		}else if(mMDResolveHandle->status() == ASYNC_ERROR)
+		}
+		else if(mMDResolveHandle->status() == ASYNC_ERROR)
 		{
 			onSearchError(mMDResolveHandle->getStatusString());
 			mMDResolveHandle.reset();
@@ -442,7 +452,9 @@ void ScraperSearchComponent::updateThumbnail()
 		std::string content = mThumbnailReq->getContent();
 		mResultThumbnail->setImage(content.data(), content.length());
 		mGrid.onSizeChanged();
-	}else{
+	}
+	else
+	{
 		LOG(LogWarning) << "thumbnail req failed: " << mThumbnailReq->getErrorMsg();
 		mResultThumbnail->setImage("");
 	}
@@ -465,16 +477,13 @@ void ScraperSearchComponent::openInputScreen(ScraperSearchParams& params)
 	stop();
 
 	const std::string title = tr("SEARCH FOR");
-	const std::string accept = tr("SEARCH"); // ✅ para pasar const char* sin temporales
 
-	mWindow->pushGui(new GuiTextEditPopup(
+	mWindow->pushGui(new GuiTextEditKeyboardPopup(
 		mWindow,
 		title,
-		// initial value is last search if there was one, otherwise the clean path name
 		params.nameOverride.empty() ? params.game->getCleanName() : params.nameOverride,
 		searchForFunc,
-		false,
-		accept.c_str()
+		false
 	));
 }
 

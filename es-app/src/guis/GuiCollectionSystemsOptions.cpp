@@ -9,7 +9,7 @@
 #include "guis/GuiInfoPopup.h"
 #include "guis/GuiRandomCollectionOptions.h"
 #include "guis/GuiSettings.h"
-#include "guis/GuiTextEditPopup.h"
+#include "guis/GuiTextEditKeyboardPopup.h"
 #include "utils/StringUtil.h"
 #include "views/ViewController.h"
 #include "CollectionSystemManager.h"
@@ -76,8 +76,8 @@ void GuiCollectionSystemsOptions::initializeMenu()
 			addEntry(_("CREATE NEW CUSTOM COLLECTION FROM THEME").c_str(), 0x777777FF, true,
 				[this, unusedFolders] {
 					auto s = new GuiSettings(mWindow, _("SELECT THEME FOLDER").c_str());
-					std::shared_ptr< OptionListComponent<std::string> > folderThemes =
-						std::make_shared< OptionListComponent<std::string> >(
+					std::shared_ptr<OptionListComponent<std::string>> folderThemes =
+						std::make_shared<OptionListComponent<std::string>>(
 							mWindow,
 							_("SELECT THEME FOLDER"),
 							true);
@@ -118,21 +118,24 @@ void GuiCollectionSystemsOptions::initializeMenu()
 
 		auto createCustomCollection = [this](const std::string& newVal) {
 			std::string name = newVal;
-			// hay que guardar el primer Gui y quitarlo, porque será borrado por el nuevo Gui
+
+			// Hay que guardar el primer Gui y quitarlo, porque será borrado por el nuevo Gui
 			Window* window = mWindow;
 			GuiComponent* topGui = window->peekGui();
 			window->removeGui(topGui);
+
 			createCollection(name);
 		};
 
 		row.makeAcceptInputHandler([this, createCustomCollection] {
-			mWindow->pushGui(new GuiTextEditPopup(
+			mWindow->pushGui(new GuiTextEditKeyboardPopup(
 				mWindow,
 				_("NEW COLLECTION NAME"),
 				"",
 				createCustomCollection,
 				false));
-			});
+		});
+
 		mMenu.addRow(row);
 	}
 
@@ -158,7 +161,7 @@ void GuiCollectionSystemsOptions::initializeMenu()
 
 	// opción de colección por defecto para screensaver
 	defaultScreenSaverCollection =
-		std::make_shared< OptionListComponent<std::string> >(
+		std::make_shared<OptionListComponent<std::string>>(
 			mWindow,
 			_("ADD/REMOVE GAMES WHILE SCREENSAVER TO"),
 			false);
@@ -178,10 +181,12 @@ void GuiCollectionSystemsOptions::initializeMenu()
 	for (auto it = customSystems.cbegin(); it != customSystems.cend(); ++it)
 	{
 		if (it->second.isEnabled)
+		{
 			defaultScreenSaverCollection->add(
 				it->second.decl.longName,
 				it->second.decl.name,
 				defaultScreenSaverCollectionName == it->second.decl.name);
+		}
 	}
 
 	mMenu.addWithLabel(_("ADD/REMOVE GAMES WHILE SCREENSAVER TO"), defaultScreenSaverCollection);
@@ -262,7 +267,7 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 		CollectionSystemManager::get()->getAutoCollectionSystems();
 
 	autoOptionList =
-		std::make_shared< OptionListComponent<std::string> >(
+		std::make_shared<OptionListComponent<std::string>>(
 			mWindow,
 			_("SELECT COLLECTIONS"),
 			true);
@@ -291,7 +296,7 @@ void GuiCollectionSystemsOptions::addSystemsToMenu()
 		CollectionSystemManager::get()->getCustomCollectionSystems();
 
 	customOptionList =
-		std::make_shared< OptionListComponent<std::string> >(
+		std::make_shared<OptionListComponent<std::string>>(
 			mWindow,
 			_("SELECT COLLECTIONS"),
 			true);
@@ -359,6 +364,7 @@ void GuiCollectionSystemsOptions::applySettings()
 	{
 		Settings::getInstance()->saveFile();
 	}
+
 	delete this;
 }
 

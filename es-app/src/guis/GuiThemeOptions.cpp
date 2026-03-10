@@ -2,7 +2,7 @@
 
 #include "guis/GuiThemeOptions.h"
 #include "guis/GuiMsgBox.h"
-#include "guis/GuiTextEditPopup.h"
+#include "guis/GuiTextEditKeyboardPopup.h"
 
 #include "LocaleES.h"
 #include "Settings.h"
@@ -787,9 +787,7 @@ namespace
 		if(current.empty())
 			current = opt.defaultValue;
 
-		static std::string okLabel = _("OK");
-
-		win->pushGui(new GuiTextEditPopup(
+		win->pushGui(new GuiTextEditKeyboardPopup(
 			win,
 			title,
 			current,
@@ -800,8 +798,7 @@ namespace
 
 				applyThemeOption(win, themeDir, opt, newValue);
 			},
-			false,
-			okLabel.c_str()
+			false
 		));
 	}
 }

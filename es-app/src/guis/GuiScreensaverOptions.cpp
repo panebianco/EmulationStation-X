@@ -1,6 +1,6 @@
 #include "guis/GuiScreensaverOptions.h"
 
-#include "guis/GuiTextEditPopup.h"
+#include "guis/GuiTextEditKeyboardPopup.h"
 #include "views/ViewController.h"
 #include "Settings.h"
 #include "SystemData.h"
@@ -23,7 +23,7 @@ static inline std::string tr(const std::string& key)
 
 GuiScreensaverOptions::GuiScreensaverOptions(Window* window, const char* title)
     : GuiComponent(window)
-    , mMenu(window, title) // ⚠️ El título traducilo donde creás este Gui (ver nota abajo)
+    , mMenu(window, title)
 {
     addChild(&mMenu);
 
@@ -80,7 +80,6 @@ std::vector<HelpPrompt> GuiScreensaverOptions::getHelpPrompts()
 {
     std::vector<HelpPrompt> prompts = mMenu.getHelpPrompts();
 
-    // Estos textos estaban hardcodeados en inglés
     prompts.push_back(HelpPrompt("b", tr("back")));
     prompts.push_back(HelpPrompt("start", tr("close")));
 
@@ -92,7 +91,6 @@ void GuiScreensaverOptions::addEditableTextComponent(ComponentListRow row, const
 {
     row.elements.clear();
 
-    // Label: si te llega ya traducido, es_translate() no lo rompe (fallback).
     const std::string labelTr = tr(label);
 
     auto lbl = std::make_shared<TextComponent>(
@@ -102,7 +100,7 @@ void GuiScreensaverOptions::addEditableTextComponent(ComponentListRow row, const
         0x777777FF
     );
 
-    row.addElement(lbl, true); // label
+    row.addElement(lbl, true);
     row.addElement(ed, true);
 
     auto spacer = std::make_shared<GuiComponent>(mWindow);
@@ -116,9 +114,13 @@ void GuiScreensaverOptions::addEditableTextComponent(ComponentListRow row, const
 
     auto updateVal = [ed](const std::string& newVal) { ed->setValue(newVal); };
 
-    // Popup: título traducido
     row.makeAcceptInputHandler([this, labelTr, ed, updateVal] {
-        mWindow->pushGui(new GuiTextEditPopup(mWindow, labelTr, ed->getValue(), updateVal, false));
+        mWindow->pushGui(new GuiTextEditKeyboardPopup(
+            mWindow,
+            labelTr,
+            ed->getValue(),
+            updateVal,
+            false));
     });
 
     assert(ed);
