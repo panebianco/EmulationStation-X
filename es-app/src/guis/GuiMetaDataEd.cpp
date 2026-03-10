@@ -15,7 +15,7 @@
 
 #include "guis/GuiGameScraper.h"
 #include "guis/GuiMsgBox.h"
-#include "guis/GuiTextEditPopup.h"
+#include "guis/GuiTextEditKeyboardPopup.h"
 
 #include "resources/Font.h"
 #include "utils/StringUtil.h"
@@ -35,8 +35,6 @@
 // ------------------------------------------------------------
 static inline std::string tr(const std::string& key)
 {
-	// LocaleES::get() debería devolver algo razonable aunque falte la clave,
-	// pero por seguridad hacemos fallback al original si devuelve vacío.
 	std::string t = LocaleES::get(key);
 	return t.empty() ? key : t;
 }
@@ -182,7 +180,7 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 
 			const bool multiLine = (iter->type == MD_MULTILINE_STRING);
 
-			// ✅ Translate prompt too (this was missing in ES classic / forks usually)
+			// Prompt translated
 			const std::string title = tr(iter->displayPrompt);
 
 			auto updateVal = [ed](const std::string& newVal) {
@@ -190,7 +188,13 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 			};
 
 			row.makeAcceptInputHandler([this, title, ed, updateVal, multiLine] {
-				mWindow->pushGui(new GuiTextEditPopup(mWindow, title, ed->getValue(), updateVal, multiLine));
+				mWindow->pushGui(new GuiTextEditKeyboardPopup(
+					mWindow,
+					title,
+					ed->getValue(),
+					updateVal,
+					multiLine
+				));
 			});
 			break;
 		}
@@ -230,7 +234,6 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 			delete this;
 		};
 
-		// Pre-translate strings (safe inside lambda)
 		const std::string msg = tr("THIS WILL DELETE THE ACTUAL GAME FILE(S)!\nARE YOU SURE?");
 		const std::string yes = tr("YES");
 		const std::string no  = tr("NO");
@@ -422,8 +425,6 @@ std::vector<HelpPrompt> GuiMetaDataEd::getHelpPrompts()
 {
 	std::vector<HelpPrompt> prompts = mGrid.getHelpPrompts();
 
-	// ES-X suele usar minúsculas para help prompts internos
-	// y vos ya tenés [LOWERCASE] en el lang.
 	prompts.push_back(HelpPrompt("b", tr("back")));
 	prompts.push_back(HelpPrompt("start", tr("close")));
 	return prompts;

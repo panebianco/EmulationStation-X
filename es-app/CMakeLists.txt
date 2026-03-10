@@ -91,6 +91,7 @@ set(ES_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeOptions.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiThemeBrowser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/guis/GuiTextEditKeyboardPopup.cpp
     
 
     # 🔊 Background music

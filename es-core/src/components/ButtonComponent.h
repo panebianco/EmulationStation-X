@@ -10,7 +10,11 @@ class TextCache;
 class ButtonComponent : public GuiComponent
 {
 public:
-	ButtonComponent(Window* window, const std::string& text = "", const std::string& helpText = "", const std::function<void()>& func = nullptr);
+	ButtonComponent(Window* window,
+	                const std::string& text = "",
+	                const std::string& helpText = "",
+	                const std::function<void()>& func = nullptr,
+	                bool forceUppercase = true);
 
 	void setPressedFunc(std::function<void()> f);
 
@@ -36,6 +40,8 @@ private:
 
 	bool mFocused;
 	bool mEnabled;
+	bool mForceUppercase;
+
 	unsigned int mTextColorFocused;
 	unsigned int mTextColorUnfocused;
 
