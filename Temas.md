@@ -1,338 +1,241 @@
-Temas (Themes)
+Sistema de Temas ES-X
+EmulationStation-X (ES-X) carga un tema para cada sistema.
 
-En EmulationStation-X (ES-X), cada sistema puede tener su propio tema.
+Un tema se compone simplemente de:
 
-Un tema es:
+Vistas (Views)
 
-Una colección de vistas (views)
+Elementos (Elements)
 
-Cada vista define elementos
+Propiedades (Properties)
 
-Cada elemento tiene propiedades que controlan su apariencia y comportamiento
+La mayoría de los temas se definen en:
 
-Normalmente, un tema se define en un archivo llamado:
+theme.xml
 
-<theme>
-  <formatVersion>4</formatVersion>
-  ...
-</theme>
+Este archivo define la estructura visual de la interfaz.
 
-Pero lo más importante no es el XML.
+ES-X está diseñado para que los temas sigan siendo simples, modulares y escalables, incluso cuando aumenta su complejidad.
 
-Lo importante es que en ES-X crear y mantener temas es simple, escalable y modular.
+Orden de Búsqueda del Tema
+Para cada sistema, ES-X busca el archivo theme.xml siguiendo esta prioridad:
 
-Por qué crear temas en ES-X es sencillo
+Ruta del sistema (tema por sistema)
 
-En ES-X podés:
+[RUTA_DEL_SISTEMA]/theme.xml
 
-✔ Crear un tema con un solo archivo
-✔ Agregar múltiples layouts sin duplicar recursos
-✔ Reutilizar imágenes, audio y fuentes
-✔ Separar estructura, configuración y experiencia
+Set de temas del usuario [HOME]/.emulationstation/themes/[SET_DE_TEMAS_ACTUAL]/[TEMA_DEL_SISTEMA]/theme.xml
 
-La arquitectura está pensada para que crecer no signifique complicarse.
+Set de temas del sistema /etc/emulationstation/themes/[SET_DE_TEMAS_ACTUAL]/[TEMA_DEL_SISTEMA]/theme.xml
 
-Orden de búsqueda de temas
+Si existen varios temas, prevalece la primera coincidencia.
 
-Para cada sistema, ES-X intenta cargar theme.xml en este orden:
+Orden de prioridad: Ruta del sistema → Set de temas Home → Set de temas /etc
 
-1️⃣ Tema directo del sistema
+Esta arquitectura permite:
 
-[SYSTEM_PATH]/theme.xml
+Sobrescritura por sistema.
 
-2️⃣ Theme set del usuario
+Personalización del usuario.
 
-[HOME]/.emulationstation/themes/[CURRENT_THEME_SET]/[SYSTEM_THEME]/theme.xml
+Separación limpia entre temas globales y locales.
 
-3️⃣ Theme set del sistema
+Identificadores de Tema
+SYSTEM_THEME
+Este valor proviene de la etiqueta <theme> en es_systems.cfg.
 
-/etc/emulationstation/themes/[CURRENT_THEME_SET]/[SYSTEM_THEME]/theme.xml
+Ejemplo: <theme>snes</theme>
 
-Si existen varios, se usa el primero encontrado.
+Si <theme> no está definido, ES-X utiliza el <name> (nombre) del sistema.
 
-Prioridad:
+CURRENT_THEME_SET
+Se selecciona en:
 
-Ruta del sistema → HOME → /etc
+Configuración de UI → Set de Temas
 
-Esto permite:
+Si no está definido, ES-X carga el primer set de temas disponible.
 
-Personalización por sistema
+Estructura de Carpetas del Set de Temas
+Un set de temas es simplemente una carpeta estructurada:
 
-Overrides locales
-
-Organización limpia por theme sets
-
-Estructura de un Theme Set
-
-Un theme set es simplemente una carpeta organizada.
-
-Ejemplo:
-
+Plaintext
 themes/
-  mi_theme_set/
+  mi_set_de_temas/
     snes/
       theme.xml
-
     nes/
       theme.xml
-
     _inc/
       backgrounds/
       logos/
       audio/
+    theme.xml
+El theme.xml de la raíz actúa como respaldo (fallback) si falta la carpeta de un sistema. Esto mantiene los temas modulares, reutilizables y fáciles de mantener.
 
-    theme.xml   ← fallback opcional
+Conceptos Críticos
+Vistas (Views)
+Una vista representa un tipo de pantalla.
 
-El theme.xml raíz puede actuar como tema por defecto.
+Ejemplo:
 
-No hay complejidad innecesaria.
-Solo carpetas claras.
-
-Conceptos Básicos
-Vistas
-
-Una vista representa una pantalla:
-
+XML
 <view name="detailed">
   ...
 </view>
+Varias vistas pueden compartir el mismo diseño:
 
-Se pueden combinar vistas:
-
+XML
 <view name="system, basic, detailed, grid">
   ...
 </view>
-Elementos
+Elementos (Elements)
+Son los componentes de la interfaz usados dentro de las vistas.
 
-Un elemento es un componente visual:
+Elementos comunes: image, text, video, carousel, textlist, imagegrid, rating, datetime, helpsystem.
 
-image
+Puedes modificar elementos existentes o crear nuevos:
 
-text
+Modificar un elemento existente:
 
-textlist
-
-video
-
-carousel
-
-imagegrid
-
-rating
-
-datetime
-
-helpsystem
-
-Modificar uno existente:
-
+XML
 <text name="md_description">
   <color>FFFFFF</color>
 </text>
+Crear un nuevo elemento:
 
-Crear uno nuevo:
-
+XML
 <image name="e_overlay" extra="true">
   <path>./overlay.png</path>
 </image>
+Los elementos "extra" se renderizan en orden de declaración. Los elementos de fondo (background) generalmente deben definirse primero. Los temas solo necesitan definir lo que desean cambiar.
 
-No necesitás definir todo.
-Solo lo que querés cambiar.
+Propiedades (Properties)
+Controlan el comportamiento del elemento. No es necesario definir todas las propiedades, solo sobrescribir las importantes.
 
-Múltiples Layouts: Simple y Directo
+XML
+<pos>0.1 0.2</pos>
+<color>FFFFFFFF</color>
+Etiquetas Requeridas y Avanzadas
+formatVersion: Requerido en cada tema.
 
-En ES-X podés crear múltiples variaciones usando solo una carpeta:
+<formatVersion>4</formatVersion>
 
-layout/
+resolution: Posicionamiento opcional basado en píxeles.
 
-Ejemplo:
+<resolution>1920 1080</resolution>
 
-mi_tema/
-  layout/
-    ps4/
-      theme.xml
-    ps3/
-      theme.xml
-    lite/
-      theme.xml
+ES-X normaliza las coordenadas automáticamente. ⚠ El "parenting" (jerarquía padre-hijo) no es compatible cuando la resolución es distinta a 1 1.
 
-  _inc/
-    backgrounds/
-    logos/
+include: Permite archivos de tema modulares.
 
-Eso es todo.
+<include>./shared.xml</include>
 
-ES-X:
+Orden de Renderizado zIndex
+zIndex controla las capas de renderizado. Los valores más bajos se renderizan primero; los más altos aparecen encima.
 
-Detecta las carpetas
+Vista de Sistema Típica:
+| Elemento | zIndex |
+| :--- | :--- |
+| Elementos extra | 10 |
+| systemcarousel | 40 |
+| systemInfo | 50 |
 
-Las muestra en Theme Options
-
-Activa la seleccionada
-
-Mantiene los mismos recursos
-
-No duplicás imágenes.
-No duplicás audio.
-No duplicás fuentes.
-
-Solo cambiás lo necesario.
+Vista de Gamelist Típica:
+| Elemento | zIndex |
+| :--- | :--- |
+| background | 0 |
+| Extra | 10 |
+| list / grid | 20 |
+| media | 30 |
+| metadata | 40 |
+| logo | 50 |
 
 Variables
+Las variables simplifican la reutilización y el escalado.
 
-Las variables permiten reutilizar valores.
+Variables de Sistema (Automáticas)
+${system.name}, ${system.fullName}, ${system.theme}, ${system.gameCount}, ${system.mostPlayedImage}.
 
-Variables del sistema:
+Ejemplo: <path>./_inc/consoles/${system.theme}.png</path>
 
-${system.name}
-${system.fullName}
-${system.theme}
-${system.mostPlayedImage}
+Variables de Tema
+Definidas dentro del tema:
 
-Ejemplo:
-
-<path>./_inc/consoles/${system.theme}.png</path>
-
-Variables definidas por el tema:
-
+XML
 <variables>
   <themeColor>8b0000</themeColor>
 </variables>
-Carrusel (System View)
+Uso: <color>${themeColor}c0</color>
 
-El carrusel es personalizable:
-
+Extensiones de ES-X
+Carrusel (Vista de Sistema)
+XML
 <carousel name="systemcarousel">
   <logoScale>1.32</logoScale>
   <minLogoOpacity>0.94</minLogoOpacity>
   <scaledLogoSpacing>1</scaledLogoSpacing>
 </carousel>
+Propiedades importantes: logoScale, minLogoOpacity, scaledLogoSpacing.
 
-Podés ajustar:
+La profundidad y el espaciado se pueden ajustar totalmente sin modificar el código del motor.
 
-Escala
+Sonidos de Navegación
+Los temas pueden definir audio de navegación (solo archivos .wav).
 
-Opacidad
-
-Separación
-
-Cantidad de logos
-
-Sin tocar el core.
-Solo XML.
-
-Sonidos de navegación
+XML
 <feature supported="navigationsounds">
-  <sound name="scroll"><path>./audio/scroll.wav</path></sound>
+  <view name="all">
+    <sound name="scroll">
+      <path>./audio/scroll.wav</path>
+    </sound>
+  </view>
 </feature>
+Opciones de Tema (ES-X)
+Los temas pueden exponer opciones configurables en la interfaz:
 
-Solo .wav.
+Selección de diseño (ps4 / ps3 / lite).
 
-Simple.
+Selección de fuente de arte (artwork).
 
-Theme Options en ES-X
-Donde la simplicidad se vuelve poderosa
+Interruptores de rendimiento.
 
-Aquí está la diferencia clave.
+Modos de densidad.
 
-Un tema en ES-X no es solo un XML.
+theme.ini (ES-X)
+Es opcional pero potente. Permite centralizar configuraciones y reducir la duplicación de XML.
 
-Es:
+Uso de valores INI en theme.xml: Las llaves INI se convierten en variables.
 
-theme.xml  → estructura visual
-theme.ini  → decisiones y menú
-Theme Options → experiencia del usuario
-theme.ini
+XML
+<pos>${systemNamePos}</pos>
+<maxSize>${mostPlayedMaxSize}</maxSize>
 
-theme.ini define:
+Elemento Reloj (ES-X)
+ES-X incluye un reloj del sistema integrado que los temas pueden estilizar.
 
-Qué opciones ve el usuario
+Se define como un elemento de texto dentro de la vista de pantalla (screen).
 
-Qué layouts existen
+XML
+<view name="screen">
+  <text name="clock">
+    <pos>0.984 0.03</pos>
+    <origin>1 0.5</origin>
+    <color>FFFFFFFF</color>
+    <fontPath>./_inc/fonts/Exo2-Medium.ttf</fontPath>
+    <fontSize>0.018</fontSize>
+  </text>
+</view>
+Formato: El formato de hora (24H/12H) es controlado por el usuario, no por el tema.
 
-Qué valores se aplican
+Renderizado: Se actualiza suavemente una vez por segundo con un uso mínimo de CPU.
 
-Ejemplo real:
+Filosofía de Diseño
+ES-X separa las responsabilidades:
 
-[layout]
-type=select
-label=Layout del tema
-apply_to=layout
-values=ps4|PlayStation 4,
-       ps3|PlayStation 3,
-       lite|Lite
-default=ps4
+theme.xml → Estructura
 
-Las carpetas en layout/ contienen la estructura.
-El theme.ini define cómo se eligen.
+theme.ini → Configuración
 
-Separación clara.
-Sin lógica compleja.
-Sin scripts.
+Opciones de Tema → Experiencia de usuario
 
-Flujo real
-
-El tema define opciones en theme.ini
-
-El usuario elige
-
-ES-X carga la sección correspondiente
-
-theme.xml usa los valores
-
-El tema se redibuja
-
-El XML no decide.
-El INI no dibuja.
-ES-X conecta ambos.
-
-Ejemplo: Mini
-
-Un solo XML.
-Dos layouts.
-
-[layout]
-type=select
-label=Layout
-apply_to=layout
-values=classic|Classic, carousel|Carousel
-default=classic
-
-✔ Sin duplicación
-✔ Recursos compartidos
-✔ Cambio inmediato
-
-Filosofía de ES-X
-
-Un tema debe ser:
-
-Fácil de crear
-
-Fácil de mantener
-
-Fácil de ampliar
-
-Múltiples variaciones no deberían implicar complejidad.
-
-En ES-X, no la implican.
-
-Conclusión
-
-Crear un tema en ES-X es:
-
-Estructura clara
-
-Recursos reutilizables
-
-Layouts simples
-
-Opciones configurables
-
-Sin sistemas complicados
-
-Theme Options no son un extra.
-
-Son la base que permite que un mismo tema tenga muchas versiones sin duplicación ni caos.
-
-Pensá el tema como un sistema.
-No como una imagen fija.
+Esto hace que los temas sean más fáciles de mantener, expandir y adaptar a diferentes hardwares. Los temas modernos no se tratan de complejidad, sino de flexibilidad sin caos.

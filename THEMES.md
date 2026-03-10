@@ -1,26 +1,26 @@
-Themes
+ES-X Theme System
 
 EmulationStation-X (ES-X) loads a theme for each system.
 
-A theme is simply:
+A theme is simply composed of:
 
-A collection of views
+Views
 
-Each view contains elements
+Elements
 
-Each element has properties
+Properties
 
 Most themes are defined in:
 
 theme.xml
 
-That’s the visual structure.
+This file defines the visual structure of the interface.
 
-But ES-X is built so themes can stay simple even as they grow.
+ES-X is designed so themes remain simple, modular, and scalable even as they grow in complexity.
 
 Theme Lookup Order
 
-For each system, ES-X searches for theme.xml in this order:
+For each system, ES-X searches for theme.xml using the following priority:
 
 1️⃣ System path (per-system theme)
 
@@ -34,35 +34,42 @@ For each system, ES-X searches for theme.xml in this order:
 
 /etc/emulationstation/themes/[CURRENT_THEME_SET]/[SYSTEM_THEME]/theme.xml
 
-If multiple exist, the first match wins.
+If multiple themes exist, the first match wins.
 
-Priority:
+Priority order:
 
 System path → Home theme set → /etc theme set
 
-This allows:
+This architecture allows:
 
 Per-system overrides
 
 User customization
 
-Clean separation of global vs local themes
+Clean separation between global and local themes
 
-What is [SYSTEM_THEME]?
+Theme Identifiers
+SYSTEM_THEME
 
-It comes from the <theme> tag in es_systems.cfg.
+This value comes from the <theme> tag in es_systems.cfg.
+
+Example:
+
+<theme>snes</theme>
 
 If <theme> is not defined, ES-X uses the system <name>.
 
-What is [CURRENT_THEME_SET]?
+CURRENT_THEME_SET
 
-Selected in UI Settings.
+Selected in:
 
-If missing, ES-X loads the first available theme set.
+UI Settings → Theme Set
+
+If not defined, ES-X loads the first available theme set.
 
 Theme Set Folder Structure
 
-A theme set is just a structured folder:
+A theme set is simply a structured folder:
 
 themes/
   my_theme_set/
@@ -77,50 +84,51 @@ themes/
       logos/
       audio/
 
-    theme.xml   ← optional fallback
+    theme.xml
 
-The root theme.xml acts as a default if a system folder is missing.
+The root theme.xml acts as a fallback if a system folder is missing.
 
-Simple structure.
-No hidden complexity.
+This keeps themes:
+
+modular
+
+reusable
+
+easy to maintain
 
 Core Concepts
 Views
 
-A view represents a screen type:
+A view represents a screen type.
+
+Example:
 
 <view name="detailed">
   ...
 </view>
 
-Multiple views can share the same structure:
+Multiple views can share the same layout:
 
 <view name="system, basic, detailed, grid">
   ...
 </view>
 Elements
 
-Elements are UI components:
+Elements are the UI components used inside views.
+
+Common elements:
 
 image
-
 text
-
 video
-
 carousel
-
 textlist
-
 imagegrid
-
 rating
-
 datetime
-
 helpsystem
 
-You can:
+You can either modify existing elements or create new ones.
 
 Modify an existing element
 <text name="md_description">
@@ -131,63 +139,73 @@ Create a new element
   <path>./overlay.png</path>
 </image>
 
-Extra elements render in order.
-Define backgrounds first.
+Extra elements render in order of declaration.
 
-You only define what you want to change.
+Background elements should generally be defined first.
+
+Themes only need to define what they want to change.
 
 Properties
 
-Properties define behavior:
+Properties control element behavior.
+
+Example:
 
 <pos>0.1 0.2</pos>
 <color>FFFFFFFF</color>
 
-You don’t need to define every property.
-Only override what matters.
+You do not need to define every property.
+
+Only override the ones that matter.
 
 Required & Advanced Tags
-<formatVersion>
+formatVersion
 
-Required:
+Required in every theme.
 
 <formatVersion>4</formatVersion>
-<resolution>
+resolution
 
-Optional pixel-based positioning:
+Optional pixel-based positioning.
 
 <resolution>1920 1080</resolution>
 
-ES-X normalizes coordinates automatically.
+ES-X automatically normalizes coordinates.
 
 ⚠ Parenting is not supported when resolution ≠ 1 1.
 
-<include>
+include
 
-Merge multiple theme files:
+Allows modular theme files.
 
 <include>./shared.xml</include>
 
-Clean modular structure.
-Reusable components.
+Useful for:
+
+shared layouts
+
+reusable components
+
+modular themes
 
 zIndex Rendering Order
 
-zIndex controls layering.
+zIndex controls rendering layers.
 
-Lower values → drawn first
-Higher values → drawn on top
+Lower values render first.
+
+Higher values render on top.
 
 Typical System View
 Element	zIndex
 Extra elements	10
 systemcarousel	40
 systemInfo	50
-Gamelist Views
+Typical Gamelist View
 Element	zIndex
 background	0
 Extra	10
-list/grid	20
+list / grid	20
 media	30
 metadata	40
 logo	50
@@ -197,7 +215,7 @@ Variables simplify reuse and scaling.
 
 System Variables
 
-Available automatically:
+Automatically available:
 
 ${system.name}
 ${system.fullName}
@@ -208,7 +226,10 @@ ${system.mostPlayedImage}
 Example:
 
 <path>./_inc/consoles/${system.theme}.png</path>
-Theme-Defined Variables
+Theme Variables
+
+Defined inside the theme.
+
 <variables>
   <themeColor>8b0000</themeColor>
 </variables>
@@ -232,9 +253,12 @@ minLogoOpacity
 
 scaledLogoSpacing
 
-Depth and spacing are fully adjustable without touching core code.
+Depth and spacing can be fully adjusted without modifying engine code.
 
 Navigation Sounds
+
+Themes can define navigation audio.
+
 <feature supported="navigationsounds">
   <view name="all">
     <sound name="scroll">
@@ -243,13 +267,13 @@ Navigation Sounds
   </view>
 </feature>
 
-Only .wav supported.
+Only .wav files are supported.
 
 Theme Options (ES-X)
 
-This is where ES-X becomes truly flexible.
+Themes can expose configurable options in the UI.
 
-Themes can expose configurable options in the UI:
+Examples:
 
 Layout selection (ps4 / ps3 / lite)
 
@@ -259,21 +283,21 @@ Performance toggles
 
 Density modes
 
-If no options are defined, the Theme Options menu can be hidden.
+If a theme defines no options, the Theme Options menu can remain hidden.
 
 theme.ini (ES-X)
 
-theme.ini is optional — but powerful.
+theme.ini is optional but powerful.
 
-It allows you to:
+It allows themes to:
 
-Centralize configuration
+centralize configuration
 
-Avoid XML duplication
+reduce XML duplication
 
-Control layout variations
+control layout variations
 
-Define user-selectable options
+expose user-selectable options
 
 Syntax
 [section]
@@ -285,11 +309,13 @@ Comments:
 # comment
 Using INI values in theme.xml
 
-Keys become variables:
+INI keys become variables.
+
+Example:
 
 <pos>${systemNamePos}</pos>
 <maxSize>${mostPlayedMaxSize}</maxSize>
-Layout Section Pattern
+Layout Sections
 
 Common structure:
 
@@ -299,9 +325,77 @@ Common structure:
 
 Theme Options selects which section becomes active.
 
-Why This Architecture Matters
+Clock Element (ES-X)
 
-ES-X separates:
+ES-X includes a built-in system clock that can be styled by themes.
+
+The clock is controlled from:
+
+UI Settings → Clock
+UI Settings → Clock Format
+
+Themes control visual styling only, not time format.
+
+Theme Definition
+
+The clock is defined as a text element inside the screen view.
+
+Example:
+
+<view name="screen">
+  <text name="clock">
+    <pos>0.984 0.03</pos>
+    <origin>1 0.5</origin>
+    <color>FFFFFFFF</color>
+    <fontPath>./_inc/fonts/Exo2-Medium.ttf</fontPath>
+    <fontSize>0.018</fontSize>
+  </text>
+</view>
+Properties
+Property	Description
+pos	normalized screen position
+origin	anchor point
+color	text color
+fontPath	optional font
+fontSize	optional size
+
+If the clock element is not defined, ES-X uses an internal fallback position.
+
+Typical Placement
+
+Most console-style themes place the clock in the top-right corner.
+
+<pos>0.984 0.03</pos>
+<origin>1 0.5</origin>
+Format Handling
+
+Clock format is controlled by the user.
+
+Setting	Output
+24H	18:42
+12H	6:42 PM
+
+Themes cannot override the time format.
+
+Rendering Model
+
+Although declared as:
+
+<text name="clock">
+
+the clock is rendered internally by ES-X.
+
+This provides:
+
+smooth updates (once per second)
+
+minimal CPU usage
+
+consistent behavior across themes
+
+Design Philosophy
+
+ES-X separates responsibilities:
 
 theme.xml   → structure
 theme.ini   → configuration
@@ -309,13 +403,13 @@ Theme Options → user experience
 
 This makes themes:
 
-Easier to maintain
+easier to maintain
 
-Easier to expand
+easier to expand
 
-Easier to reuse
+easier to reuse
 
-Easier to adapt to different hardware
+adaptable to different hardware
 
 Modern themes are not about complexity.
 
@@ -323,45 +417,24 @@ They are about flexibility without chaos.
 
 Reference
 Property Types
-
 RESOLUTION_RECT
-
 RESOLUTION_PAIR
-
 RESOLUTION_FLOAT
-
 NORMALIZED_PAIR
-
 PATH
-
 STRING
-
 COLOR
-
 FLOAT
-
 BOOLEAN
-
 Common Element Types
-
 image
-
 text
-
 textlist
-
 video
-
 carousel
-
 rating
-
 datetime
-
 helpsystem
-
 sound
-
 ninepatch
-
 imagegrid
