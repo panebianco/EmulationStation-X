@@ -13,8 +13,54 @@
 #include <ctime>
 #include <sstream>
 
+#ifndef WIN32
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <arpa/inet.h>
+#endif
+
 #ifdef WIN32
 #include <SDL_events.h>
+#endif
+
+#ifndef WIN32
+static bool hasActiveNetworkConnection()
+{
+	struct ifaddrs* ifaddr = nullptr;
+	if (getifaddrs(&ifaddr) == -1)
+		return false;
+
+	bool connected = false;
+
+	for (struct ifaddrs* ifa = ifaddr; ifa != nullptr; ifa = ifa->ifa_next)
+	{
+		if (!ifa->ifa_addr)
+			continue;
+
+		// ignore loopback
+		if (ifa->ifa_flags & IFF_LOOPBACK)
+			continue;
+
+		// interface must be up
+		if (!(ifa->ifa_flags & IFF_UP))
+			continue;
+
+		const int family = ifa->ifa_addr->sa_family;
+		if (family == AF_INET || family == AF_INET6)
+		{
+			connected = true;
+			break;
+		}
+	}
+
+	freeifaddrs(ifaddr);
+	return connected;
+}
+#else
+static bool hasActiveNetworkConnection()
+{
+	return false;
+}
 #endif
 
 Window::Window()
@@ -37,6 +83,7 @@ Window::Window()
 {
 	mHelp = new HelpComponent(this);
 	mBackgroundOverlay = new ImageComponent(this);
+	mNetworkIcon.reset(new ImageComponent(this));
 }
 
 Window::~Window()
@@ -109,6 +156,17 @@ bool Window::init()
 	mBackgroundOverlay->setImage(":/scroll_gradient.png");
 	mBackgroundOverlay->setResize((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
 
+	if (mNetworkIcon)
+	{
+		mNetworkIcon->setImage(mNetworkPath);
+		mNetworkIcon->setResize(
+			Renderer::getScreenHeight() * mNetworkSize.x(),
+			Renderer::getScreenHeight() * mNetworkSize.y());
+	}
+
+	mNetworkConnected = hasActiveNetworkConnection();
+	mNetworkPollAccum = 0;
+
 	// update our help because font sizes probably changed
 	if (peekGui())
 		peekGui()->updateHelpPrompts();
@@ -128,7 +186,10 @@ bool Window::init()
 
 void Window::applyClockTheme(const std::shared_ptr<ThemeData>& theme)
 {
-	// defaults / fallback
+	// =========================
+	// Clock defaults / fallback
+	// =========================
+
 	mClockDefined = false;
 	mClockPos = Vector2f(0.98f, 0.05f);
 	mClockOrigin = Vector2f(1.0f, 0.0f);
@@ -136,35 +197,94 @@ void Window::applyClockTheme(const std::shared_ptr<ThemeData>& theme)
 	mClockOutlineColor = 0x000000FF;
 	mClockFont = mDefaultFonts.empty() ? std::shared_ptr<Font>() : mDefaultFonts.at(1);
 
+	// =========================
+	// Network defaults / fallback
+	// =========================
+
+	mNetworkDefined = false;
+	mNetworkPos = Vector2f(0.90f, 0.05f);
+	mNetworkOrigin = Vector2f(1.0f, 0.0f);
+	mNetworkSize = Vector2f(0.03f, 0.03f);
+	mNetworkPath = ":/icons/network.png";
+
 	if (!theme)
+	{
+		if (mNetworkIcon)
+		{
+			mNetworkIcon->setImage(mNetworkPath);
+			mNetworkIcon->setResize(
+				Renderer::getScreenHeight() * mNetworkSize.x(),
+				Renderer::getScreenHeight() * mNetworkSize.y());
+		}
+
+		mClockTimeAccum = 0;
+		mClockLastText.clear();
+		mClockTextCache.reset();
+		mClockOutlineCache.reset();
 		return;
+	}
+
+	// =========================
+	// Clock theme
+	// =========================
 
 	const ThemeData::ThemeElement* elem = theme->getElement("screen", "clock", "text");
 
-	if (!elem)
-		return;
-
-	mClockDefined = true;
-
-	if (elem->has("pos"))
-		mClockPos = elem->get<Vector2f>("pos");
-
-	if (elem->has("origin"))
-		mClockOrigin = elem->get<Vector2f>("origin");
-
-	if (elem->has("color"))
-		mClockColor = elem->get<unsigned int>("color");
-
-	// Ahora sí soporta fuente y tamaño desde el tema
-	if (elem->has("fontPath") || elem->has("fontSize"))
+	if (elem)
 	{
-		mClockFont = Font::getFromTheme(
-			elem,
-			ThemeFlags::FONT_PATH | ThemeFlags::FONT_SIZE,
-			mDefaultFonts.at(1));
+		mClockDefined = true;
+
+		if (elem->has("pos"))
+			mClockPos = elem->get<Vector2f>("pos");
+
+		if (elem->has("origin"))
+			mClockOrigin = elem->get<Vector2f>("origin");
+
+		if (elem->has("color"))
+			mClockColor = elem->get<unsigned int>("color");
+
+		// supports font and size from theme
+		if (elem->has("fontPath") || elem->has("fontSize"))
+		{
+			mClockFont = Font::getFromTheme(
+				elem,
+				ThemeFlags::FONT_PATH | ThemeFlags::FONT_SIZE,
+				mDefaultFonts.at(1));
+		}
 	}
 
-	// force cache rebuild
+	// =========================
+	// Network theme
+	// =========================
+
+	const ThemeData::ThemeElement* netElem = theme->getElement("screen", "network", "image");
+
+	if (netElem)
+	{
+		mNetworkDefined = true;
+
+		if (netElem->has("pos"))
+			mNetworkPos = netElem->get<Vector2f>("pos");
+
+		if (netElem->has("origin"))
+			mNetworkOrigin = netElem->get<Vector2f>("origin");
+
+		if (netElem->has("size"))
+			mNetworkSize = netElem->get<Vector2f>("size");
+
+		if (netElem->has("path"))
+			mNetworkPath = netElem->get<std::string>("path");
+	}
+
+	if (mNetworkIcon)
+	{
+		mNetworkIcon->setImage(mNetworkPath);
+		mNetworkIcon->setResize(
+			Renderer::getScreenHeight() * mNetworkSize.x(),
+			Renderer::getScreenHeight() * mNetworkSize.y());
+	}
+
+	// force clock cache rebuild
 	mClockTimeAccum = 0;
 	mClockLastText.clear();
 	mClockTextCache.reset();
@@ -276,6 +396,14 @@ void Window::update(int deltaTime)
 	// Update the screensaver
 	if (mScreenSaver)
 		mScreenSaver->update(deltaTime);
+
+	// Network polling
+	mNetworkPollAccum += deltaTime;
+	if (mNetworkPollAccum >= 3000)
+	{
+		mNetworkPollAccum = 0;
+		mNetworkConnected = hasActiveNetworkConnection();
+	}
 
 	if (!Settings::getInstance()->getBool("ShowClock"))
 	{
@@ -394,7 +522,7 @@ void Window::render()
 		std::shared_ptr<Font> font = mClockFont ? mClockFont : mDefaultFonts.at(1);
 
 		// 1px outline (4 directions)
-		static const int off[4][2] = { {-1,0}, {1,0}, {0,-1}, {0,1} };
+		static const int off[4][2] = { { -1,0 }, { 1,0 }, { 0,-1 }, { 0,1 } };
 		for (int i = 0; i < 4; i++)
 		{
 			Transform4x4f t = Transform4x4f::Identity();
@@ -408,6 +536,58 @@ void Window::render()
 		t = t.translate(Vector3f(x, y, 0.0f));
 		Renderer::setMatrix(t);
 		font->renderTextCache(mClockTextCache.get());
+	}
+
+	// Render network icon
+	// Render network icon
+if (Settings::getInstance()->getBool("ShowNetworkIcon") &&
+    mNetworkConnected &&
+    !mRenderScreenSaver &&
+    mNetworkIcon)
+	{
+		float x = 0.0f;
+		float y = 0.0f;
+
+		if (mNetworkDefined)
+		{
+			const float iconW = Renderer::getScreenHeight() * mNetworkSize.x();
+			const float iconH = Renderer::getScreenHeight() * mNetworkSize.y();
+
+			x = Renderer::getScreenWidth() * mNetworkPos.x();
+			y = Renderer::getScreenHeight() * mNetworkPos.y();
+
+			x -= iconW * mNetworkOrigin.x();
+			y -= iconH * mNetworkOrigin.y();
+		}
+		else
+		{
+			// fallback: place it just before the clock
+			const float iconW = Renderer::getScreenHeight() * mNetworkSize.x();
+			const float margin = 10.0f;
+
+			float clockX = Renderer::getScreenWidth() * mClockPos.x();
+			float clockY = Renderer::getScreenHeight() * mClockPos.y();
+
+			if (showClock && mClockTextCache)
+			{
+				float clockW = mClockTextCache->metrics.size.x();
+				float clockH = mClockTextCache->metrics.size.y();
+
+				clockX -= clockW * mClockOrigin.x();
+				clockY -= clockH * mClockOrigin.y();
+
+				x = clockX - iconW - margin;
+				y = clockY;
+			}
+			else
+			{
+				x = Renderer::getScreenWidth() * 0.90f;
+				y = Renderer::getScreenHeight() * 0.05f;
+			}
+		}
+
+		mNetworkIcon->setPosition(x, y);
+		mNetworkIcon->render(transform);
 	}
 
 	// Info popup always on top
@@ -458,7 +638,7 @@ void Window::renderLoadingScreen(std::string text, float percent, unsigned char 
 		float y = Renderer::getScreenHeight() - (Renderer::getScreenHeight() * 3 * baseHeight);
 
 		Renderer::drawRect(x, y, w, h, 0x25252500 | opacity, 0x25252500 | opacity);
-		Renderer::drawRect(x, y, (w*percent), h, 0x006C9E00 | opacity, 0x006C9E00 | opacity); // 0xFFFFFFFF
+		Renderer::drawRect(x, y, (w * percent), h, 0x006C9E00 | opacity, 0x006C9E00 | opacity); // 0xFFFFFFFF
 	}
 
 	ImageComponent splash(this, true);

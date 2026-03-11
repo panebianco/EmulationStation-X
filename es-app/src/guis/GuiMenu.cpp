@@ -495,6 +495,16 @@ void GuiMenu::openUISettings()
 			Settings::getInstance()->setString("ClockFormat", clock_format->getSelected());
 		});
 	}
+	
+		{
+		auto show_network = std::make_shared<SwitchComponent>(mWindow);
+		show_network->setState(Settings::getInstance()->getBool("ShowNetworkIcon"));
+		s->addWithLabel(_("NETWORK ICON").c_str(), show_network);
+		s->addSaveFunc([show_network] {
+			Settings::getInstance()->setBool("ShowNetworkIcon", show_network->getState());
+		});
+	}
+	
 
 	auto themeSets = ThemeData::getThemeSets();
 

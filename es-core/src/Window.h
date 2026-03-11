@@ -26,8 +26,8 @@ class Window
 public:
 	class ScreenSaver {
 	public:
-		virtual void startScreenSaver(SystemData* system=NULL) = 0;
-		virtual void stopScreenSaver(bool toResume=false) = 0;
+		virtual void startScreenSaver(SystemData* system = NULL) = 0;
+		virtual void stopScreenSaver(bool toResume = false) = 0;
 		virtual void renderScreenSaver() = 0;
 		virtual bool allowSleep() = 0;
 		virtual void update(int deltaTime) = 0;
@@ -75,11 +75,11 @@ public:
 	void setInfoPopup(InfoPopup* infoPopup) { delete mInfoPopup; mInfoPopup = infoPopup; }
 	inline void stopInfoPopup() { if (mInfoPopup) mInfoPopup->stop(); };
 
-	void startScreenSaver(SystemData* system=NULL);
+	void startScreenSaver(SystemData* system = NULL);
 	bool cancelScreenSaver();
 	void renderScreenSaver();
 
-	// Clock theme integration
+	// Clock + network theme integration
 	void applyClockTheme(const std::shared_ptr<class ThemeData>& theme);
 
 private:
@@ -88,11 +88,11 @@ private:
 
 	bool isProcessing();
 
-	HelpComponent*	mHelp;
+	HelpComponent* mHelp;
 	ImageComponent* mBackgroundOverlay;
-	ScreenSaver*	mScreenSaver;
-	InfoPopup*		mInfoPopup;
-	bool			mRenderScreenSaver;
+	ScreenSaver* mScreenSaver;
+	InfoPopup* mInfoPopup;
+	bool mRenderScreenSaver;
 
 	std::vector<GuiComponent*> mGuiStack;
 
@@ -124,13 +124,28 @@ private:
 	std::unique_ptr<TextCache> mClockTextCache;
 	std::unique_ptr<TextCache> mClockOutlineCache;
 
-	Vector2f mClockPos = {0.98f, 0.05f};
-	Vector2f mClockOrigin = {1.0f, 0.0f};
+	Vector2f mClockPos = { 0.98f, 0.05f };
+	Vector2f mClockOrigin = { 1.0f, 0.0f };
 
 	unsigned int mClockColor = 0xFFFFFFFF;
 	unsigned int mClockOutlineColor = 0x000000FF;
 
 	std::shared_ptr<Font> mClockFont;
+
+	// =========================
+	// Network overlay
+	// =========================
+
+	bool mNetworkDefined = false;
+	bool mNetworkConnected = false;
+	int mNetworkPollAccum = 0;
+
+	Vector2f mNetworkPos = { 0.90f, 0.05f };
+	Vector2f mNetworkOrigin = { 1.0f, 0.0f };
+	Vector2f mNetworkSize = { 0.03f, 0.03f };
+
+	std::string mNetworkPath = ":/icons/network.png";
+	std::unique_ptr<ImageComponent> mNetworkIcon;
 };
 
 #endif

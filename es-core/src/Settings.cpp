@@ -1,4 +1,4 @@
-// ========== Settings.cpp (COMPLETO, VERSION ES-X CON EnableBGM) ==========
+// ========== Settings.cpp (COMPLETO, VERSION ES-X CORREGIDA) ==========
 
 #include "Settings.h"
 
@@ -55,6 +55,9 @@ void Settings::setDefaults()
 {
 	mBoolMap.clear();
 	mIntMap.clear();
+	mFloatMap.clear();
+	mStringMap.clear();
+	mMapIntMap.clear();
 
 	mBoolMap["BackgroundJoystickInput"] = false;
 	mBoolMap["ParseGamelistOnly"] = false;
@@ -89,8 +92,15 @@ void Settings::setDefaults()
 	mBoolMap["DebugText"] = false;
 	mBoolMap["DebugImage"] = false;
 
-	// 🆕 NUEVO: Música de fondo
-	mBoolMap["EnableBGM"] = true;
+	// HUD / overlays
+	mBoolMap["ShowClock"] = true;
+	mStringMap["ClockFormat"] = "24H";
+	mBoolMap["ShowNetworkIcon"] = true;
+
+	// Música de fondo ES-X
+	mBoolMap["BackgroundMusic"] = true;
+	mIntMap["BackgroundMusicVolume"] = 75;
+	mStringMap["BackgroundMusicSource"] = "auto";
 
 	mIntMap["ScreenSaverTime"] = 5 * Settings::ONE_MINUTE_IN_MS;
 	mIntMap["SystemSleepTime"] = 0 * Settings::ONE_MINUTE_IN_MS;
@@ -227,13 +237,13 @@ void Settings::saveFile()
 		node.append_attribute("value").set_value(iter->second.c_str());
 	}
 
-	for(auto &m : mMapIntMap)
+	for(auto& m : mMapIntMap)
 	{
 		pugi::xml_node node = doc.append_child("map");
 		node.append_attribute("name").set_value(m.first.c_str());
 		std::string datatype = "int";
 		node.append_attribute("type").set_value(datatype.c_str());
-		for(auto &intMap : m.second)
+		for(auto& intMap : m.second)
 		{
 			pugi::xml_node entry = node.append_child(datatype.c_str());
 			entry.append_attribute("name").set_value(intMap.first.c_str());
@@ -352,12 +362,39 @@ void Settings::processBackwardCompatibility()
 			mStringMap["LaunchTransitionStyle"] = itTransition->second;
 	}
 
+	// Compatibilidad música de fondo
+	auto itOldBgm = mBoolMap.find("EnableBGM");
+	if (itOldBgm != mBoolMap.end())
+	{
+		if (mBoolMap.find("BackgroundMusic") == mBoolMap.end())
+			mBoolMap["BackgroundMusic"] = itOldBgm->second;
+		mBoolMap.erase(itOldBgm);
+	}
+
 	// Seguridad extra por si faltan
 	if (mStringMap["ListTransitionStyle"].empty())
 		mStringMap["ListTransitionStyle"] = "fade";
 
 	if (mStringMap["LaunchTransitionStyle"].empty())
 		mStringMap["LaunchTransitionStyle"] = "instant";
+
+	if (mStringMap["ClockFormat"].empty())
+		mStringMap["ClockFormat"] = "24H";
+
+	if (mStringMap["BackgroundMusicSource"].empty())
+		mStringMap["BackgroundMusicSource"] = "auto";
+
+	if (mIntMap.find("BackgroundMusicVolume") == mIntMap.end())
+		mIntMap["BackgroundMusicVolume"] = 75;
+
+	if (mBoolMap.find("ShowClock") == mBoolMap.end())
+		mBoolMap["ShowClock"] = true;
+
+	if (mBoolMap.find("ShowNetworkIcon") == mBoolMap.end())
+		mBoolMap["ShowNetworkIcon"] = true;
+
+	if (mBoolMap.find("BackgroundMusic") == mBoolMap.end())
+		mBoolMap["BackgroundMusic"] = true;
 }
 
 #define SETTINGS_GETSET(type, mapName, getMethodName, setMethodName) \
