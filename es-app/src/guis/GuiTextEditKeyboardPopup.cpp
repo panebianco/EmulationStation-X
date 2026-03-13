@@ -5,6 +5,8 @@
 #include "renderers/Renderer.h"
 #include "resources/Font.h"
 
+#include <SDL.h>
+
 #define KEYBOARD_HEIGHT (Renderer::getScreenHeight() * 0.52f)
 #define KEYBOARD_PADDINGX (Renderer::getScreenWidth() * 0.02f)
 #define KEYBOARD_PADDINGY (Renderer::getScreenWidth() * 0.01f)
@@ -23,6 +25,7 @@ GuiTextEditKeyboardPopup::GuiTextEditKeyboardPopup(
     , mMultiLine(multiLine)
     , mShift(false)
     , mDeleteRepeat(false)
+    , mTextEditActive(false)
     , mDeleteRepeatTimer(0)
     , mNavigationRepeatTimer(0)
     , mNavigationRepeatDirX(0)
@@ -57,7 +60,6 @@ GuiTextEditKeyboardPopup::GuiTextEditKeyboardPopup(
     mGrid.setEntry(mTitle, Vector2i(0, 0), false, true);
     mGrid.setEntry(mText, Vector2i(0, 1), true, false);
 
-    // Indicador flotante, separado del grid para no romper el TextEdit
     addChild(mCaseIndicator.get());
 
     std::vector<std::vector<std::string>> kbBase {
@@ -67,7 +69,7 @@ GuiTextEditKeyboardPopup::GuiTextEditKeyboardPopup(
         {"q","w","e","r","t","y","u","i","o","p","✓"},
         {"Q","W","E","R","T","Y","U","I","O","P","✓"},
 
-        {"a","s","d","f","g","h","j","k","l","ñ","-rowspan-"},
+        {"a","s","d","f","g","h","j","k","l","Ñ","-rowspan-"},
         {"A","S","D","F","G","H","J","K","L","Ñ","-rowspan-"},
 
         {"z","x","c","v","b","n","m",",",".","-","-rowspan-"},
@@ -87,7 +89,6 @@ GuiTextEditKeyboardPopup::GuiTextEditKeyboardPopup(
 
             std::string upper = kbBase[row * 2 + 1][col];
             std::shared_ptr<ButtonComponent> button = makeButton(lower, upper);
-
             mKeyboardGrid->setEntry(button, Vector2i(col, row), true, true, Vector2i(1, 1));
         }
     }
@@ -100,10 +101,10 @@ GuiTextEditKeyboardPopup::GuiTextEditKeyboardPopup(
     auto clearButton  = makeButton("clr", "clr");
     auto cancelButton = makeButton("✖", "✖");
 
-    mKeyboardGrid->setEntry(mShiftButton,  Vector2i(0, 4), true, true, Vector2i(2, 1));
-    mKeyboardGrid->setEntry(spaceButton,   Vector2i(2, 4), true, true, Vector2i(4, 1));
-    mKeyboardGrid->setEntry(clearButton,   Vector2i(6, 4), true, true, Vector2i(2, 1));
-    mKeyboardGrid->setEntry(cancelButton,  Vector2i(8, 4), true, true, Vector2i(3, 1));
+    mKeyboardGrid->setEntry(mShiftButton, Vector2i(0, 4), true, true, Vector2i(2, 1));
+    mKeyboardGrid->setEntry(spaceButton,  Vector2i(2, 4), true, true, Vector2i(4, 1));
+    mKeyboardGrid->setEntry(clearButton,  Vector2i(6, 4), true, true, Vector2i(2, 1));
+    mKeyboardGrid->setEntry(cancelButton, Vector2i(8, 4), true, true, Vector2i(3, 1));
 
     mGrid.setEntry(mKeyboardGrid, Vector2i(0, 2), true, true);
 
@@ -128,9 +129,8 @@ void GuiTextEditKeyboardPopup::onSizeChanged()
     const float keyboardWidth = mSize.x() - KEYBOARD_PADDINGX * 2.0f;
     const float textHeight = Font::get(FONT_SIZE_MEDIUM)->getLetterHeight() * 1.8f;
 
-    // Mantener visible la barra del TextEdit
     const float textWidth = mSize.x() * 0.70f;
-mText->setSize(textWidth, textHeight);
+    mText->setSize(textWidth, textHeight);
 
     Vector3f kbPos = mKeyboardGrid->getPosition();
     Vector2f kbSize = mKeyboardGrid->getSize();
@@ -138,7 +138,6 @@ mText->setSize(textWidth, textHeight);
     mKeyboardGrid->setSize(keyboardWidth, kbSize.y() - KEYBOARD_PADDINGY);
     mKeyboardGrid->setPosition(KEYBOARD_PADDINGX, kbPos.y(), 0.0f);
 
-    // Indicador visual solamente
     const float indicatorWidth = Renderer::getScreenWidth() * 0.05f;
     const float indicatorHeight = Font::get(FONT_SIZE_SMALL)->getLetterHeight();
     const float indicatorPadding = Renderer::getScreenWidth() * 0.012f;
@@ -155,7 +154,57 @@ mText->setSize(textWidth, textHeight);
 
 bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
 {
-    if (config->isMappedTo("b", input) && input.value)
+    const bool fromKeyboard = (config->getDeviceId() == DEVICE_KEYBOARD);
+
+    // Ignorar tecla mapeada como back mientras se edita con teclado físico
+    const bool keyboardBack =
+        fromKeyboard && mTextEditActive && config->isMappedLike("b", input);
+
+    if (fromKeyboard && input.value)
+    {
+        // ESC sale del modo edición
+        if (mTextEditActive && input.id == SDLK_ESCAPE)
+        {
+            mTextEditActive = false;
+            SDL_StopTextInput();
+            return true;
+        }
+
+        // ENTER entra o sale del modo edición
+        if (input.id == SDLK_RETURN || input.id == SDLK_KP_ENTER)
+        {
+            if (mTextEditActive)
+            {
+                mTextEditActive = false;
+                SDL_StopTextInput();
+                return true;
+            }
+
+            if (mGrid.getSelectedComponent() == mText)
+            {
+                mTextEditActive = true;
+                SDL_StartTextInput();
+                mText->setCursor((int)mText->getValue().size());
+                return true;
+            }
+        }
+
+        // Borrar desde teclado físico
+        if (mTextEditActive && (input.id == SDLK_BACKSPACE || input.id == SDLK_DELETE))
+        {
+            mText->textInput("\b");
+            return true;
+        }
+
+        // Mientras editas con teclado físico, no dejar que otras teclas
+        // disparen acciones mapeadas o navegación del frontend.
+        if (mTextEditActive)
+            return true;
+    }
+
+    // Back / cancelar fuera del modo edición
+    if ((fromKeyboard && input.value && input.id == SDLK_ESCAPE && !mTextEditActive) ||
+        (!keyboardBack && input.value && config->isMappedTo("b", input)))
     {
         if (mText->getValue() != mInitValue)
         {
@@ -165,6 +214,11 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
                 "YES",
                 [this]
                 {
+                    if (mTextEditActive)
+                    {
+                        mTextEditActive = false;
+                        SDL_StopTextInput();
+                    }
                     mOkCallback(mText->getValue());
                     delete this;
                     return true;
@@ -172,12 +226,22 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
                 "NO",
                 [this]
                 {
+                    if (mTextEditActive)
+                    {
+                        mTextEditActive = false;
+                        SDL_StopTextInput();
+                    }
                     delete this;
                     return true;
                 }));
         }
         else
         {
+            if (mTextEditActive)
+            {
+                mTextEditActive = false;
+                SDL_StopTextInput();
+            }
             delete this;
         }
         return true;
@@ -187,6 +251,14 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
         return true;
 
     return false;
+}
+
+void GuiTextEditKeyboardPopup::textInput(const char* text)
+{
+    if (!mTextEditActive || text == nullptr || text[0] == '\0')
+        return;
+
+    mText->textInput(text);
 }
 
 void GuiTextEditKeyboardPopup::update(int deltaTime)
@@ -239,7 +311,13 @@ std::shared_ptr<ButtonComponent> GuiTextEditKeyboardPopup::makeButton(
 
             if (key == "✓")
             {
-                mOkCallback(value);
+                if (mTextEditActive)
+                {
+                    mTextEditActive = false;
+                    SDL_StopTextInput();
+                }
+
+                mOkCallback(mText->getValue());
                 delete this;
                 return;
             }
@@ -247,7 +325,7 @@ std::shared_ptr<ButtonComponent> GuiTextEditKeyboardPopup::makeButton(
             {
                 if (!value.empty())
                 {
-                    value.pop_back();
+                    value.erase(value.size() - 1, 1);
                     mText->setValue(value);
                     mText->setCursor((int)value.size());
                 }
@@ -268,6 +346,12 @@ std::shared_ptr<ButtonComponent> GuiTextEditKeyboardPopup::makeButton(
             }
             else if (key == "✖")
             {
+                if (mTextEditActive)
+                {
+                    mTextEditActive = false;
+                    SDL_StopTextInput();
+                }
+
                 delete this;
                 return;
             }

@@ -24,6 +24,7 @@ public:
 
     void onSizeChanged() override;
     bool input(InputConfig* config, Input input) override;
+    void textInput(const char* text) override;
     void update(int deltaTime) override;
     std::vector<HelpPrompt> getHelpPrompts() override;
 
@@ -56,6 +57,7 @@ private:
     bool mMultiLine;
     bool mShift;
     bool mDeleteRepeat;
+    bool mTextEditActive;
     int mDeleteRepeatTimer;
     int mNavigationRepeatTimer;
     int mNavigationRepeatDirX;
