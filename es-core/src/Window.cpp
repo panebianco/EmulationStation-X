@@ -84,6 +84,22 @@ Window::Window()
 	mHelp = new HelpComponent(this);
 	mBackgroundOverlay = new ImageComponent(this);
 	mNetworkIcon.reset(new ImageComponent(this));
+
+	// Safe initial clock defaults
+	mClockDefined = false;
+	mClockPos = Vector2f(0.98f, 0.05f);
+	mClockOrigin = Vector2f(1.0f, 0.0f);
+	mClockColor = 0xFFFFFFFF;
+	mClockOutlineColor = 0x000000FF;
+
+	// Safe initial network defaults
+	mNetworkDefined = false;
+	mNetworkPos = Vector2f(0.90f, 0.05f);
+	mNetworkOrigin = Vector2f(1.0f, 0.0f);
+	mNetworkSize = Vector2f(0.03f, 0.03f);
+	mNetworkPath = ":/icons/network.png";
+	mNetworkConnected = false;
+	mNetworkPollAccum = 0;
 }
 
 Window::~Window()
@@ -156,6 +172,10 @@ bool Window::init()
 	mBackgroundOverlay->setImage(":/scroll_gradient.png");
 	mBackgroundOverlay->setResize((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
 
+	// Fallback clock font
+	if (!mDefaultFonts.empty() && !mClockFont)
+		mClockFont = mDefaultFonts.at(1);
+
 	if (mNetworkIcon)
 	{
 		mNetworkIcon->setImage(mNetworkPath);
@@ -177,29 +197,27 @@ bool Window::init()
 	mClockTextCache.reset();
 	mClockOutlineCache.reset();
 
-	// Fallback font
-	if (!mDefaultFonts.empty())
-		mClockFont = mDefaultFonts.at(1);
-
 	return true;
 }
 
 void Window::applyClockTheme(const std::shared_ptr<ThemeData>& theme)
 {
-	// =========================
-	// Clock defaults / fallback
-	// =========================
+	// -------------------------------------------------
+	// IMPORTANT:
+	// Do NOT reset clock every time this is called.
+	// If the theme reload path does not provide screen/clock
+	// momentarily, we preserve the last valid clock styling.
+	// -------------------------------------------------
 
-	mClockDefined = false;
-	mClockPos = Vector2f(0.98f, 0.05f);
-	mClockOrigin = Vector2f(1.0f, 0.0f);
-	mClockColor = 0xFFFFFFFF;
-	mClockOutlineColor = 0x000000FF;
-	mClockFont = mDefaultFonts.empty() ? std::shared_ptr<Font>() : mDefaultFonts.at(1);
+	// Make sure there is always a usable fallback font
+	if (!mClockFont && !mDefaultFonts.empty())
+		mClockFont = mDefaultFonts.at(1);
 
 	// =========================
 	// Network defaults / fallback
 	// =========================
+	// Network can safely reset each call because it is purely visual
+	// and does not affect cached text rendering like the clock does.
 
 	mNetworkDefined = false;
 	mNetworkPos = Vector2f(0.90f, 0.05f);
@@ -217,6 +235,7 @@ void Window::applyClockTheme(const std::shared_ptr<ThemeData>& theme)
 				Renderer::getScreenHeight() * mNetworkSize.y());
 		}
 
+		// Force clock cache rebuild but preserve styling
 		mClockTimeAccum = 0;
 		mClockLastText.clear();
 		mClockTextCache.reset();
@@ -242,6 +261,9 @@ void Window::applyClockTheme(const std::shared_ptr<ThemeData>& theme)
 
 		if (elem->has("color"))
 			mClockColor = elem->get<unsigned int>("color");
+
+		if (elem->has("outlineColor"))
+			mClockOutlineColor = elem->get<unsigned int>("outlineColor");
 
 		// supports font and size from theme
 		if (elem->has("fontPath") || elem->has("fontSize"))
@@ -284,7 +306,7 @@ void Window::applyClockTheme(const std::shared_ptr<ThemeData>& theme)
 			Renderer::getScreenHeight() * mNetworkSize.y());
 	}
 
-	// force clock cache rebuild
+	// force clock cache rebuild using current styling
 	mClockTimeAccum = 0;
 	mClockLastText.clear();
 	mClockTextCache.reset();
@@ -539,11 +561,10 @@ void Window::render()
 	}
 
 	// Render network icon
-	// Render network icon
-if (Settings::getInstance()->getBool("ShowNetworkIcon") &&
-    mNetworkConnected &&
-    !mRenderScreenSaver &&
-    mNetworkIcon)
+	if (Settings::getInstance()->getBool("ShowNetworkIcon") &&
+	    mNetworkConnected &&
+	    !mRenderScreenSaver &&
+	    mNetworkIcon)
 	{
 		float x = 0.0f;
 		float y = 0.0f;
