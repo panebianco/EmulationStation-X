@@ -156,26 +156,25 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
 {
     const bool fromKeyboard = (config->getDeviceId() == DEVICE_KEYBOARD);
 
-    // Ignorar tecla mapeada como back mientras se edita con teclado físico
     const bool keyboardBack =
         fromKeyboard && mTextEditActive && config->isMappedLike("b", input);
 
     if (fromKeyboard && input.value)
     {
-        // ESC sale del modo edición
         if (mTextEditActive && input.id == SDLK_ESCAPE)
         {
             mTextEditActive = false;
+            mDeleteRepeatTimer = 0;
             SDL_StopTextInput();
             return true;
         }
 
-        // ENTER entra o sale del modo edición
         if (input.id == SDLK_RETURN || input.id == SDLK_KP_ENTER)
         {
             if (mTextEditActive)
             {
                 mTextEditActive = false;
+                mDeleteRepeatTimer = 0;
                 SDL_StopTextInput();
                 return true;
             }
@@ -183,26 +182,36 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
             if (mGrid.getSelectedComponent() == mText)
             {
                 mTextEditActive = true;
+                mDeleteRepeatTimer = 0;
                 SDL_StartTextInput();
                 mText->setCursor((int)mText->getValue().size());
                 return true;
             }
         }
 
-        // Borrar desde teclado físico
+        // Borrar con debounce para evitar doble evento
         if (mTextEditActive && (input.id == SDLK_BACKSPACE || input.id == SDLK_DELETE))
         {
-            mText->textInput("\b");
+            if (mDeleteRepeatTimer > 0)
+                return true;
+
+            std::string value = mText->getValue();
+            if (!value.empty())
+            {
+                value.erase(value.size() - 1, 1);
+                mText->setValue(value);
+                mText->setCursor((int)value.size());
+            }
+
+            mDeleteRepeatTimer = 140;
             return true;
         }
 
-        // Mientras editas con teclado físico, no dejar que otras teclas
-        // disparen acciones mapeadas o navegación del frontend.
+        // Mientras se edita con teclado físico, no dejar pasar mappings del frontend
         if (mTextEditActive)
             return true;
     }
 
-    // Back / cancelar fuera del modo edición
     if ((fromKeyboard && input.value && input.id == SDLK_ESCAPE && !mTextEditActive) ||
         (!keyboardBack && input.value && config->isMappedTo("b", input)))
     {
@@ -217,6 +226,7 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
                     if (mTextEditActive)
                     {
                         mTextEditActive = false;
+                        mDeleteRepeatTimer = 0;
                         SDL_StopTextInput();
                     }
                     mOkCallback(mText->getValue());
@@ -229,6 +239,7 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
                     if (mTextEditActive)
                     {
                         mTextEditActive = false;
+                        mDeleteRepeatTimer = 0;
                         SDL_StopTextInput();
                     }
                     delete this;
@@ -240,6 +251,7 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
             if (mTextEditActive)
             {
                 mTextEditActive = false;
+                mDeleteRepeatTimer = 0;
                 SDL_StopTextInput();
             }
             delete this;
@@ -264,6 +276,13 @@ void GuiTextEditKeyboardPopup::textInput(const char* text)
 void GuiTextEditKeyboardPopup::update(int deltaTime)
 {
     GuiComponent::update(deltaTime);
+
+    if (mDeleteRepeatTimer > 0)
+    {
+        mDeleteRepeatTimer -= deltaTime;
+        if (mDeleteRepeatTimer < 0)
+            mDeleteRepeatTimer = 0;
+    }
 }
 
 std::vector<HelpPrompt> GuiTextEditKeyboardPopup::getHelpPrompts()
@@ -314,6 +333,7 @@ std::shared_ptr<ButtonComponent> GuiTextEditKeyboardPopup::makeButton(
                 if (mTextEditActive)
                 {
                     mTextEditActive = false;
+                    mDeleteRepeatTimer = 0;
                     SDL_StopTextInput();
                 }
 
@@ -349,6 +369,7 @@ std::shared_ptr<ButtonComponent> GuiTextEditKeyboardPopup::makeButton(
                 if (mTextEditActive)
                 {
                     mTextEditActive = false;
+                    mDeleteRepeatTimer = 0;
                     SDL_StopTextInput();
                 }
 

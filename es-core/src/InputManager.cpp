@@ -270,25 +270,23 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 		window->input(getInputConfigByDevice(ev.jhat.which), Input(ev.jhat.which, TYPE_HAT, ev.jhat.hat, ev.jhat.value, false));
 		return true;
 
-	case SDL_KEYDOWN:
-		if(ev.key.keysym.sym == SDLK_BACKSPACE && SDL_IsTextInputActive())
-		{
-			window->textInput("\b");
-		}
+case SDL_KEYDOWN:
+	if(ev.key.repeat)
+		return false;
 
-		if(ev.key.repeat)
-			return false;
+	if(ev.key.keysym.sym == SDLK_F4)
+	{
+		SDL_Event* quit = new SDL_Event();
+		quit->type = SDL_QUIT;
+		SDL_PushEvent(quit);
+		return false;
+	}
 
-		if(ev.key.keysym.sym == SDLK_F4)
-		{
-			SDL_Event* quit = new SDL_Event();
-			quit->type = SDL_QUIT;
-			SDL_PushEvent(quit);
-			return false;
-		}
-
-		window->input(getInputConfigByDevice(DEVICE_KEYBOARD), Input(DEVICE_KEYBOARD, TYPE_KEY, ev.key.keysym.sym, 1, false));
-		return true;
+	window->input(
+		getInputConfigByDevice(DEVICE_KEYBOARD),
+		Input(DEVICE_KEYBOARD, TYPE_KEY, ev.key.keysym.sym, 1, false)
+	);
+	return true;
 
 	case SDL_KEYUP:
 		window->input(getInputConfigByDevice(DEVICE_KEYBOARD), Input(DEVICE_KEYBOARD, TYPE_KEY, ev.key.keysym.sym, 0, false));
