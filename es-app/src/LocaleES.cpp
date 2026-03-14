@@ -6,6 +6,65 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <cctype>
+
+// --------------------
+// Helpers
+// --------------------
+namespace
+{
+    static inline void trim(std::string& s)
+    {
+        size_t start = 0;
+        while (start < s.size() &&
+               (s[start] == ' ' || s[start] == '\t' || s[start] == '\r' || s[start] == '\n'))
+            ++start;
+
+        size_t end = s.size();
+        while (end > start &&
+               (s[end - 1] == ' ' || s[end - 1] == '\t' || s[end - 1] == '\r' || s[end - 1] == '\n'))
+            --end;
+
+        s = s.substr(start, end - start);
+    }
+
+    static inline std::string toLowerCopy(const std::string& s)
+    {
+        std::string out = s;
+        std::transform(out.begin(), out.end(), out.begin(),
+            [](unsigned char c) { return (char)std::tolower(c); });
+        return out;
+    }
+
+    static inline std::string normalizeKey(std::string key)
+    {
+        trim(key);
+
+        // compactar espacios internos múltiples a uno solo
+        std::string compact;
+        compact.reserve(key.size());
+
+        bool lastWasSpace = false;
+        for (char ch : key)
+        {
+            bool isSpace = (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n');
+            if (isSpace)
+            {
+                if (!lastWasSpace)
+                    compact += ' ';
+                lastWasSpace = true;
+            }
+            else
+            {
+                compact += ch;
+                lastWasSpace = false;
+            }
+        }
+
+        trim(compact);
+        return toLowerCopy(compact);
+    }
+}
 
 // --------------------
 // Singleton
@@ -33,23 +92,8 @@ bool LocaleES::loadLanguageFile(const std::string& filePath)
         return false;
     }
 
-    mTranslations.clear();
-
     std::string line;
-
-    auto trim = [](std::string& s)
-    {
-        // recorta espacios al inicio y al final
-        size_t start = 0;
-        while (start < s.size() && (s[start] == ' ' || s[start] == '\t' || s[start] == '\r' || s[start] == '\n'))
-            ++start;
-
-        size_t end = s.size();
-        while (end > start && (s[end - 1] == ' ' || s[end - 1] == '\t' || s[end - 1] == '\r' || s[end - 1] == '\n'))
-            --end;
-
-        s = s.substr(start, end - start);
-    };
+    int loaded = 0;
 
     while (std::getline(in, line))
     {
@@ -59,7 +103,7 @@ bool LocaleES::loadLanguageFile(const std::string& filePath)
         if (line.empty() || line[0] == '#' || line[0] == ';' || line[0] == '[')
             continue;
 
-        auto pos = line.find('=');
+        const auto pos = line.find('=');
         if (pos == std::string::npos)
             continue;
 
@@ -70,10 +114,13 @@ bool LocaleES::loadLanguageFile(const std::string& filePath)
         trim(value);
 
         if (!key.empty())
-            mTranslations[key] = value;
+        {
+            mTranslations[normalizeKey(key)] = value;
+            ++loaded;
+        }
     }
 
-    LOG(LogInfo) << "LocaleES: loaded " << mTranslations.size()
+    LOG(LogInfo) << "LocaleES: loaded " << loaded
                  << " entries from " << filePath;
     return true;
 }
@@ -87,24 +134,38 @@ void LocaleES::loadFromSettings()
     if (lang.empty())
         lang = "en";
 
-    // Si ya está cargado este idioma y hay traducciones, no recargar
-    if (lang == mCurrentLanguage && !mTranslations.empty())
+    if (lang == mCurrentLanguage && !mTranslations.empty() && !mFallbackTranslations.empty())
         return;
 
     mCurrentLanguage = lang;
     mTranslations.clear();
+    mFallbackTranslations.clear();
 
-    // Ruta en el home del usuario: ~/.emulationstation/lang/<CODE>.ini
-    std::string home = Utils::FileSystem::getHomePath();
-    std::string userPath = home + "/.emulationstation/lang/" + lang + ".ini";
+    const std::string home = Utils::FileSystem::getHomePath();
+    const std::string exePath = Utils::FileSystem::getExePath();
 
-    // Ruta opcional junto al ejecutable: <carpeta de ES>/lang/<CODE>.ini
-    std::string exePath = Utils::FileSystem::getExePath();
-    std::string appPath = exePath + "/lang/" + lang + ".ini";
+    const std::string userLangPath = home + "/.emulationstation/lang/" + lang + ".ini";
+    const std::string appLangPath  = exePath + "/lang/" + lang + ".ini";
 
-    if (!loadLanguageFile(userPath))
+    const std::string userEnPath = home + "/.emulationstation/lang/en.ini";
+    const std::string appEnPath  = exePath + "/lang/en.ini";
+
+    // cargar fallback inglés primero en mapa temporal
     {
-        if (!loadLanguageFile(appPath))
+        std::map<std::string, std::string> backup;
+        mTranslations.clear();
+
+        if (!loadLanguageFile(userEnPath))
+            loadLanguageFile(appEnPath);
+
+        mFallbackTranslations = mTranslations;
+        mTranslations.clear();
+    }
+
+    // luego cargar idioma actual
+    if (!loadLanguageFile(userLangPath))
+    {
+        if (!loadLanguageFile(appLangPath))
         {
             LOG(LogWarning) << "LocaleES: no language file found for '" << lang << "'";
         }
@@ -116,11 +177,16 @@ void LocaleES::loadFromSettings()
 // --------------------
 std::string LocaleES::translate(const std::string& key) const
 {
-    auto it = mTranslations.find(key);
+    const std::string normalized = normalizeKey(key);
+
+    auto it = mTranslations.find(normalized);
     if (it != mTranslations.end())
         return it->second;
 
-    // Si no hay traducción, devolvemos la clave tal cual
+    auto itFallback = mFallbackTranslations.find(normalized);
+    if (itFallback != mFallbackTranslations.end())
+        return itFallback->second;
+
     return key;
 }
 

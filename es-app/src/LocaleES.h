@@ -6,31 +6,21 @@
 class LocaleES
 {
 public:
-    // Singleton
-    static LocaleES& getInstance();
+	static LocaleES& getInstance();
 
-    // Carga archivo .ini desde una ruta
-    bool loadLanguageFile(const std::string& filePath);
+	bool loadLanguageFile(const std::string& filePath);
+	void loadFromSettings();
 
-    // Carga el idioma según Settings ("Language")
-    void loadFromSettings();
-
-    // Traduce una clave usando la instancia global
-    static std::string get(const std::string& key);
-
-    // Traduce una clave usando esta instancia
-    std::string translate(const std::string& key) const;
+	std::string translate(const std::string& key) const;
+	static std::string get(const std::string& key);
 
 private:
-    LocaleES(); // constructor privado (singleton)
+	LocaleES();
 
-    // Evitar copias
-    LocaleES(const LocaleES&) = delete;
-    LocaleES& operator=(const LocaleES&) = delete;
-
-    std::string mCurrentLanguage;
-    std::map<std::string, std::string> mTranslations;
+	std::map<std::string, std::string> mTranslations;
+	std::map<std::string, std::string> mFallbackTranslations;
+	std::string mCurrentLanguage;
 };
 
-// Función accesible desde cualquier parte (incluido es-core)
+// Función global para usar desde cualquier parte
 std::string es_translate(const std::string& key);

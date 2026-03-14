@@ -11,11 +11,11 @@
 #include "GuiMetaDataEd.h"
 #include "SystemData.h"
 #include "components/TextListComponent.h"
-#include "../LocaleES.h"   // 🔹 Sistema de traducción
+#include "../LocaleES.h"
 
 GuiGamelistOptions::GuiGamelistOptions(Window* window, SystemData* system)
 	: GuiComponent(window)
-	, mMenu(window, es_translate("OPTIONS").c_str(), Font::get(FONT_SIZE_LARGE)) // 🔹 Título traducible
+	, mMenu(window, es_translate("OPTIONS").c_str(), Font::get(FONT_SIZE_LARGE))
 	, mSystem(system)
 	, mFromPlaceholder(false)
 	, mFiltersChanged(false)
@@ -116,7 +116,7 @@ GuiGamelistOptions::GuiGamelistOptions(Window* window, SystemData* system)
 		for (unsigned int i = 0; i < FileSorts::SortTypes.size(); i++)
 		{
 			const FileData::SortType& sort = FileSorts::SortTypes.at(i);
-			mListSort->add(sort.description, &sort, sort.description == currentSort);
+			mListSort->add(es_translate(sort.description.c_str()), &sort, sort.description == currentSort);
 		}
 
 		mMenu.addWithLabel(es_translate("SORT GAMES BY"), mListSort);
@@ -216,6 +216,7 @@ GuiGamelistOptions::GuiGamelistOptions(Window* window, SystemData* system)
 GuiGamelistOptions::~GuiGamelistOptions()
 {
 	FileData* root = mSystem->getRootFolder();
+
 	// apply sort
 	if (!mFromPlaceholder)
 	{
