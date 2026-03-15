@@ -12,6 +12,8 @@
 #include "Sound.h"
 #include "ThemeData.h"
 
+#include <sstream>
+
 namespace
 {
 	// Busca un ThemeElement de tipo "sound" por nombre, considerando
@@ -58,14 +60,23 @@ namespace
 }
 
 BasicGameListView::BasicGameListView(Window* window, FileData* root)
-	: ISimpleGameListView(window, root), mList(window)
+	: ISimpleGameListView(window, root), mList(window), mGameCounter(window)
 {
 	mList.setSize(mSize.x(), mSize.y() * 0.8f);
 	mList.setPosition(0, mSize.y() * 0.2f);
 	mList.setDefaultZIndex(20);
 	addChild(&mList);
 
+	// Contador de posición actual / total
+	mGameCounter.setFont(Font::get(FONT_SIZE_SMALL));
+	mGameCounter.setColor(0xAAAAAAFF);
+	mGameCounter.setHorizontalAlignment(ALIGN_RIGHT);
+	mGameCounter.setPosition(mSize.x() - 20.0f, 10.0f);
+	mGameCounter.setDefaultZIndex(100);
+	addChild(&mGameCounter);
+
 	populateList(root->getChildrenListToDisplay());
+	updateGameCounter();
 }
 
 void BasicGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
@@ -73,8 +84,52 @@ void BasicGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 	ISimpleGameListView::onThemeChanged(theme);
 	using namespace ThemeFlags;
 	mList.applyTheme(theme, getName(), "gamelist", ALL);
+	mGameCounter.applyTheme(theme, getName(), "md_gamecounter", ALL);
 
 	sortChildren();
+}
+
+void BasicGameListView::updateGameCounter()
+{
+	FileData* file = mList.getSelected();
+
+	if (!file || !mRoot || file->isPlaceHolder())
+	{
+		mGameCounter.setValue("");
+		return;
+	}
+
+	// La lista visible real no siempre cuelga de mRoot.
+	// En carpetas/colecciones conviene usar el padre del item actual.
+	FileData* parent = file->getParent();
+	const std::vector<FileData*>* list = nullptr;
+
+	if (parent)
+		list = &parent->getChildrenListToDisplay();
+	else
+		list = &mRoot->getChildrenListToDisplay();
+
+	int index = 0;
+	for (size_t i = 0; i < list->size(); i++)
+	{
+		if ((*list)[i] == file)
+		{
+			index = (int)i + 1;
+			break;
+		}
+	}
+
+	int total = (int)list->size();
+
+	if (index <= 0 || total <= 0)
+	{
+		mGameCounter.setValue("");
+		return;
+	}
+
+	std::stringstream ss;
+	ss << index << " / " << total;
+	mGameCounter.setValue(ss.str());
 }
 
 void BasicGameListView::onFileChanged(FileData* file, FileChangeType change)
@@ -87,23 +142,25 @@ void BasicGameListView::onFileChanged(FileData* file, FileChangeType change)
 	}
 
 	ISimpleGameListView::onFileChanged(file, change);
+	updateGameCounter();
 }
 
 void BasicGameListView::populateList(const std::vector<FileData*>& files)
 {
 	mList.clear();
 	mHeaderText.setText(mRoot->getSystem()->getFullName());
+
 	if (files.size() > 0)
 	{
 		for (auto it = files.cbegin(); it != files.cend(); it++)
-		{
 			mList.add((*it)->getName(), *it, ((*it)->getType() == FOLDER));
-		}
 	}
 	else
 	{
 		addPlaceholder();
 	}
+
+	updateGameCounter();
 }
 
 FileData* BasicGameListView::getCursor()
@@ -120,6 +177,7 @@ void BasicGameListView::setCursor(FileData* cursor, bool refreshListCursorPos)
 	if (!refreshListCursorPos && notInList && !cursor->isPlaceHolder())
 	{
 		populateList(cursor->getParent()->getChildrenListToDisplay());
+
 		// this extra call is needed iff a system has games organized in folders
 		// and the cursor is focusing a game in a folder
 		if (cursor->getParent()->getType() == FOLDER)
@@ -145,6 +203,8 @@ void BasicGameListView::setCursor(FileData* cursor, bool refreshListCursorPos)
 			}
 		}
 	}
+
+	updateGameCounter();
 }
 
 void BasicGameListView::setViewportTop(int index)
@@ -245,6 +305,7 @@ void BasicGameListView::remove(FileData *game, bool deleteFile, bool refreshView
 		if (!keepMarquee)
 			Utils::FileSystem::removeFile(game->getMarqueePath());
 	}
+
 	FileData* parent = game->getParent();
 	if (getCursor() == game)                     // Select next element in list, or prev if none
 	{
@@ -262,14 +323,16 @@ void BasicGameListView::remove(FileData *game, bool deleteFile, bool refreshView
 			}
 		}
 	}
+
 	mList.remove(game);
 	if (mList.size() == 0)
-	{
 		addPlaceholder();
-	}
+
 	delete game;                                 // remove before repopulating (removes from parent)
 	if (refreshView)
 		onFileChanged(parent, FILE_REMOVED);     // update the view, with game removed
+
+	updateGameCounter();
 }
 
 std::vector<HelpPrompt> BasicGameListView::getHelpPrompts()
@@ -306,16 +369,22 @@ std::vector<HelpPrompt> BasicGameListView::getHelpPrompts()
 	return prompts;
 }
 
-void BasicGameListView::onFocusLost() {
+void BasicGameListView::onFocusLost()
+{
 	mList.stopScrolling(true);
+	updateGameCounter();
 }
 
 // NUEVO: interceptar input para reproducir BACK y FAVORITE
 bool BasicGameListView::input(InputConfig* config, Input input)
 {
-	// Llamamos primero a la lógica base para no romper nada importante
-	if (ISimpleGameListView::input(config, input))
+	// Llamamos primero a la lógica base, pero luego actualizamos contador.
+	bool handled = ISimpleGameListView::input(config, input);
+	if (handled)
+	{
+		updateGameCounter();
 		return true;
+	}
 
 	if (input.value != 0)
 	{
@@ -325,16 +394,19 @@ bool BasicGameListView::input(InputConfig* config, Input input)
 		if (config->isMappedTo("b", input))
 		{
 			playNavSound(sys, "back");
-			return true; // evento consumido
+			updateGameCounter();
+			return true;
 		}
 
 		// FAVORITE / EDIT COLLECTION (Y)
 		if (config->isMappedTo("y", input))
 		{
 			playNavSound(sys, "favorite");
-			return true; // evento consumido
+			updateGameCounter();
+			return true;
 		}
 	}
 
+	updateGameCounter();
 	return false;
 }

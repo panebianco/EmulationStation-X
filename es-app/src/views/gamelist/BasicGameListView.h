@@ -2,6 +2,7 @@
 #ifndef ES_APP_VIEWS_GAME_LIST_BASIC_GAME_LIST_VIEW_H
 #define ES_APP_VIEWS_GAME_LIST_BASIC_GAME_LIST_VIEW_H
 
+#include "components/TextComponent.h"
 #include "components/TextListComponent.h"
 #include "views/gamelist/ISimpleGameListView.h"
 
@@ -25,7 +26,6 @@ public:
 	virtual std::vector<HelpPrompt> getHelpPrompts() override;
 	virtual void launch(FileData* game) override;
 
-	// Necesario porque en el .cpp ya existe BasicGameListView::input(...)
 	virtual bool input(InputConfig* config, Input input) override;
 
 	void onFocusLost() override;
@@ -37,7 +37,10 @@ protected:
 	virtual void remove(FileData* game, bool deleteFile, bool refreshView = true) override;
 	virtual void addPlaceholder();
 
+	void updateGameCounter();
+
 	TextListComponent<FileData*> mList;
+	TextComponent mGameCounter;
 };
 
 #endif // ES_APP_VIEWS_GAME_LIST_BASIC_GAME_LIST_VIEW_H

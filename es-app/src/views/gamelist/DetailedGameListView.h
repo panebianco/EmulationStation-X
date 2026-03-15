@@ -26,6 +26,8 @@ private:
 	void initMDLabels();
 	void initMDValues();
 
+	int getCurrentGameIndex(FileData* file) const;
+
 	ImageComponent mThumbnail;
 	ImageComponent mMarquee;
 	ImageComponent mImage;
@@ -41,6 +43,7 @@ private:
 	DateTimeComponent mLastPlayed;
 	TextComponent mPlayCount;
 	TextComponent mName;
+	TextComponent mGameCounter;
 
 	std::vector<TextComponent*> getMDLabels();
 	std::vector<GuiComponent*> getMDValues();
