@@ -77,12 +77,14 @@ private:
 
 	bool isVertical() const { return mScrollDirection == SCROLL_VERTICALLY; };
 
-	// Helpers para centrado visual
+	// Helpers
 	int getPrimaryVisibleCount() const;
 	int getSecondaryVisibleCount() const;
 	int getVisibleCapacity() const;
 	bool hasScrollableOverflow() const;
 	Vector2f getStaticCenterOffset() const;
+	bool shouldCarouselFill() const;
+	int wrapEntryIndex(int idx) const;
 
 	// IMAGES & ENTRIES
 	bool mEntriesDirty;
@@ -111,6 +113,8 @@ private:
 	bool mAnimate;
 	bool mCenterSelection;
 	bool mScrollLoop;
+	bool mCarouselMode;
+	bool mCarouselFill;
 	ScrollDirection mScrollDirection;
 	ImageSource mImageSource;
 	std::function<void(CursorState state)> mCursorChangedCallback;
@@ -142,6 +146,8 @@ ImageGridComponent<T>::ImageGridComponent(Window* window) : IList<ImageGridData,
 	mAnimate = true;
 	mCenterSelection = false;
 	mScrollLoop = false;
+	mCarouselMode = false;
+	mCarouselFill = false;
 	mScrollDirection = SCROLL_VERTICALLY;
 	mImageSource = THUMBNAIL;
 }
@@ -214,7 +220,8 @@ void ImageGridComponent<T>::render(const Transform4x4f& parentTrans)
 	float offsetX = isVertical() ? 0.0f : mCamera * mCameraDirection * (mTileSize.x() + mMargin.x());
 	float offsetY = isVertical() ? mCamera * mCameraDirection * (mTileSize.y() + mMargin.y()) : 0.0f;
 
-	// Si no hay suficientes items para scrollear, centramos visualmente el bloque real
+	// Si NO usamos fill y no hay suficientes items para scroll real,
+	// centramos visualmente el bloque real.
 	Vector2f staticOffset = getStaticCenterOffset();
 
 	tileTrans.translate(Vector3f(offsetX + staticOffset.x(), offsetY + staticOffset.y(), 0.0f));
@@ -225,7 +232,6 @@ void ImageGridComponent<T>::render(const Transform4x4f& parentTrans)
 		mEntriesDirty = false;
 	}
 
-	// Create a clipRect to hide tiles used to buffer texture loading
 	float scaleX = trans.r0().x();
 	float scaleY = trans.r1().y();
 
@@ -234,13 +240,11 @@ void ImageGridComponent<T>::render(const Transform4x4f& parentTrans)
 
 	Renderer::pushClipRect(pos, size);
 
-	// Render all the tiles but the selected one
 	std::shared_ptr<GridTileComponent> selectedTile = NULL;
 	for(auto it = mTiles.begin(); it != mTiles.end(); it++)
 	{
 		std::shared_ptr<GridTileComponent> tile = (*it);
 
-		// If it's the selected image, keep it for later, otherwise render it now
 		if(tile->isSelected())
 			selectedTile = tile;
 		else
@@ -249,7 +253,6 @@ void ImageGridComponent<T>::render(const Transform4x4f& parentTrans)
 
 	Renderer::popClipRect();
 
-	// Render the selected image on top of the others
 	if (selectedTile != NULL)
 		selectedTile->render(tileTrans);
 
@@ -261,10 +264,8 @@ void ImageGridComponent<T>::render(const Transform4x4f& parentTrans)
 template<typename T>
 void ImageGridComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, const std::string& view, const std::string& element, unsigned int properties)
 {
-	// Apply theme to GuiComponent but not size property, which will be applied at the end of this function
 	GuiComponent::applyTheme(theme, view, element, properties ^ ThemeFlags::SIZE);
 
-	// Keep the theme pointer to apply it on the tiles later on
 	mTheme = theme;
 
 	Vector2f screen = Vector2f((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
@@ -300,16 +301,30 @@ void ImageGridComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, 
 		if (elem->has("scrollDirection"))
 			mScrollDirection = (ScrollDirection)(elem->get<std::string>("scrollDirection") == "horizontal");
 
-		if (elem->has("centerSelection"))
-		{
-			mCenterSelection = (elem->get<bool>("centerSelection"));
+		// Modo carrusel: preset cómodo
+		if (elem->has("carouselMode"))
+			mCarouselMode = elem->get<bool>("carouselMode");
+		else
+			mCarouselMode = false;
 
-			if (elem->has("scrollLoop"))
-				mScrollLoop = (elem->get<bool>("scrollLoop"));
+		if (mCarouselMode)
+		{
+			mCenterSelection = true;
+			mScrollLoop = true;
+			mCarouselFill = true;
 		}
 
+		if (elem->has("centerSelection"))
+			mCenterSelection = elem->get<bool>("centerSelection");
+
+		if (elem->has("scrollLoop"))
+			mScrollLoop = elem->get<bool>("scrollLoop");
+
+		if (elem->has("carouselFill"))
+			mCarouselFill = elem->get<bool>("carouselFill");
+
 		if (elem->has("animate"))
-			mAnimate = (elem->get<bool>("animate"));
+			mAnimate = elem->get<bool>("animate");
 		else
 			mAnimate = true;
 
@@ -326,8 +341,6 @@ void ImageGridComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, 
 				std::string oldDefaultGameTexture = mDefaultGameTexture;
 				mDefaultGameTexture = path;
 
-				// mEntries are already loaded at this point,
-				// so we need to update them with new game image texture
 				for (auto it = mEntries.begin(); it != mEntries.end(); it++)
 				{
 					if ((*it).data.texturePath == oldDefaultGameTexture)
@@ -349,8 +362,6 @@ void ImageGridComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, 
 				std::string oldDefaultFolderTexture = mDefaultFolderTexture;
 				mDefaultFolderTexture = path;
 
-				// mEntries are already loaded at this point,
-				// so we need to update them with new folder image texture
 				for (auto it = mEntries.begin(); it != mEntries.end(); it++)
 				{
 					if ((*it).data.texturePath == oldDefaultFolderTexture)
@@ -360,18 +371,14 @@ void ImageGridComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, 
 		}
 	}
 
-	// We still need to manually get the grid tile size here,
-	// so we can recalculate the new grid dimension, and THEN (re)build the tiles
 	elem = theme->getElement(view, "default", "gridtile");
 
 	mTileSize = elem && elem->has("size") ?
 				elem->get<Vector2f>("size") * screen :
 				GridTileComponent::getDefaultTileSize();
 
-	// Apply size property, will trigger a call to onSizeChanged() which will build the tiles
 	GuiComponent::applyTheme(theme, view, element, ThemeFlags::SIZE);
 
-	// Trigger the call manually if the theme have no "imagegrid" element
 	if (!elem)
 		buildTiles();
 }
@@ -386,6 +393,9 @@ void ImageGridComponent<T>::onSizeChanged()
 template<typename T>
 void ImageGridComponent<T>::onCursorChanged(const CursorState& state)
 {
+	if (mEntries.empty())
+		return;
+
 	if (mLastCursor == mCursor)
 	{
 		if (state == CURSOR_STOPPED && mCursorChangedCallback)
@@ -396,7 +406,7 @@ void ImageGridComponent<T>::onCursorChanged(const CursorState& state)
 
 	bool direction = mCursor >= mLastCursor;
 	int diff = direction ? mCursor - mLastCursor : mLastCursor - mCursor;
-	if (isScrollLoop() && diff == mEntries.size() - 1)
+	if (isScrollLoop() && diff == (int)mEntries.size() - 1)
 	{
 		direction = !direction;
 	}
@@ -413,7 +423,6 @@ void ImageGridComponent<T>::onCursorChanged(const CursorState& state)
 	int col = (mCursor / dimOpposite);
 
 	int lastCol = (((int)mEntries.size() - 1) / dimOpposite);
-
 	int lastScroll = std::max(0, (lastCol + 1 - dimScrollable));
 
 	float startPos = 0.0f;
@@ -436,14 +445,6 @@ void ImageGridComponent<T>::onCursorChanged(const CursorState& state)
 			oldTile = mTiles[oldIdx];
 
 		int newIdx = mCursor - mStartPosition + (dimOpposite * EXTRAITEMS);
-		if (isScrollLoop())
-		{
-			if (newIdx < 0)
-				newIdx += (int)mEntries.size();
-			else if (newIdx >= (int)mTiles.size())
-				newIdx -= (int)mEntries.size();
-		}
-
 		if (newIdx >= 0 && newIdx < (int)mTiles.size())
 			newTile = mTiles[newIdx];
 
@@ -489,14 +490,12 @@ void ImageGridComponent<T>::onCursorChanged(const CursorState& state)
 			mStartPosition = (col - centralCol) * dimOpposite;
 	}
 
-	// Si el grid no tiene suficientes items para hacer scroll real,
-	// mantenemos start fijo y dejamos que el centrado visual lo haga render().
-	if (mCenterSelection && !hasScrollableOverflow())
+	// Si usamos fill carrusel, dejamos siempre el anclaje activo aunque haya pocos.
+	if (mCenterSelection && !hasScrollableOverflow() && !shouldCarouselFill())
 	{
 		mStartPosition = 0;
 	}
 
-	// Clamp start position cuando NO hay loop
 	if (!isScrollLoop())
 	{
 		const int minStart = 0;
@@ -535,7 +534,7 @@ void ImageGridComponent<T>::onCursorChanged(const CursorState& state)
 		if (!moveCamera)
 			return;
 
-		t -= 1.0f; // cubic ease out
+		t -= 1.0f;
 		float pct = Math::lerp(0.0f, 1.0f, t * t * t + 1.0f);
 		t = startPos * (1.0f - pct) + endPos * pct;
 
@@ -548,7 +547,6 @@ void ImageGridComponent<T>::onCursorChanged(const CursorState& state)
 	}, false, 2);
 }
 
-// Create and position tiles (mTiles)
 template<typename T>
 void ImageGridComponent<T>::buildTiles()
 {
@@ -557,9 +555,9 @@ void ImageGridComponent<T>::buildTiles()
 
 	calcGridDimension();
 
-	// Solo predesplazar cuando realmente hay overflow scrollable.
-	// Si hay pocos items, el centrado visual se hace en render().
-	if (mCenterSelection && hasScrollableOverflow())
+	// Si hay overflow, dejamos el cursor visual en zona central.
+	// Si no hay overflow pero usamos carouselFill, también conviene predesplazar.
+	if (mCenterSelection && (hasScrollableOverflow() || shouldCarouselFill()))
 	{
 		int dimScrollable = (isVertical() ? mGridDimension.y() : mGridDimension.x()) - 2 * EXTRAITEMS;
 		mStartPosition -= (int)Math::floorf(dimScrollable / 2.0f);
@@ -583,15 +581,12 @@ void ImageGridComponent<T>::buildTiles()
 
 	int X, Y;
 
-	// Layout tile size and position
 	for (int y = 0; y < (vert ? mGridDimension.y() : mGridDimension.x()); y++)
 	{
 		for (int x = 0; x < (vert ? mGridDimension.x() : mGridDimension.y()); x++)
 		{
 			auto tile = std::make_shared<GridTileComponent>(mWindow);
 
-			// In Vertical mode, tiles are ordered from left to right, then from top to bottom
-			// In Horizontal mode, tiles are ordered from top to bottom, then from left to right
 			X = vert ? x : y - EXTRAITEMS;
 			Y = vert ? y - EXTRAITEMS : x;
 
@@ -616,7 +611,6 @@ void ImageGridComponent<T>::updateTiles(bool allowAnimation, bool updateSelected
 	if (!mTiles.size())
 		return;
 
-	// Stop updating the tiles at highest scroll speed
 	if (mScrollTier == 3)
 	{
 		for (int ti = 0; ti < (int)mTiles.size(); ti++)
@@ -630,7 +624,6 @@ void ImageGridComponent<T>::updateTiles(bool allowAnimation, bool updateSelected
 		return;
 	}
 
-	// Temporary store previous textures so they can't be unloaded
 	std::vector<std::shared_ptr<TextureResource>> previousTextures;
 	for (int ti = 0; ti < (int)mTiles.size(); ti++)
 	{
@@ -638,7 +631,6 @@ void ImageGridComponent<T>::updateTiles(bool allowAnimation, bool updateSelected
 		previousTextures.push_back(tile->getTexture());
 	}
 
-	// Update the tiles
 	int firstImg = mStartPosition - EXTRAITEMS * (isVertical() ? mGridDimension.x() : mGridDimension.y());
 	for (int ti = 0; ti < (int)mTiles.size(); ti++)
 		updateTileAtPos(ti, firstImg + ti, allowAnimation, updateSelectedState);
@@ -654,16 +646,14 @@ void ImageGridComponent<T>::updateTileAtPos(int tilePos, int imgPos, bool allowA
 {
 	std::shared_ptr<GridTileComponent> tile = mTiles.at(tilePos);
 
-	if(isScrollLoop())
-	{
-		if (imgPos < 0)
-			imgPos += (int)mEntries.size();
-		else if (imgPos >= size())
-			imgPos -= (int)mEntries.size();
-	}
+	const bool carouselFill = shouldCarouselFill();
 
-	// If we have more tiles than we have to display images on screen, hide them
-	if(imgPos < 0 || imgPos >= size() || tilePos < 0 || tilePos >= (int)mTiles.size())
+	if (carouselFill)
+		imgPos = wrapEntryIndex(imgPos);
+	else if (isScrollLoop())
+		imgPos = wrapEntryIndex(imgPos);
+
+	if (mEntries.empty() || imgPos < 0 || imgPos >= size() || tilePos < 0 || tilePos >= (int)mTiles.size())
 	{
 		if (updateSelectedState)
 			tile->setSelected(false, allowAnimation);
@@ -705,12 +695,9 @@ void ImageGridComponent<T>::updateTileAtPos(int tilePos, int imgPos, bool allowA
 	}
 }
 
-// Calculate how much tiles of size mTileSize we can fit in a grid of size mSize using a margin of size mMargin
 template<typename T>
 void ImageGridComponent<T>::calcGridDimension()
 {
-	// GRID_SIZE = COLUMNS * TILE_SIZE + (COLUMNS - 1) * MARGIN
-	// <=> COLUMNS = (GRID_SIZE + MARGIN) / (TILE_SIZE + MARGIN)
 	Vector2f gridDimension = (mSize + mMargin) / (mTileSize + mMargin);
 
 	if (mAutoLayout.x() != 0 && mAutoLayout.y() != 0)
@@ -718,16 +705,13 @@ void ImageGridComponent<T>::calcGridDimension()
 
 	mLastRowPartial = Math::floorf(gridDimension.y()) != gridDimension.y();
 
-	// Ceil y dim so we can display partial last row
 	mGridDimension = Vector2i(gridDimension.x(), Math::ceilf(gridDimension.y()));
 
-	// Grid dimension validation
 	if (mGridDimension.x() < 1)
 		LOG(LogError) << "Theme defined grid X dimension below 1";
 	if (mGridDimension.y() < 1)
 		LOG(LogError) << "Theme defined grid Y dimension below 1";
 
-	// Add extra tiles to both sides : Add EXTRAITEMS before, EXTRAITEMS after
 	if (isVertical())
 		mGridDimension.y() += 2 * EXTRAITEMS;
 	else
@@ -762,6 +746,28 @@ bool ImageGridComponent<T>::hasScrollableOverflow() const
 }
 
 template<typename T>
+bool ImageGridComponent<T>::shouldCarouselFill() const
+{
+	if (!mCarouselFill || !mCenterSelection)
+		return false;
+
+	return !mEntries.empty();
+}
+
+template<typename T>
+int ImageGridComponent<T>::wrapEntryIndex(int idx) const
+{
+	if (mEntries.empty())
+		return -1;
+
+	const int count = (int)mEntries.size();
+	int wrapped = idx % count;
+	if (wrapped < 0)
+		wrapped += count;
+	return wrapped;
+}
+
+template<typename T>
 Vector2f ImageGridComponent<T>::getStaticCenterOffset() const
 {
 	if (!mCenterSelection)
@@ -770,7 +776,11 @@ Vector2f ImageGridComponent<T>::getStaticCenterOffset() const
 	if (mEntries.empty())
 		return Vector2f::Zero();
 
-	// Si hay suficientes items para scroll real, no aplicar este offset fijo
+	// En modo carrusel con fill, NO centramos bloque real:
+	// dejamos que la banda visual se llene repitiendo elementos.
+	if (shouldCarouselFill())
+		return Vector2f::Zero();
+
 	if (hasScrollableOverflow())
 		return Vector2f::Zero();
 
@@ -786,13 +796,11 @@ Vector2f ImageGridComponent<T>::getStaticCenterOffset() const
 
 	if (isVertical())
 	{
-		// Vertical: left->right, then top->bottom
 		occupiedCols = std::min(visibleSecondary, count);
 		occupiedRows = (int)Math::ceilf((float)count / (float)visibleSecondary);
 	}
 	else
 	{
-		// Horizontal: top->bottom, then left->right
 		occupiedRows = std::min(visibleSecondary, count);
 		occupiedCols = (int)Math::ceilf((float)count / (float)visibleSecondary);
 	}
