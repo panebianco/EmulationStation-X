@@ -10,6 +10,7 @@
 #include "guis/GuiGeneralScreensaverOptions.h"
 #include "guis/GuiMsgBox.h"
 #include "guis/GuiScraperStart.h"
+#include "guis/GuiSkyscraperMenu.h"
 #include "guis/GuiSettings.h"
 #include "guis/GuiThemeOptions.h"
 #include "guis/GuiThemeBrowser.h" // ✅ Theme Downloader (ES-X)
@@ -100,6 +101,7 @@ GuiMenu::GuiMenu(Window* window)
 	if (isFullUI)
 	{
 		addEntry(_("SCRAPER").c_str(), menuColor, true, [this] { openScraperSettings(); });
+		addEntry(_("SKYSCRAPER").c_str(), menuColor, true, [this] { openSkyscraperMenu(); });
 		addEntry(_("SOUND SETTINGS").c_str(), menuColor, true, [this] { openSoundSettings(); });
 		addEntry(_("UI SETTINGS").c_str(), menuColor, true, [this] { openUISettings(); });
 		addEntry(_("GAME COLLECTION SETTINGS").c_str(), menuColor, true, [this] { openCollectionSystemSettings(); });
@@ -162,6 +164,11 @@ void GuiMenu::openScraperSettings()
 	s->addRow(row);
 
 	mWindow->pushGui(s);
+}
+
+void GuiMenu::openSkyscraperMenu()
+{
+	mWindow->pushGui(new GuiSkyscraperMenu(mWindow));
 }
 
 void GuiMenu::openSoundSettings()
@@ -495,8 +502,8 @@ void GuiMenu::openUISettings()
 			Settings::getInstance()->setString("ClockFormat", clock_format->getSelected());
 		});
 	}
-	
-		{
+
+	{
 		auto show_network = std::make_shared<SwitchComponent>(mWindow);
 		show_network->setState(Settings::getInstance()->getBool("ShowNetworkIcon"));
 		s->addWithLabel(_("NETWORK ICON").c_str(), show_network);
@@ -504,7 +511,6 @@ void GuiMenu::openUISettings()
 			Settings::getInstance()->setBool("ShowNetworkIcon", show_network->getState());
 		});
 	}
-	
 
 	auto themeSets = ThemeData::getThemeSets();
 

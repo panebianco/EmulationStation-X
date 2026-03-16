@@ -24,6 +24,7 @@ private:
 
 	// Bloques del menú principal
 	void openScraperSettings();
+	void openSkyscraperMenu();
 	void openSoundSettings();
 	void openUISettings();
 	void openOtherSettings();
