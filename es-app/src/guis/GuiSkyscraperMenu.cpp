@@ -2,12 +2,14 @@
 
 #include "components/TextComponent.h"
 #include "guis/GuiInfoPopup.h"
+#include "guis/GuiMsgBox.h"
 #include "views/ViewController.h"
 #include "SystemData.h"
 #include "Settings.h"
 #include "Log.h"
 #include "resources/Font.h"
 #include "renderers/Renderer.h"
+#include "LocaleES.h"
 
 #include <cstdlib>
 
@@ -19,11 +21,21 @@ namespace
 	{
 		return Settings::getInstance()->getBool("MenuDark") ? 0xFFFFFFFF : 0x777777FF;
 	}
+
+	inline std::string quote(const std::string& s)
+	{
+		return std::string("\"") + s + "\"";
+	}
+
+	inline std::string tr(const std::string& key)
+	{
+		return es_translate(key);
+	}
 }
 
 GuiSkyscraperMenu::GuiSkyscraperMenu(Window* window)
 	: GuiComponent(window)
-	, mMenu(window, "SKYSCRAPER")
+	, mMenu(window, es_translate("SKYSCRAPER").c_str())
 {
 	std::shared_ptr<Font> font = Font::get(FONT_SIZE_MEDIUM);
 	const unsigned int textColor = getMenuTextColor();
@@ -32,7 +44,7 @@ GuiSkyscraperMenu::GuiSkyscraperMenu(Window* window)
 	{
 		ComponentListRow row;
 
-		auto txt = std::make_shared<TextComponent>(window, "Gather resources", font, textColor);
+		auto txt = std::make_shared<TextComponent>(window, tr("GATHER RESOURCES"), font, textColor);
 		row.addElement(txt, true);
 
 		row.makeAcceptInputHandler([this] { runGather(); });
@@ -44,7 +56,7 @@ GuiSkyscraperMenu::GuiSkyscraperMenu(Window* window)
 	{
 		ComponentListRow row;
 
-		auto txt = std::make_shared<TextComponent>(window, "Generate gamelist", font, textColor);
+		auto txt = std::make_shared<TextComponent>(window, tr("GENERATE GAMELIST"), font, textColor);
 		row.addElement(txt, true);
 
 		row.makeAcceptInputHandler([this] { runGenerate(); });
@@ -56,7 +68,7 @@ GuiSkyscraperMenu::GuiSkyscraperMenu(Window* window)
 	{
 		ComponentListRow row;
 
-		auto txt = std::make_shared<TextComponent>(window, "Open log", font, textColor);
+		auto txt = std::make_shared<TextComponent>(window, tr("OPEN LOG"), font, textColor);
 		row.addElement(txt, true);
 
 		row.makeAcceptInputHandler([this] { openLog(); });
@@ -89,7 +101,11 @@ bool GuiSkyscraperMenu::input(InputConfig* config, Input input)
 
 std::string GuiSkyscraperMenu::getCurrentSystem()
 {
-	auto state = ViewController::get()->getState();
+	auto vc = ViewController::get();
+	if (!vc)
+		return "nes";
+
+	auto state = vc->getState();
 	SystemData* sys = state.getSystem();
 
 	if (!sys)
@@ -110,14 +126,14 @@ std::string GuiSkyscraperMenu::getCurrentLanguage()
 
 int GuiSkyscraperMenu::launchScript(const std::string& action)
 {
-	std::string system = getCurrentSystem();
-	std::string lang = getCurrentLanguage();
+	const std::string system = getCurrentSystem();
+	const std::string lang   = getCurrentLanguage();
 
-	std::string cmd =
+	const std::string cmd =
 		std::string(SKY_SCRIPT) +
-		" " + action +
-		" " + system +
-		" " + lang;
+		" " + quote(action) +
+		" " + quote(system) +
+		" " + quote(lang);
 
 	LOG(LogInfo) << "Launching Skyscraper: " << cmd;
 
@@ -128,30 +144,40 @@ void GuiSkyscraperMenu::runGather()
 {
 	const std::string system = getCurrentSystem();
 
-	mWindow->setInfoPopup(new GuiInfoPopup(
-		mWindow,
-		"Running Skyscraper gather: " + system,
-		2000
+	mWindow->pushGui(new GuiMsgBox(
+	mWindow,
+	tr("SKYSCRAPER_CONFIRM"),
+	tr("CONTINUE"),
+		[this, system]
+		{
+			mWindow->setInfoPopup(new GuiInfoPopup(
+				mWindow,
+				tr("WORKING... THIS MAY TAKE SEVERAL MINUTES."),
+				3000
+			));
+
+			const int ret = launchScript("gather");
+
+			if (ret == 0)
+			{
+				mWindow->setInfoPopup(new GuiInfoPopup(
+					mWindow,
+					tr("SKYSCRAPER GATHER FINISHED: ") + system,
+					5000
+				));
+			}
+			else
+			{
+				mWindow->setInfoPopup(new GuiInfoPopup(
+					mWindow,
+					tr("SKYSCRAPER GATHER FAILED: ") + system,
+					5000
+				));
+			}
+		},
+		tr("CANCEL"),
+		nullptr
 	));
-
-	const int ret = launchScript("gather");
-
-	if (ret == 0)
-	{
-		mWindow->setInfoPopup(new GuiInfoPopup(
-			mWindow,
-			"Skyscraper gather finished: " + system,
-			5000
-		));
-	}
-	else
-	{
-		mWindow->setInfoPopup(new GuiInfoPopup(
-			mWindow,
-			"Skyscraper gather failed: " + system,
-			5000
-		));
-	}
 }
 
 void GuiSkyscraperMenu::runGenerate()
@@ -160,8 +186,8 @@ void GuiSkyscraperMenu::runGenerate()
 
 	mWindow->setInfoPopup(new GuiInfoPopup(
 		mWindow,
-		"Running Skyscraper generate: " + system,
-		2000
+		tr("GENERATING GAMELIST... PLEASE WAIT A MOMENT."),
+		2500
 	));
 
 	const int ret = launchScript("generate");
@@ -170,7 +196,7 @@ void GuiSkyscraperMenu::runGenerate()
 	{
 		mWindow->setInfoPopup(new GuiInfoPopup(
 			mWindow,
-			"Skyscraper generate finished: " + system,
+			tr("SKYSCRAPER GENERATE FINISHED: ") + system,
 			5000
 		));
 	}
@@ -178,7 +204,7 @@ void GuiSkyscraperMenu::runGenerate()
 	{
 		mWindow->setInfoPopup(new GuiInfoPopup(
 			mWindow,
-			"Skyscraper generate failed: " + system,
+			tr("SKYSCRAPER GENERATE FAILED: ") + system,
 			5000
 		));
 	}
@@ -186,21 +212,29 @@ void GuiSkyscraperMenu::runGenerate()
 
 void GuiSkyscraperMenu::openLog()
 {
-	std::system("nano /tmp/esx-skyscraper/log");
+	mWindow->setInfoPopup(new GuiInfoPopup(
+		mWindow,
+		tr("LOG: /TMP/ESX-SKYSCRAPER/LOG"),
+		3000
+	));
 }
 
 HelpStyle GuiSkyscraperMenu::getHelpStyle()
 {
 	HelpStyle style;
-	style.applyTheme(ViewController::get()->getState().getSystem()->getTheme(), "system");
+
+	auto vc = ViewController::get();
+	if (vc && vc->getState().getSystem())
+		style.applyTheme(vc->getState().getSystem()->getTheme(), "system");
+
 	return style;
 }
 
 std::vector<HelpPrompt> GuiSkyscraperMenu::getHelpPrompts()
 {
 	return {
-		{ "up/down", "CHOOSE" },
-		{ "a", "SELECT" },
-		{ "b", "BACK" }
+		{ "up/down", tr("CHOOSE") },
+		{ "a", tr("SELECT") },
+		{ "b", tr("BACK") }
 	};
 }
