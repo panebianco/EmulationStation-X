@@ -124,6 +124,7 @@ set(CORE_SOURCES
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/MenuComponent.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/NinePatchComponent.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/ScrollableContainer.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/components/KeyboardKeyComponent.cpp
 
 	# ✅ NUEVO: ScrollableTextComponent (source)
 	${CMAKE_CURRENT_SOURCE_DIR}/src/components/ScrollableTextComponent.cpp
