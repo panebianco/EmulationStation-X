@@ -3,7 +3,24 @@
 #include "components/ComponentGrid.h"
 #include "components/NinePatchComponent.h"
 #include "components/TextComponent.h"
+#include "renderers/Renderer.h"
+#include "resources/Font.h"
+#include "Settings.h"
+
 #include <SDL_timer.h>
+
+namespace
+{
+	inline unsigned int getPopupTextColor()
+	{
+		return Settings::getInstance()->getBool("MenuDark") ? 0xFFFFFFFF : 0x444444FF;
+	}
+
+	inline unsigned int getPopupFrameColor()
+	{
+		return Settings::getInstance()->getBool("MenuDark") ? 0x202020FF : 0xFFFFFFFF;
+	}
+}
 
 GuiInfoPopup::GuiInfoPopup(Window* window, std::string message, int duration, int fadein, int fadeout) :
 	GuiComponent(window), mMessage(message), mDuration(duration), mFadein(fadein), mFadeout(fadeout), running(true)
@@ -12,34 +29,39 @@ GuiInfoPopup::GuiInfoPopup(Window* window, std::string message, int duration, in
 	float maxWidth = Renderer::getScreenWidth() * 0.9f;
 	float maxHeight = Renderer::getScreenHeight() * 0.2f;
 
-	std::shared_ptr<TextComponent> s = std::make_shared<TextComponent>(mWindow,
+	std::shared_ptr<TextComponent> s = std::make_shared<TextComponent>(
+		mWindow,
 		"",
 		Font::get(FONT_SIZE_MINI),
-		0x444444FF,
-		ALIGN_CENTER);
+		getPopupTextColor(),
+		ALIGN_CENTER
+	);
 
 	// we do this to force the text container to resize and return an actual expected popup size
-	s->setSize(0,0);
+	s->setSize(0, 0);
 	s->setText(message);
 	mSize = s->getSize();
 
 	// confirm the size isn't larger than the screen width, otherwise cap it
-	if (mSize.x() > maxWidth) {
+	if(mSize.x() > maxWidth)
+	{
 		s->setSize(maxWidth, mSize[1]);
 		mSize[0] = maxWidth;
 	}
-	if (mSize.y() > maxHeight) {
+
+	if(mSize.y() > maxHeight)
+	{
 		s->setSize(mSize[0], maxHeight);
 		mSize[1] = maxHeight;
 	}
 
 	// add a padding to the box
-	int paddingX = (int) (Renderer::getScreenWidth() * 0.03f);
-	int paddingY = (int) (Renderer::getScreenHeight() * 0.02f);
+	int paddingX = (int)(Renderer::getScreenWidth() * 0.03f);
+	int paddingY = (int)(Renderer::getScreenHeight() * 0.02f);
 	mSize[0] = mSize.x() + paddingX;
 	mSize[1] = mSize.y() + paddingY;
 
-	float posX = Renderer::getScreenWidth()*0.5f - mSize.x()*0.5f;
+	float posX = Renderer::getScreenWidth() * 0.5f - mSize.x() * 0.5f;
 	float posY = Renderer::getScreenHeight() * 0.02f;
 
 	setPosition(posX, posY, 0);
@@ -59,7 +81,6 @@ GuiInfoPopup::GuiInfoPopup(Window* window, std::string message, int duration, in
 
 GuiInfoPopup::~GuiInfoPopup()
 {
-
 }
 
 void GuiInfoPopup::render(const Transform4x4f& /*parentTrans*/)
@@ -85,21 +106,23 @@ bool GuiInfoPopup::updateState()
 	}
 
 	// compute fade in effect
-	if (curTime - mStartTime > mDuration)
+	if(curTime - mStartTime > mDuration)
 	{
 		// we're past the popup duration, no need to render
 		running = false;
 		return false;
 	}
-	else if (curTime < mStartTime) {
+	else if(curTime < mStartTime)
+	{
 		// if SDL reset
 		running = false;
 		return false;
 	}
-	else if (curTime - mStartTime <= mFadein) {
+	else if(curTime - mStartTime <= mFadein)
+	{
 		alpha = (curTime - mStartTime) * 255 / mFadein;
 	}
-	else if (curTime - mStartTime < mDuration - mFadeout)
+	else if(curTime - mStartTime < mDuration - mFadeout)
 	{
 		alpha = 255;
 	}
@@ -107,10 +130,13 @@ bool GuiInfoPopup::updateState()
 	{
 		alpha = -(curTime - mStartTime - mDuration) * 255 / mFadeout;
 	}
+
 	mGrid->setOpacity((unsigned char)alpha);
 
 	// apply fade in effect to popup frame
-	mFrame->setEdgeColor(0xFFFFFF00 | (unsigned char)(alpha));
-	mFrame->setCenterColor(0xFFFFFF00 | (unsigned char)(alpha));
+	const unsigned int frameColor = getPopupFrameColor();
+	mFrame->setEdgeColor((frameColor & 0xFFFFFF00) | (unsigned char)(alpha));
+	mFrame->setCenterColor((frameColor & 0xFFFFFF00) | (unsigned char)(alpha));
+
 	return true;
 }

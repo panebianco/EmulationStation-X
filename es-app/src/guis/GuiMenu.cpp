@@ -512,6 +512,15 @@ void GuiMenu::openUISettings()
 		});
 	}
 
+	{
+		auto controller_notifications = std::make_shared<SwitchComponent>(mWindow);
+		controller_notifications->setState(Settings::getInstance()->getBool("ShowControllerNotifications"));
+		s->addWithLabel(_("CONTROLLER NOTIFICATIONS").c_str(), controller_notifications);
+		s->addSaveFunc([controller_notifications] {
+			Settings::getInstance()->setBool("ShowControllerNotifications", controller_notifications->getState());
+		});
+	}
+
 	auto themeSets = ThemeData::getThemeSets();
 
 	if (!themeSets.empty())

@@ -11,6 +11,7 @@
 #include "utils/StringUtil.h"
 #include "Settings.h"
 #include "InputConfig.h"
+#include "LocaleES.h"
 
 #include <pugixml.hpp>
 #include <SDL.h>
@@ -26,6 +27,21 @@ int SDL_USER_CECBUTTONDOWN = -1;
 int SDL_USER_CECBUTTONUP   = -1;
 
 InputManager* InputManager::mInstance = NULL;
+
+namespace
+{
+	inline std::string tr(const std::string& key)
+	{
+		return es_translate(key);
+	}
+
+	inline std::string buildControllerPopupMessage(bool connected, const std::string& joyName)
+	{
+		return std::string(connected ? "★ " : "☆ ")
+			+ tr(connected ? "CONTROLLER_CONNECTED" : "CONTROLLER_DISCONNECTED")
+			+ ": " + joyName;
+	}
+}
 
 InputManager::InputManager()
 	: mKeyboardInputConfig(NULL)
@@ -61,7 +77,7 @@ void InputManager::init()
 	// Don't enable the HIDAPI drivers by default, it will break the existing configurations
 	// for a few controller types, since the names and the input mappings are different.
 #if !defined(_WIN32)
-#if	SDL_VERSION_ATLEAST(2,0,9)
+#if SDL_VERSION_ATLEAST(2,0,9)
 	SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0");
 #endif
 #endif
@@ -117,9 +133,14 @@ void InputManager::addJoystickByDeviceIndex(int id)
 
 	if(!loadInputConfig(mInputConfigs[joyId]))
 	{
-		LOG(LogInfo) << "Added unconfigured joystick '" << SDL_JoystickName(joy) << "' (GUID: " << guid << ", instance ID: " << joyId << ", device index: " << id << ").";
-	}else{
-		LOG(LogInfo) << "Added known joystick '" << SDL_JoystickName(joy) << "' (instance ID: " << joyId << ", device index: " << id << ")";
+		LOG(LogInfo) << "Added unconfigured joystick '" << SDL_JoystickName(joy)
+		             << "' (GUID: " << guid << ", instance ID: " << joyId
+		             << ", device index: " << id << ").";
+	}
+	else
+	{
+		LOG(LogInfo) << "Added known joystick '" << SDL_JoystickName(joy)
+		             << "' (instance ID: " << joyId << ", device index: " << id << ")";
 	}
 
 	// set up the prevAxisValues
@@ -152,7 +173,8 @@ void InputManager::removeJoystickByJoystickID(SDL_JoystickID joyId)
 	auto joyIt = mJoysticks.find(joyId);
 	if(joyIt != mJoysticks.end())
 	{
-		LOG(LogInfo) << "Removed joystick '" << SDL_JoystickName(joyIt->second) << "' (instance ID: " << joyId << ")";
+		LOG(LogInfo) << "Removed joystick '" << SDL_JoystickName(joyIt->second)
+		             << "' (instance ID: " << joyId << ")";
 		SDL_JoystickClose(joyIt->second);
 		mJoysticks.erase(joyIt);
 	}
@@ -205,7 +227,10 @@ void InputManager::deinit()
 	SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
 }
 
-int InputManager::getNumJoysticks() { return (int)mJoysticks.size(); }
+int InputManager::getNumJoysticks()
+{
+	return (int)mJoysticks.size();
+}
 
 int InputManager::getAxisCountByDevice(SDL_JoystickID id)
 {
@@ -219,9 +244,9 @@ int InputManager::getButtonCountByDevice(SDL_JoystickID id)
 	else if(id == DEVICE_CEC)
 #ifdef HAVE_CECLIB
 		return CEC::CEC_USER_CONTROL_CODE_MAX;
-#else // HAVE_LIBCEF
+#else
 		return 0;
-#endif // HAVE_CECLIB
+#endif
 	else
 		return SDL_JoystickNumButtons(mJoysticks[id]);
 }
@@ -239,6 +264,7 @@ InputConfig* InputManager::getInputConfigByDevice(int device)
 bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 {
 	bool causedEvent = false;
+
 	switch(ev.type)
 	{
 	case SDL_JOYAXISMOTION:
@@ -248,13 +274,13 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 			int normValue;
 			if(abs(ev.jaxis.value) <= DEADZONE)
 				normValue = 0;
+			else if(ev.jaxis.value > 0)
+				normValue = 1;
 			else
-				if(ev.jaxis.value > 0)
-					normValue = 1;
-				else
-					normValue = -1;
+				normValue = -1;
 
-			window->input(getInputConfigByDevice(ev.jaxis.which), Input(ev.jaxis.which, TYPE_AXIS, ev.jaxis.axis, normValue, false));
+			window->input(getInputConfigByDevice(ev.jaxis.which),
+				Input(ev.jaxis.which, TYPE_AXIS, ev.jaxis.axis, normValue, false));
 			causedEvent = true;
 		}
 
@@ -263,33 +289,36 @@ bool InputManager::parseEvent(const SDL_Event& ev, Window* window)
 
 	case SDL_JOYBUTTONDOWN:
 	case SDL_JOYBUTTONUP:
-		window->input(getInputConfigByDevice(ev.jbutton.which), Input(ev.jbutton.which, TYPE_BUTTON, ev.jbutton.button, ev.jbutton.state == SDL_PRESSED, false));
+		window->input(getInputConfigByDevice(ev.jbutton.which),
+			Input(ev.jbutton.which, TYPE_BUTTON, ev.jbutton.button, ev.jbutton.state == SDL_PRESSED, false));
 		return true;
 
 	case SDL_JOYHATMOTION:
-		window->input(getInputConfigByDevice(ev.jhat.which), Input(ev.jhat.which, TYPE_HAT, ev.jhat.hat, ev.jhat.value, false));
+		window->input(getInputConfigByDevice(ev.jhat.which),
+			Input(ev.jhat.which, TYPE_HAT, ev.jhat.hat, ev.jhat.value, false));
 		return true;
 
-case SDL_KEYDOWN:
-	if(ev.key.repeat)
-		return false;
+	case SDL_KEYDOWN:
+		if(ev.key.repeat)
+			return false;
 
-	if(ev.key.keysym.sym == SDLK_F4)
-	{
-		SDL_Event* quit = new SDL_Event();
-		quit->type = SDL_QUIT;
-		SDL_PushEvent(quit);
-		return false;
-	}
+		if(ev.key.keysym.sym == SDLK_F4)
+		{
+			SDL_Event* quit = new SDL_Event();
+			quit->type = SDL_QUIT;
+			SDL_PushEvent(quit);
+			return false;
+		}
 
-	window->input(
-		getInputConfigByDevice(DEVICE_KEYBOARD),
-		Input(DEVICE_KEYBOARD, TYPE_KEY, ev.key.keysym.sym, 1, false)
-	);
-	return true;
+		window->input(
+			getInputConfigByDevice(DEVICE_KEYBOARD),
+			Input(DEVICE_KEYBOARD, TYPE_KEY, ev.key.keysym.sym, 1, false)
+		);
+		return true;
 
 	case SDL_KEYUP:
-		window->input(getInputConfigByDevice(DEVICE_KEYBOARD), Input(DEVICE_KEYBOARD, TYPE_KEY, ev.key.keysym.sym, 0, false));
+		window->input(getInputConfigByDevice(DEVICE_KEYBOARD),
+			Input(DEVICE_KEYBOARD, TYPE_KEY, ev.key.keysym.sym, 0, false));
 		return true;
 
 	case SDL_TEXTINPUT:
@@ -304,23 +333,29 @@ case SDL_KEYDOWN:
 		addJoystickByDeviceIndex(deviceIndex);
 
 		// ✅ Notificar SOLO hotplug real (no durante init/scan)
-		if (!mSuppressHotplugPopups && window != nullptr)
+		if(!mSuppressHotplugPopups && window != nullptr &&
+		   Settings::getInstance()->getBool("ShowControllerNotifications"))
 		{
 			std::string joyName = "Controller";
 
 #if SDL_VERSION_ATLEAST(2,0,4)
 			SDL_JoystickID instanceId = SDL_JoystickGetDeviceInstanceID(deviceIndex);
 			auto it = mJoystickNameCache.find(instanceId);
-			if (it != mJoystickNameCache.end() && !it->second.empty())
+			if(it != mJoystickNameCache.end() && !it->second.empty())
 				joyName = it->second;
 			else
 #endif
 			{
 				const char* joyNameC = SDL_JoystickNameForIndex(deviceIndex);
-				if (joyNameC && joyNameC[0]) joyName = joyNameC;
+				if(joyNameC && joyNameC[0])
+					joyName = joyNameC;
 			}
 
-			window->setInfoPopup(new GuiInfoPopup(window, std::string("★ Connected: ") + joyName, 2500));
+			window->setInfoPopup(new GuiInfoPopup(
+				window,
+				buildControllerPopupMessage(true, joyName),
+				2500
+			));
 		}
 		return true;
 	}
@@ -331,14 +366,19 @@ case SDL_KEYDOWN:
 		SDL_JoystickID instanceId = ev.jdevice.which;
 
 		// ✅ Popup ANTES de remover/cerrar
-		if (!mSuppressHotplugPopups && window != nullptr)
+		if(!mSuppressHotplugPopups && window != nullptr &&
+		   Settings::getInstance()->getBool("ShowControllerNotifications"))
 		{
 			std::string joyName = "Controller";
 			auto it = mJoystickNameCache.find(instanceId);
-			if (it != mJoystickNameCache.end() && !it->second.empty())
+			if(it != mJoystickNameCache.end() && !it->second.empty())
 				joyName = it->second;
 
-			window->setInfoPopup(new GuiInfoPopup(window, std::string("☆ Disconnected: ") + joyName, 2500));
+			window->setInfoPopup(new GuiInfoPopup(
+				window,
+				buildControllerPopupMessage(false, joyName),
+				2500
+			));
 		}
 
 		removeJoystickByJoystickID(instanceId);
@@ -348,7 +388,9 @@ case SDL_KEYDOWN:
 
 	if((ev.type == (unsigned int)SDL_USER_CECBUTTONDOWN) || (ev.type == (unsigned int)SDL_USER_CECBUTTONUP))
 	{
-		window->input(getInputConfigByDevice(DEVICE_CEC), Input(DEVICE_CEC, TYPE_CEC_BUTTON, ev.user.code, ev.type == (unsigned int)SDL_USER_CECBUTTONDOWN, false));
+		window->input(getInputConfigByDevice(DEVICE_CEC),
+			Input(DEVICE_CEC, TYPE_CEC_BUTTON, ev.user.code,
+			ev.type == (unsigned int)SDL_USER_CECBUTTONDOWN, false));
 		return true;
 	}
 
@@ -490,7 +532,7 @@ void InputManager::doOnFinish()
 				if(root)
 				{
 					for(pugi::xml_node command = root.child("command"); command;
-							command = command.next_sibling("command"))
+						command = command.next_sibling("command"))
 					{
 						std::string tocall = command.text().get();
 
