@@ -5,15 +5,34 @@
 #include "components/ButtonComponent.h"
 #include "components/MenuComponent.h"
 #include "../LocaleESHook.h"  // Para es_translate
+#include "Settings.h"
 
 #define HORIZONTAL_PADDING_PX 20
+
+namespace
+{
+    inline bool isMenuDark()
+    {
+        return Settings::getInstance()->getBool("MenuDark");
+    }
+
+    inline unsigned int getMessageTextColor()
+    {
+        return isMenuDark() ? 0xE0E0E0FF : 0x777777FF;
+    }
+
+    inline const char* getFramePath()
+    {
+        return isMenuDark() ? ":/frame_dark.png" : ":/frame.png";
+    }
+}
 
 GuiMsgBox::GuiMsgBox(Window* window, const std::string& text,
     const std::string& name1, const std::function<void()>& func1,
     const std::string& name2, const std::function<void()>& func2,
     const std::string& name3, const std::function<void()>& func3)
     : GuiComponent(window)
-    , mBackground(window, ":/frame.png")
+    , mBackground(window, getFramePath())
     , mGrid(window, Vector2i(1, 2))
 {
     float width    = Renderer::getScreenWidth() * 0.6f; // max width
@@ -24,7 +43,7 @@ GuiMsgBox::GuiMsgBox(Window* window, const std::string& text,
         mWindow,
         es_translate(text),
         Font::get(FONT_SIZE_MEDIUM),
-        0x777777FF,
+        getMessageTextColor(),
         ALIGN_CENTER
     );
     mGrid.setEntry(mMsg, Vector2i(0, 0), false, false);

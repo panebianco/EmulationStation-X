@@ -6,77 +6,98 @@
 #include "FileData.h"
 #include "PowerSaver.h"
 #include "SystemData.h"
+#include "Settings.h"
 
-GuiGameScraper::GuiGameScraper(Window* window, ScraperSearchParams params, std::function<void(const ScraperSearchResult&)> doneFunc) : GuiComponent(window),
-	mGrid(window, Vector2i(1, 7)),
-	mBox(window, ":/frame.png"),
-	mSearchParams(params),
-	mClose(false)
+namespace
+{
+	inline unsigned int getPrimaryTextColor()
+	{
+		return Settings::getInstance()->getBool("MenuDark") ? 0xFFFFFFFF : 0x777777FF;
+	}
+
+	inline unsigned int getSecondaryTextColor()
+	{
+		return Settings::getInstance()->getBool("MenuDark") ? 0xBBBBBBFF : 0x888888FF;
+	}
+
+	inline const char* getFramePath()
+	{
+		return Settings::getInstance()->getBool("MenuDark") ? ":/frame_dark.png" : ":/frame.png";
+	}
+}
+
+GuiGameScraper::GuiGameScraper(Window* window, ScraperSearchParams params, std::function<void(const ScraperSearchResult&)> doneFunc)
+	: GuiComponent(window),
+	  mGrid(window, Vector2i(1, 7)),
+	  mBox(window, getFramePath()),
+	  mSearchParams(params),
+	  mClose(false)
 {
 	PowerSaver::pause();
 	addChild(&mBox);
 	addChild(&mGrid);
 
-	// row 0 is a spacer
+	// row 0 spacer
 
-	mGameName = std::make_shared<TextComponent>(mWindow, Utils::String::toUpper(Utils::FileSystem::getFileName(mSearchParams.game->getPath())),
-		Font::get(FONT_SIZE_MEDIUM), 0x777777FF, ALIGN_CENTER);
+	mGameName = std::make_shared<TextComponent>(
+		mWindow,
+		Utils::String::toUpper(Utils::FileSystem::getFileName(mSearchParams.game->getPath())),
+		Font::get(FONT_SIZE_MEDIUM),
+		getPrimaryTextColor(),
+		ALIGN_CENTER
+	);
 	mGrid.setEntry(mGameName, Vector2i(0, 1), false, true);
 
-	// row 2 is a spacer
+	// row 2 spacer
 
-	mSystemName = std::make_shared<TextComponent>(mWindow, Utils::String::toUpper(mSearchParams.system->getFullName()), Font::get(FONT_SIZE_SMALL),
-		0x888888FF, ALIGN_CENTER);
+	mSystemName = std::make_shared<TextComponent>(
+		mWindow,
+		Utils::String::toUpper(mSearchParams.system->getFullName()),
+		Font::get(FONT_SIZE_SMALL),
+		getSecondaryTextColor(),
+		ALIGN_CENTER
+	);
 	mGrid.setEntry(mSystemName, Vector2i(0, 3), false, true);
 
-	// row 4 is a spacer
+	// row 4 spacer
 
 	// ScraperSearchComponent
 	mSearch = std::make_shared<ScraperSearchComponent>(window, ScraperSearchComponent::NEVER_AUTO_ACCEPT);
 	mGrid.setEntry(mSearch, Vector2i(0, 5), true);
 
 	// buttons
-	std::vector< std::shared_ptr<ButtonComponent> > buttons;
+	std::vector<std::shared_ptr<ButtonComponent>> buttons;
 
 	buttons.push_back(std::make_shared<ButtonComponent>(mWindow, "INPUT", "search", [&] {
 		mSearch->openInputScreen(mSearchParams);
 		mGrid.resetCursor();
 	}));
-	buttons.push_back(std::make_shared<ButtonComponent>(mWindow, "CANCEL", "cancel", [&] { delete this; }));
-	mButtonGrid = makeButtonGrid(mWindow, buttons);
 
+	buttons.push_back(std::make_shared<ButtonComponent>(mWindow, "CANCEL", "cancel", [&] {
+		delete this;
+	}));
+
+	mButtonGrid = makeButtonGrid(mWindow, buttons);
 	mGrid.setEntry(mButtonGrid, Vector2i(0, 6), true, false);
 
-	// we call this->close() instead of just delete this; in the accept callback:
-	// this is because of how GuiComponent::update works.  if it was just delete this, this would happen when the metadata resolver is done:
-	//     GuiGameScraper::update()
-	//       GuiComponent::update()
-	//         it = mChildren.cbegin();
-	//         mBox::update()
-	//         it++;
-	//         mSearchComponent::update()
-	//           acceptCallback -> delete this
-	//         it++; // error, mChildren has been deleted because it was part of this
+	// callbacks seguros
+	mSearch->setAcceptCallback([this, doneFunc](const ScraperSearchResult& result) {
+		doneFunc(result);
+		close();
+	});
 
-	// so instead we do this:
-	//     GuiGameScraper::update()
-	//       GuiComponent::update()
-	//         it = mChildren.cbegin();
-	//         mBox::update()
-	//         it++;
-	//         mSearchComponent::update()
-	//           acceptCallback -> close() -> mClose = true
-	//         it++; // ok
-	//       if(mClose)
-	//         delete this;
-	mSearch->setAcceptCallback([this, doneFunc](const ScraperSearchResult& result) { doneFunc(result); close(); });
-	mSearch->setCancelCallback([&] { delete this; });
+	mSearch->setCancelCallback([&] {
+		delete this;
+	});
 
 	setSize(Renderer::getScreenWidth() * 0.95f, Renderer::getScreenHeight() * 0.747f);
-	setPosition((Renderer::getScreenWidth() - mSize.x()) / 2, (Renderer::getScreenHeight() - mSize.y()) / 2);
+	setPosition(
+		(Renderer::getScreenWidth() - mSize.x()) / 2,
+		(Renderer::getScreenHeight() - mSize.y()) / 2
+	);
 
 	mGrid.resetCursor();
-	mSearch->search(params); // start the search
+	mSearch->search(params);
 }
 
 void GuiGameScraper::onSizeChanged()
@@ -84,17 +105,18 @@ void GuiGameScraper::onSizeChanged()
 	mBox.fitTo(mSize, Vector3f::Zero(), Vector2f(-32, -32));
 
 	mGrid.setRowHeightPerc(0, 0.04f, false);
-	mGrid.setRowHeightPerc(1, mGameName->getFont()->getLetterHeight() / mSize.y(), false); // game name
+	mGrid.setRowHeightPerc(1, mGameName->getFont()->getLetterHeight() / mSize.y(), false);
 	mGrid.setRowHeightPerc(2, 0.04f, false);
-	mGrid.setRowHeightPerc(3, mSystemName->getFont()->getLetterHeight() / mSize.y(), false); // system name
+	mGrid.setRowHeightPerc(3, mSystemName->getFont()->getLetterHeight() / mSize.y(), false);
 	mGrid.setRowHeightPerc(4, 0.04f, false);
-	mGrid.setRowHeightPerc(6, mButtonGrid->getSize().y() / mSize.y(), false); // buttons
+	mGrid.setRowHeightPerc(6, mButtonGrid->getSize().y() / mSize.y(), false);
+
 	mGrid.setSize(mSize);
 }
 
 bool GuiGameScraper::input(InputConfig* config, Input input)
 {
-	if(config->isMappedTo("b", input) && input.value)
+	if (config->isMappedTo("b", input) && input.value)
 	{
 		PowerSaver::resume();
 		delete this;
@@ -108,7 +130,7 @@ void GuiGameScraper::update(int deltaTime)
 {
 	GuiComponent::update(deltaTime);
 
-	if(mClose)
+	if (mClose)
 		delete this;
 }
 

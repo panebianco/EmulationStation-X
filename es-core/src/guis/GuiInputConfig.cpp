@@ -6,6 +6,7 @@
 #include "InputManager.h"
 #include "Log.h"
 #include "Window.h"
+#include "Settings.h"
 
 // ✅ ES-X locale
 #include "LocaleES.h"
@@ -16,6 +17,59 @@
 static inline std::string tr(const char* key)
 {
 	return es_translate(std::string(key));
+}
+
+namespace
+{
+	inline bool isMenuDark()
+	{
+		return Settings::getInstance()->getBool("MenuDark");
+	}
+
+	inline const char* getFramePath()
+	{
+		return isMenuDark() ? ":/frame_dark.png" : ":/frame.png";
+	}
+
+	inline unsigned int getTitleColor()
+	{
+		return isMenuDark() ? 0xFFFFFFFF : 0x555555FF;
+	}
+
+	inline unsigned int getSubtitleColor()
+	{
+		return isMenuDark() ? 0xD0D0D0FF : 0x555555FF;
+	}
+
+	inline unsigned int getHintColor()
+	{
+		return isMenuDark() ? 0xA8A8A8FF : 0x999999FF;
+	}
+
+	inline unsigned int getLabelColor()
+	{
+		return isMenuDark() ? 0xE0E0E0FF : 0x777777FF;
+	}
+
+	inline unsigned int getValueColor()
+	{
+		return isMenuDark() ? 0xBEBEBEFF : 0x999999FF;
+	}
+
+	inline unsigned int getActiveColor()
+	{
+		return isMenuDark() ? 0xFFFFFFFF : 0x656565FF;
+	}
+
+	inline unsigned int getErrorColor()
+	{
+		return isMenuDark() ? 0xFF9090FF : 0x656565FF;
+	}
+
+	inline unsigned int getIconColor()
+	{
+		return isMenuDark() ? 0xE0E0E0FF : 0x777777FF;
+	}
 }
 
 struct InputConfigStructure
@@ -59,7 +113,7 @@ static const InputConfigStructure GUI_INPUT_CONFIG_LIST[inputCount] =
 #define HOLD_TO_SKIP_MS 1000
 
 GuiInputConfig::GuiInputConfig(Window* window, InputConfig* target, bool reconfigureAll, const std::function<void()>& okCallback) : GuiComponent(window),
-	mBackground(window, ":/frame.png"), mGrid(window, Vector2i(1, 7)),
+	mBackground(window, getFramePath()), mGrid(window, Vector2i(1, 7)),
 	mTargetConfig(target), mHoldingInput(false), mBusyAnim(window)
 {
 	LOG(LogInfo) << "Configuring device " << target->getDeviceId() << " (" << target->getDeviceName() << ").";
@@ -76,7 +130,7 @@ GuiInputConfig::GuiInputConfig(Window* window, InputConfig* target, bool reconfi
 	// 0 is a spacer row
 	mGrid.setEntry(std::make_shared<GuiComponent>(mWindow), Vector2i(0, 0), false);
 
-	mTitle = std::make_shared<TextComponent>(mWindow, tr("CONFIGURING"), Font::get(FONT_SIZE_LARGE), 0x555555FF, ALIGN_CENTER);
+	mTitle = std::make_shared<TextComponent>(mWindow, tr("CONFIGURING"), Font::get(FONT_SIZE_LARGE), getTitleColor(), ALIGN_CENTER);
 	mGrid.setEntry(mTitle, Vector2i(0, 1), false, true);
 
 	std::stringstream ss;
@@ -86,16 +140,15 @@ GuiInputConfig::GuiInputConfig(Window* window, InputConfig* target, bool reconfi
 		ss << tr("CEC");
 	else
 	{
-		// "GAMEPAD %d" como clave base para traducir fácil
 		char buf[64];
 		std::snprintf(buf, sizeof(buf), "%s %d", tr("GAMEPAD").c_str(), (target->getDeviceId() + 1));
 		ss << buf;
 	}
 
-	mSubtitle1 = std::make_shared<TextComponent>(mWindow, Utils::String::toUpper(ss.str()), Font::get(FONT_SIZE_MEDIUM), 0x555555FF, ALIGN_CENTER);
+	mSubtitle1 = std::make_shared<TextComponent>(mWindow, Utils::String::toUpper(ss.str()), Font::get(FONT_SIZE_MEDIUM), getSubtitleColor(), ALIGN_CENTER);
 	mGrid.setEntry(mSubtitle1, Vector2i(0, 2), false, true);
 
-	mSubtitle2 = std::make_shared<TextComponent>(mWindow, tr("HOLD ANY BUTTON TO SKIP"), Font::get(FONT_SIZE_SMALL), 0x999999FF, ALIGN_CENTER);
+	mSubtitle2 = std::make_shared<TextComponent>(mWindow, tr("HOLD ANY BUTTON TO SKIP"), Font::get(FONT_SIZE_SMALL), getHintColor(), ALIGN_CENTER);
 	mSubtitle2->setOpacity(GUI_INPUT_CONFIG_LIST[0].skippable * 255);
 	mGrid.setEntry(mSubtitle2, Vector2i(0, 3), false, true);
 
@@ -107,34 +160,29 @@ GuiInputConfig::GuiInputConfig(Window* window, InputConfig* target, bool reconfi
 	{
 		ComponentListRow row;
 
-		// icon
 		auto icon = std::make_shared<ImageComponent>(mWindow);
 		icon->setImage(GUI_INPUT_CONFIG_LIST[i].icon);
-		icon->setColorShift(0x777777FF);
+		icon->setColorShift(getIconColor());
 		icon->setResize(0, Font::get(FONT_SIZE_MEDIUM)->getLetterHeight() * 1.25f);
 		row.addElement(icon, false);
 
-		// spacer between icon and text
 		auto spacer = std::make_shared<GuiComponent>(mWindow);
 		spacer->setSize(16, 0);
 		row.addElement(spacer, false);
 
-		// ✅ traducible: dispName
-		auto text = std::make_shared<TextComponent>(mWindow, tr(GUI_INPUT_CONFIG_LIST[i].dispName), Font::get(FONT_SIZE_MEDIUM), 0x777777FF);
+		auto text = std::make_shared<TextComponent>(mWindow, tr(GUI_INPUT_CONFIG_LIST[i].dispName), Font::get(FONT_SIZE_MEDIUM), getLabelColor());
 		row.addElement(text, true);
 
-		auto mapping = std::make_shared<TextComponent>(mWindow, tr("-NOT DEFINED-"), Font::get(FONT_SIZE_MEDIUM, FONT_PATH_LIGHT), 0x999999FF, ALIGN_RIGHT);
-		setNotDefined(mapping); // overrides text and color set above
+		auto mapping = std::make_shared<TextComponent>(mWindow, tr("-NOT DEFINED-"), Font::get(FONT_SIZE_MEDIUM, FONT_PATH_LIGHT), getValueColor(), ALIGN_RIGHT);
+		setNotDefined(mapping);
 		row.addElement(mapping, true);
 		mMappings.push_back(mapping);
 
 		row.input_handler = [this, i, mapping](InputConfig* config, Input input) -> bool
 		{
-			// ignore input not from our target device
 			if(config != mTargetConfig)
 				return false;
 
-			// if we're not configuring, start configuring when A is pressed
 			if(!mConfiguringRow)
 			{
 				if(config->isMappedTo("a", input) && input.value)
@@ -145,15 +193,12 @@ GuiInputConfig::GuiInputConfig(Window* window, InputConfig* target, bool reconfi
 					return true;
 				}
 
-				// we're not configuring and they didn't press A to start, so ignore this
 				return false;
 			}
 
-			// apply filtering for quirks related to trigger mapping
 			if(filterTrigger(input, config, i))
 				return false;
 
-			// we are configuring
 			if(input.value != 0)
 			{
 				if(mHoldingInput)
@@ -181,7 +226,6 @@ GuiInputConfig::GuiInputConfig(Window* window, InputConfig* target, bool reconfi
 		mList->addRow(row);
 	}
 
-	// only show "HOLD TO SKIP" if this input is skippable
 	mList->setCursorChangedCallback([this](CursorState /*state*/) {
 		bool skippable = GUI_INPUT_CONFIG_LIST[mList->getCursorId()].skippable;
 		mSubtitle2->setOpacity(skippable * 255);
@@ -190,10 +234,9 @@ GuiInputConfig::GuiInputConfig(Window* window, InputConfig* target, bool reconfi
 	if(mConfiguringAll)
 		setPress(mMappings.front());
 
-	// buttons
 	std::vector< std::shared_ptr<ButtonComponent> > buttons;
 	std::function<void()> okFunction = [this, okCallback] {
-		InputManager::getInstance()->writeDeviceConfig(mTargetConfig); // save
+		InputManager::getInstance()->writeDeviceConfig(mTargetConfig);
 		if(okCallback)
 			okCallback();
 		delete this;
@@ -261,13 +304,12 @@ void GuiInputConfig::update(int deltaTime)
 			{
 				const auto& text = mMappings.at(mHeldInputId);
 
-				// ✅ Traducción base: "HOLD FOR %dS TO SKIP"
 				char buf[128];
 				int remaining = (HOLD_TO_SKIP_MS/1000) - curSec;
 				std::snprintf(buf, sizeof(buf), tr("HOLD FOR %dS TO SKIP").c_str(), remaining);
 
 				text->setText(buf);
-				text->setColor(0x777777FF);
+				text->setColor(getLabelColor());
 			}
 		}
 	}
@@ -293,25 +335,25 @@ void GuiInputConfig::rowDone()
 void GuiInputConfig::setPress(const std::shared_ptr<TextComponent>& text)
 {
 	text->setText(tr("PRESS ANYTHING"));
-	text->setColor(0x656565FF);
+	text->setColor(getActiveColor());
 }
 
 void GuiInputConfig::setNotDefined(const std::shared_ptr<TextComponent>& text)
 {
 	text->setText(tr("-NOT DEFINED-"));
-	text->setColor(0x999999FF);
+	text->setColor(getValueColor());
 }
 
 void GuiInputConfig::setAssignedTo(const std::shared_ptr<TextComponent>& text, Input input)
 {
 	text->setText(Utils::String::toUpper(input.string()));
-	text->setColor(0x777777FF);
+	text->setColor(getLabelColor());
 }
 
 void GuiInputConfig::error(const std::shared_ptr<TextComponent>& text, const std::string& /*msg*/)
 {
 	text->setText(tr("ALREADY TAKEN"));
-	text->setColor(0x656565FF);
+	text->setColor(getErrorColor());
 }
 
 bool GuiInputConfig::assign(Input input, int inputId)

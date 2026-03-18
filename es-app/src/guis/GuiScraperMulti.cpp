@@ -10,11 +10,40 @@
 #include "PowerSaver.h"
 #include "SystemData.h"
 #include "Window.h"
-#include "LocaleESHook.h"   // ← traducción (es_translate)
+#include "LocaleESHook.h"
+#include "Settings.h"
+
+namespace
+{
+	inline bool isMenuDark()
+	{
+		return Settings::getInstance()->getBool("MenuDark");
+	}
+
+	inline const char* getFramePath()
+	{
+		return isMenuDark() ? ":/frame_dark.png" : ":/frame.png";
+	}
+
+	inline unsigned int getTitleColor()
+	{
+		return isMenuDark() ? 0xFFFFFFFF : 0x555555FF;
+	}
+
+	inline unsigned int getPrimaryTextColor()
+	{
+		return isMenuDark() ? 0xE0E0E0FF : 0x777777FF;
+	}
+
+	inline unsigned int getSecondaryTextColor()
+	{
+		return isMenuDark() ? 0xBBBBBBFF : 0x888888FF;
+	}
+}
 
 GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchParams>& searches, bool approveResults) :
 	GuiComponent(window),
-	mBackground(window, ":/frame.png"),
+	mBackground(window, getFramePath()),
 	mGrid(window, Vector2i(1, 5)),
 	mSearchQueue(searches)
 {
@@ -23,7 +52,7 @@ GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchP
 	addChild(&mBackground);
 	addChild(&mGrid);
 
-	// ✅ Evitar que Window entre en sleep/idle mientras scrapea (evita que se "congele" el busy sin input)
+	// ✅ Evitar que Window entre en sleep/idle mientras scrapea
 	mWindow->setAllowSleep(false);
 
 	PowerSaver::pause();
@@ -39,7 +68,7 @@ GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchP
 		mWindow,
 		es_translate("SCRAPING IN PROGRESS"),
 		Font::get(FONT_SIZE_LARGE),
-		0x555555FF,
+		getTitleColor(),
 		ALIGN_CENTER);
 	mGrid.setEntry(mTitle, Vector2i(0, 0), false, true);
 
@@ -48,16 +77,16 @@ GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchP
 		mWindow,
 		es_translate("SYSTEM"),
 		Font::get(FONT_SIZE_MEDIUM),
-		0x777777FF,
+		getPrimaryTextColor(),
 		ALIGN_CENTER);
 	mGrid.setEntry(mSystem, Vector2i(0, 1), false, true);
 
-	// subtítulo (se actualiza en doNextSearch)
+	// subtítulo
 	mSubtitle = std::make_shared<TextComponent>(
 		mWindow,
 		"",
 		Font::get(FONT_SIZE_SMALL),
-		0x888888FF,
+		getSecondaryTextColor(),
 		ALIGN_CENTER);
 	mGrid.setEntry(mSubtitle, Vector2i(0, 2), false, true);
 
@@ -122,15 +151,12 @@ GuiScraperMulti::GuiScraperMulti(Window* window, const std::queue<ScraperSearchP
 
 GuiScraperMulti::~GuiScraperMulti()
 {
-	// ✅ Pase lo que pase, restaurar sleep (por si se destruye sin pasar por finish())
 	if (mWindow)
 		mWindow->setAllowSleep(true);
 
-	// Si estaba procesando, restaurar PowerSaver también (seguro)
 	if (mIsProcessing)
 		PowerSaver::resume();
 
-	// view type probably changed (basic -> detailed)
 	for (auto it = SystemData::sSystemVector.cbegin(); it != SystemData::sSystemVector.cend(); it++)
 		ViewController::get()->reloadGameListView(*it, false);
 }
@@ -154,10 +180,8 @@ void GuiScraperMulti::doNextSearch()
 		return;
 	}
 
-	// sistema actual
 	mSystem->setText(Utils::String::toUpper(mSearchQueue.front().system->getFullName()));
 
-	// subtítulo: "GAME X OF Y - NOMBRE.EXT"
 	std::stringstream ss;
 	const std::string gameLabel = es_translate("GAME");
 	const std::string ofLabel   = es_translate("OF");
@@ -195,7 +219,6 @@ void GuiScraperMulti::skip()
 
 void GuiScraperMulti::finish()
 {
-	// ✅ Si ya terminó, no repetir (evita doble resume / doble popup si entra por cancel+algo raro)
 	if (!mIsProcessing)
 		return;
 
@@ -207,13 +230,11 @@ void GuiScraperMulti::finish()
 	}
 	else
 	{
-		// X GAME(S) SUCCESSFULLY SCRAPED!
 		if (mTotalSuccessful == 1)
 			ss << mTotalSuccessful << " " << es_translate("GAME SCRAPED");
 		else
 			ss << mTotalSuccessful << " " << es_translate("GAMES SCRAPED");
 
-		// Y GAME(S) SKIPPED.
 		if (mTotalSkipped > 0)
 		{
 			ss << "\n";
@@ -224,7 +245,6 @@ void GuiScraperMulti::finish()
 		}
 	}
 
-	// ✅ Restaurar estados antes de cerrar
 	mIsProcessing = false;
 	PowerSaver::resume();
 

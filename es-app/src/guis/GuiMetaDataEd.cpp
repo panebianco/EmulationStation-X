@@ -27,6 +27,7 @@
 #include "SystemData.h"
 #include "Window.h"
 #include "Log.h"
+#include "Settings.h"
 
 #include "LocaleES.h"
 
@@ -39,12 +40,45 @@ static inline std::string tr(const std::string& key)
 	return t.empty() ? key : t;
 }
 
+namespace
+{
+	inline bool isMenuDark()
+	{
+		return Settings::getInstance()->getBool("MenuDark");
+	}
+
+	inline unsigned int getTitleColor()
+	{
+		return isMenuDark() ? 0xFFFFFFFF : 0x555555FF;
+	}
+
+	inline unsigned int getPrimaryTextColor()
+	{
+		return isMenuDark() ? 0xE0E0E0FF : 0x777777FF;
+	}
+
+	inline unsigned int getSecondaryTextColor()
+	{
+		return isMenuDark() ? 0xBBBBBBFF : 0x777777FF;
+	}
+
+	inline const char* getFramePath()
+	{
+		return isMenuDark() ? ":/frame_dark.png" : ":/frame.png";
+	}
+
+	inline const char* getArrowPath()
+	{
+		return isMenuDark() ? ":/arrow_dark.svg" : ":/arrow.svg";
+	}
+}
+
 GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector<MetaDataDecl>& mdd,
 	ScraperSearchParams scraperParams, const std::string& /*header*/,
 	std::function<void()> saveCallback, std::function<void()> deleteFunc)
 	: GuiComponent(window)
 	, mScraperParams(scraperParams)
-	, mBackground(window, ":/frame.png")
+	, mBackground(window, getFramePath())
 	, mGrid(window, Vector2i(1, 3))
 	, mMetaDataDecl(mdd)
 	, mMetaData(md)
@@ -61,7 +95,7 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 		mWindow,
 		tr("EDIT METADATA"),
 		Font::get(FONT_SIZE_LARGE),
-		0x555555FF,
+		getTitleColor(),
 		ALIGN_CENTER
 	);
 
@@ -78,7 +112,7 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 		mWindow,
 		subt,
 		Font::get(FONT_SIZE_SMALL),
-		0x777777FF,
+		getPrimaryTextColor(),
 		ALIGN_CENTER
 	);
 
@@ -108,7 +142,7 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 			lblTxt += " (" + DateTimeComponent::getDateformatTip() + ")";
 
 		auto lbl = std::make_shared<TextComponent>(
-			mWindow, lblTxt, Font::get(FONT_SIZE_SMALL), 0x777777FF
+			mWindow, lblTxt, Font::get(FONT_SIZE_SMALL), getPrimaryTextColor()
 		);
 
 		row.addElement(lbl, true); // label
@@ -132,7 +166,6 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 			spacer->setSize(Renderer::getScreenWidth() * 0.0025f, 0);
 			row.addElement(spacer, false);
 
-			// pass input to the actual RatingComponent instead of the spacer
 			row.input_handler = std::bind(&GuiComponent::input, ed.get(),
 				std::placeholders::_1, std::placeholders::_2);
 			break;
@@ -146,7 +179,6 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 			spacer->setSize(Renderer::getScreenWidth() * 0.0025f, 0);
 			row.addElement(spacer, false);
 
-			// pass input to the actual DateTimeEditComponent instead of the spacer
 			row.input_handler = std::bind(&GuiComponent::input, ed.get(),
 				std::placeholders::_1, std::placeholders::_2);
 			break;
@@ -160,9 +192,8 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 		case MD_MULTILINE_STRING:
 		default:
 		{
-			// MD_STRING
 			ed = std::make_shared<TextComponent>(
-				window, "", Font::get(FONT_SIZE_SMALL, FONT_PATH_LIGHT), 0x777777FF, ALIGN_RIGHT
+				window, "", Font::get(FONT_SIZE_SMALL, FONT_PATH_LIGHT), getSecondaryTextColor(), ALIGN_RIGHT
 			);
 
 			const float height = lbl->getSize().y() * 0.71f;
@@ -174,13 +205,12 @@ GuiMetaDataEd::GuiMetaDataEd(Window* window, MetaDataList* md, const std::vector
 			row.addElement(spacer, false);
 
 			auto bracket = std::make_shared<ImageComponent>(mWindow);
-			bracket->setImage(":/arrow.svg");
+			bracket->setImage(getArrowPath());
 			bracket->setResize(Vector2f(0, lbl->getFont()->getLetterHeight()));
 			row.addElement(bracket, false);
 
 			const bool multiLine = (iter->type == MD_MULTILINE_STRING);
 
-			// Prompt translated
 			const std::string title = tr(iter->displayPrompt);
 
 			auto updateVal = [ed](const std::string& newVal) {
@@ -277,7 +307,6 @@ void GuiMetaDataEd::onSizeChanged()
 
 void GuiMetaDataEd::save()
 {
-	// remove game from index
 	mScraperParams.system->getIndex()->removeFromIndex(mScraperParams.game);
 
 	assert(mMetaDataDecl.size() >= mEditors.size());
@@ -292,13 +321,11 @@ void GuiMetaDataEd::save()
 		}
 	}
 
-	// enter game in index
 	mScraperParams.system->getIndex()->addToIndex(mScraperParams.game);
 
 	if (mSavedCallback)
 		mSavedCallback();
 
-	// update respective Collection Entries
 	CollectionSystemManager::get()->refreshCollectionSystems(mScraperParams.game);
 
 	mScraperParams.system->onMetaDataSavePoint();
