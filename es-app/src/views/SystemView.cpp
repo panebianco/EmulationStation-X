@@ -1,4 +1,3 @@
-// es-app/src/views/SystemView.cpp
 #include "views/SystemView.h"
 
 #include "animations/LambdaAnimation.h"
@@ -25,6 +24,8 @@
 #include <algorithm>
 #include <sstream>
 #include <cmath>
+#include <unordered_map>
+#include <limits>
 
 // buffer values for scrolling velocity (left, stopped, right)
 const int logoBuffersLeft[]  = { -5, -2, -1 };
@@ -83,6 +84,36 @@ static inline GuiComponent* makeThemedGuiComponent(Window* window,
 	return comp;
 }
 
+// ─────────────────────────────────────────────
+// Extras locales para el carrusel, sin tocar header
+// ─────────────────────────────────────────────
+namespace
+{
+	struct SystemCarouselExtras
+	{
+		float logoOffsetX = 0.0f;
+		float logoOffsetY = 0.0f;
+
+		float selectedLogoOffsetX = 0.0f;
+		float selectedLogoOffsetY = 0.0f;
+
+		float logoSpacingX = std::numeric_limits<float>::quiet_NaN();
+		float logoSpacingY = std::numeric_limits<float>::quiet_NaN();
+	};
+
+	static std::unordered_map<const SystemView*, SystemCarouselExtras> sCarouselExtras;
+
+	static inline SystemCarouselExtras& getCarouselExtras(const SystemView* view)
+	{
+		return sCarouselExtras[view];
+	}
+
+	static inline bool validSpacing(float v)
+	{
+		return std::isfinite(v) && v > 0.0f;
+	}
+}
+
 SystemView::SystemView(Window* window) :
 	IList<SystemViewData, SystemData*>(window, LIST_SCROLL_STYLE_SLOW, LIST_ALWAYS_LOOP),
 	mViewNeedsReload(true),
@@ -98,6 +129,9 @@ SystemView::SystemView(Window* window) :
 	mExtrasCamOffset = 0;
 	mExtrasFadeOpacity = 0.0f;
 	mScrollSnd.reset();
+
+	// asegurar entrada local
+	getCarouselExtras(this);
 
 	setSize((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
 	populate();
@@ -801,6 +835,8 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 	if(mEntries.empty())
 		return;
 
+	const SystemCarouselExtras& extraCfg = getCarouselExtras(this);
+
 	Transform4x4f carouselTrans = trans;
 	carouselTrans.translate(Vector3f(mCarousel.pos.x(), mCarousel.pos.y(), 0.0));
 	carouselTrans.translate(Vector3f(
@@ -831,8 +867,11 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 	switch(mCarousel.type)
 	{
 	case VERTICAL_WHEEL:
-		// IMPORTANT: mantener comportamiento de la versión "rueda ok"
+		if(validSpacing(extraCfg.logoSpacingY))
+			logoSpacing[1] = extraCfg.logoSpacingY;
+
 		yOff = (mCarousel.size.y() - mCarousel.logoSize.y()) / 2.f - (mCamOffset * logoSpacing[1]);
+
 		if(mCarousel.logoAlignment == ALIGN_LEFT)
 			xOff = mCarousel.logoSize.x() / 10.f;
 		else if(mCarousel.logoAlignment == ALIGN_RIGHT)
@@ -846,8 +885,12 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 		                   (mCarousel.logoSize.y() * mCarousel.maxLogoCount)) /
 		                  (mCarousel.maxLogoCount))
 		               + mCarousel.logoSize.y();
-		yOff           = (mCarousel.size.y() - mCarousel.logoSize.y()) / 2.f
-		               - (mCamOffset * logoSpacing[1]);
+
+		if(validSpacing(extraCfg.logoSpacingY))
+			logoSpacing[1] = extraCfg.logoSpacingY;
+
+		yOff = (mCarousel.size.y() - mCarousel.logoSize.y()) / 2.f
+		     - (mCamOffset * logoSpacing[1]);
 
 		if(mCarousel.logoAlignment == ALIGN_LEFT)
 			xOff = mCarousel.logoSize.x() / 10.f;
@@ -858,8 +901,11 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 		break;
 
 	case HORIZONTAL_WHEEL:
-		// IMPORTANT: mantener comportamiento de la versión "rueda ok"
+		if(validSpacing(extraCfg.logoSpacingX))
+			logoSpacing[0] = extraCfg.logoSpacingX;
+
 		xOff = (mCarousel.size.x() - mCarousel.logoSize.x()) / 2.f - (mCamOffset * logoSpacing[0]);
+
 		if(mCarousel.logoAlignment == ALIGN_TOP)
 			yOff = mCarousel.logoSize.y() / 10.f;
 		else if(mCarousel.logoAlignment == ALIGN_BOTTOM)
@@ -874,8 +920,12 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 		                   (mCarousel.logoSize.x() * mCarousel.maxLogoCount)) /
 		                  (mCarousel.maxLogoCount))
 		               + mCarousel.logoSize.x();
-		xOff           = (mCarousel.size.x() - mCarousel.logoSize.x()) / 2.f
-		               - (mCamOffset * logoSpacing[0]);
+
+		if(validSpacing(extraCfg.logoSpacingX))
+			logoSpacing[0] = extraCfg.logoSpacingX;
+
+		xOff = (mCarousel.size.x() - mCarousel.logoSize.x()) / 2.f
+		     - (mCamOffset * logoSpacing[0]);
 
 		if(mCarousel.logoAlignment == ALIGN_TOP)
 			yOff = mCarousel.logoSize.y() / 10.f;
@@ -885,6 +935,10 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 			yOff = (mCarousel.size.y() - mCarousel.logoSize.y()) / 2.f;
 		break;
 	}
+
+	// offset fino del bloque completo
+	xOff += extraCfg.logoOffsetX;
+	yOff += extraCfg.logoOffsetY;
 
 	int center    = (int)(mCamOffset);
 	int logoCount = Math::min(mCarousel.maxLogoCount, (int)mEntries.size());
@@ -902,7 +956,7 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 		bufferRight = 0;
 	}
 
-	auto renderLogo = [this, &carouselTrans, &logoSpacing, xOff, yOff](int i)
+	auto renderLogo = [this, &carouselTrans, &logoSpacing, xOff, yOff, &extraCfg](int i)
 	{
 		if(mEntries.empty())
 			return;
@@ -915,42 +969,60 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 
 		Transform4x4f logoTrans = carouselTrans;
 
-		if(mCarousel.type == HORIZONTAL &&
+		float baseX = i * logoSpacing[0] + xOff;
+		float baseY = i * logoSpacing[1] + yOff;
+
+		const bool selected = (index == mCursor);
+
+		if((mCarousel.type == HORIZONTAL || mCarousel.type == VERTICAL) &&
 		   mCarousel.logoScale != 1.0f &&
 		   mCarousel.scaledLogoSpacing != 0.0f)
 		{
-			float logoDiffX = ((logoSpacing[0] * mCarousel.logoScale) - logoSpacing[0])
-				/ 2.0f * mCarousel.scaledLogoSpacing;
+			if(mCarousel.type == HORIZONTAL)
+			{
+				float logoDiffX = ((logoSpacing[0] * mCarousel.logoScale) - logoSpacing[0])
+					/ 2.0f * mCarousel.scaledLogoSpacing;
 
-			if(index == mCursor)
-			{
-				logoTrans.translate(Vector3f(
-					i * logoSpacing[0] + xOff,
-					i * logoSpacing[1] + yOff,
-					0.0f));
+				if(selected)
+				{
+					// sin ajuste lateral extra
+				}
+				else if(i < mCursor || (mCursor == 0 && index > mCarousel.maxLogoCount))
+				{
+					baseX -= logoDiffX;
+				}
+				else
+				{
+					baseX += logoDiffX;
+				}
 			}
-			else if(i < mCursor || (mCursor == 0 && index > mCarousel.maxLogoCount))
+			else // VERTICAL
 			{
-				logoTrans.translate(Vector3f(
-					i * logoSpacing[0] + xOff - logoDiffX,
-					i * logoSpacing[1] + yOff,
-					0.0f));
-			}
-			else
-			{
-				logoTrans.translate(Vector3f(
-					i * logoSpacing[0] + xOff + logoDiffX,
-					i * logoSpacing[1] + yOff,
-					0.0f));
+				float logoDiffY = ((logoSpacing[1] * mCarousel.logoScale) - logoSpacing[1])
+					/ 2.0f * mCarousel.scaledLogoSpacing;
+
+				if(selected)
+				{
+					// sin ajuste vertical extra
+				}
+				else if(i < mCursor || (mCursor == 0 && index > mCarousel.maxLogoCount))
+				{
+					baseY -= logoDiffY;
+				}
+				else
+				{
+					baseY += logoDiffY;
+				}
 			}
 		}
-		else
+
+		if(selected)
 		{
-			logoTrans.translate(Vector3f(
-				i * logoSpacing[0] + xOff,
-				i * logoSpacing[1] + yOff,
-				0.0f));
+			baseX += extraCfg.selectedLogoOffsetX;
+			baseY += extraCfg.selectedLogoOffsetY;
 		}
+
+		logoTrans.translate(Vector3f(baseX, baseY, 0.0f));
 
 		float distance = i - mCamOffset;
 
@@ -1099,6 +1171,15 @@ void SystemView::getDefaultElements(void)
 
 	mScrollSnd.reset();
 
+	// extras locales
+	SystemCarouselExtras& extraCfg = getCarouselExtras(this);
+	extraCfg.logoOffsetX = 0.0f;
+	extraCfg.logoOffsetY = 0.0f;
+	extraCfg.selectedLogoOffsetX = 0.0f;
+	extraCfg.selectedLogoOffsetY = 0.0f;
+	extraCfg.logoSpacingX = std::numeric_limits<float>::quiet_NaN();
+	extraCfg.logoSpacingY = std::numeric_limits<float>::quiet_NaN();
+
 	mSystemInfo.setSize(mSize.x(), mSystemInfo.getFont()->getLetterHeight() * 2.2f);
 	mSystemInfo.setPosition(0, (mCarousel.pos.y() + mCarousel.size.y() - 0.2f));
 	mSystemInfo.setBackgroundColor(0xDDDDDDD8);
@@ -1111,6 +1192,8 @@ void SystemView::getDefaultElements(void)
 
 void SystemView::getCarouselFromTheme(const ThemeData::ThemeElement* elem)
 {
+	SystemCarouselExtras& extraCfg = getCarouselExtras(this);
+
 	if(elem->has("type"))
 	{
 		if(!(elem->get<std::string>("type").compare("vertical")))
@@ -1188,4 +1271,40 @@ void SystemView::getCarouselFromTheme(const ThemeData::ThemeElement* elem)
 		if(!path.empty())
 			mScrollSnd = Sound::get(path);
 	}
+
+	// ─────────────────────────────────────────────
+	// Nuevas propiedades opcionales
+	// ─────────────────────────────────────────────
+
+	if(elem->has("logoOffset"))
+	{
+		Vector2f v = elem->get<Vector2f>("logoOffset") * mSize;
+		extraCfg.logoOffsetX = v.x();
+		extraCfg.logoOffsetY = v.y();
+	}
+
+	if(elem->has("logoOffsetX"))
+		extraCfg.logoOffsetX = elem->get<float>("logoOffsetX") * mSize.x();
+
+	if(elem->has("logoOffsetY"))
+		extraCfg.logoOffsetY = elem->get<float>("logoOffsetY") * mSize.y();
+
+	if(elem->has("selectedLogoOffsetX"))
+		extraCfg.selectedLogoOffsetX = elem->get<float>("selectedLogoOffsetX") * mSize.x();
+
+	if(elem->has("selectedLogoOffsetY"))
+		extraCfg.selectedLogoOffsetY = elem->get<float>("selectedLogoOffsetY") * mSize.y();
+
+	if(elem->has("logoSpacing"))
+	{
+		Vector2f v = elem->get<Vector2f>("logoSpacing") * mSize;
+		extraCfg.logoSpacingX = v.x();
+		extraCfg.logoSpacingY = v.y();
+	}
+
+	if(elem->has("logoSpacingX"))
+		extraCfg.logoSpacingX = elem->get<float>("logoSpacingX") * mSize.x();
+
+	if(elem->has("logoSpacingY"))
+		extraCfg.logoSpacingY = elem->get<float>("logoSpacingY") * mSize.y();
 }

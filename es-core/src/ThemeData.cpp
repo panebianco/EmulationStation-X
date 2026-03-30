@@ -186,26 +186,39 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "showSnapshotNoVideo", BOOLEAN },
 		{ "showSnapshotDelay", BOOLEAN } } },
 
-	{ "carousel", {
-		{ "type", STRING },
-		{ "size", RESOLUTION_PAIR },
-		{ "pos", RESOLUTION_PAIR },
-		{ "origin", NORMALIZED_PAIR },
-		{ "color", COLOR },
-		{ "colorEnd", COLOR },
-		{ "gradientType", STRING },
-		{ "logoScale", FLOAT },
-		{ "logoRotation", FLOAT },
-		{ "logoRotationOrigin", NORMALIZED_PAIR },
-		{ "logoSize", NORMALIZED_PAIR },
-		{ "logoAlignment", STRING },
-		{ "maxLogoCount", FLOAT },
-		{ "zIndex", FLOAT },
-		// propiedades extra del carrusel
-		{ "minLogoOpacity", FLOAT },
-		{ "scaledLogoSpacing", FLOAT },
-		{ "scrollSound", PATH }
-	} }
+{ "carousel", {
+	{ "type", STRING },
+	{ "size", RESOLUTION_PAIR },
+	{ "pos", RESOLUTION_PAIR },
+	{ "origin", NORMALIZED_PAIR },
+	{ "color", COLOR },
+	{ "colorEnd", COLOR },
+	{ "gradientType", STRING },
+	{ "logoScale", FLOAT },
+	{ "logoRotation", FLOAT },
+	{ "logoRotationOrigin", NORMALIZED_PAIR },
+	{ "logoSize", NORMALIZED_PAIR },
+	{ "logoAlignment", STRING },
+	{ "maxLogoCount", FLOAT },
+	{ "zIndex", FLOAT },
+
+	// extras ya existentes
+	{ "minLogoOpacity", FLOAT },
+	{ "scaledLogoSpacing", FLOAT },
+	{ "scrollSound", PATH },
+
+	// nuevos offsets / spacing
+	{ "logoOffset", RESOLUTION_PAIR },
+	{ "logoOffsetX", RESOLUTION_FLOAT },
+	{ "logoOffsetY", RESOLUTION_FLOAT },
+
+	{ "selectedLogoOffsetX", RESOLUTION_FLOAT },
+	{ "selectedLogoOffsetY", RESOLUTION_FLOAT },
+
+	{ "logoSpacing", RESOLUTION_PAIR },
+	{ "logoSpacingX", RESOLUTION_FLOAT },
+	{ "logoSpacingY", RESOLUTION_FLOAT }
+} }
 };
 
 #define MINIMUM_THEME_FORMAT_VERSION 3
