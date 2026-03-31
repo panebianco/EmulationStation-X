@@ -14,10 +14,10 @@ class Sound
 {
 	std::string mPath;
 
-	// ✅ SDL_mixer sample
+	// SDL_mixer sample
 	Mix_Chunk* mChunk;
 
-	// ✅ Canal donde se está reproduciendo (si aplica)
+	// Canal donde se está reproduciendo (si aplica)
 	int mChannel;
 
 public:
@@ -25,6 +25,9 @@ public:
 	static std::shared_ptr<Sound> getFromTheme(const std::shared_ptr<ThemeData>& theme,
 	                                           const std::string& view,
 	                                           const std::string& elem);
+
+	// Limpia caché global de sonidos antes de cerrar audio/SDL
+	static void cleanup();
 
 	~Sound();
 
@@ -43,6 +46,9 @@ private:
 
 	// Abre mixer si aún no está abierto (fallback seguro)
 	static void ensureMixerOpen();
+
+	// Comprueba si el mixer sigue realmente disponible
+	static bool isMixerAvailable();
 };
 
 #endif // ES_CORE_SOUND_H

@@ -39,6 +39,11 @@ std::shared_ptr<Sound> Sound::getFromTheme(const std::shared_ptr<ThemeData>& the
 	return get(elem->get<std::string>("path"));
 }
 
+void Sound::cleanup()
+{
+	sMap.clear();
+}
+
 Sound::Sound(const std::string& path)
 	: mPath(path),
 	  mChunk(nullptr),
@@ -52,6 +57,14 @@ Sound::~Sound()
 	deinit();
 }
 
+bool Sound::isMixerAvailable()
+{
+	int freq = 0;
+	Uint16 format = 0;
+	int channels = 0;
+	return (Mix_QuerySpec(&freq, &format, &channels) != 0);
+}
+
 void Sound::loadFile(const std::string& path)
 {
 	mPath = path;
@@ -60,18 +73,14 @@ void Sound::loadFile(const std::string& path)
 
 void Sound::ensureMixerOpen()
 {
-	// Si el BGM ya abrió el mixer, esto no hace nada.
-	int freq = 0;
-	Uint16 format = 0;
-	int channels = 0;
+	// Si el mixer ya está abierto, no hacer nada.
+	if (isMixerAvailable())
+		return;
 
-	if (Mix_QuerySpec(&freq, &format, &channels) == 0)
+	// Mixer todavía no está abierto. Abrimos con algo estándar.
+	if (Mix_OpenAudio(44100, AUDIO_S16SYS, 2, 2048) < 0)
 	{
-		// Mixer todavía no está abierto. Abrimos con algo estándar.
-		if (Mix_OpenAudio(44100, AUDIO_S16SYS, 2, 2048) < 0)
-		{
-			LOG(LogError) << "Sound: Mix_OpenAudio failed: " << Mix_GetError();
-		}
+		LOG(LogError) << "Sound: Mix_OpenAudio failed: " << Mix_GetError();
 	}
 }
 
@@ -87,6 +96,9 @@ void Sound::init()
 
 	ensureMixerOpen();
 
+	if (!isMixerAvailable())
+		return;
+
 	mChunk = Mix_LoadWAV(mPath.c_str());
 	if (mChunk == nullptr)
 	{
@@ -95,13 +107,11 @@ void Sound::init()
 		return;
 	}
 
-	// Volumen default (0..MIX_MAX_VOLUME). Podés luego hacerlo configurable.
 	Mix_VolumeChunk(mChunk, MIX_MAX_VOLUME);
 }
 
 void Sound::deinit()
 {
-	// Detener si está sonando
 	stop();
 
 	if (mChunk != nullptr)
@@ -121,6 +131,9 @@ void Sound::play()
 
 	ensureMixerOpen();
 
+	if (!isMixerAvailable())
+		return;
+
 	// Play once. (no loop)
 	// Devuelve canal asignado o -1 si falló.
 	mChannel = Mix_PlayChannel(-1, mChunk, 0);
@@ -136,14 +149,29 @@ bool Sound::isPlaying() const
 	if (mChannel < 0)
 		return false;
 
+	int freq = 0;
+	Uint16 format = 0;
+	int channels = 0;
+
+	if (Mix_QuerySpec(&freq, &format, &channels) == 0)
+		return false;
+
 	return (Mix_Playing(mChannel) != 0);
 }
 
 void Sound::stop()
 {
-	if (mChannel >= 0)
+	if (mChannel < 0)
+		return;
+
+	int freq = 0;
+	Uint16 format = 0;
+	int channels = 0;
+
+	if (Mix_QuerySpec(&freq, &format, &channels) != 0)
 	{
 		Mix_HaltChannel(mChannel);
-		mChannel = -1;
 	}
+
+	mChannel = -1;
 }
