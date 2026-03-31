@@ -26,6 +26,7 @@
 #include <cmath>
 #include <unordered_map>
 #include <limits>
+#include <memory>
 
 // buffer values for scrolling velocity (left, stopped, right)
 const int logoBuffersLeft[]  = { -5, -2, -1 };
@@ -112,6 +113,39 @@ namespace
 	{
 		return std::isfinite(v) && v > 0.0f;
 	}
+
+	// ─────────────────────────────────────────
+	// Extras locales para info de sistema
+	// ─────────────────────────────────────────
+	struct SystemInfoExtras
+	{
+		std::unique_ptr<TextComponent> gamesLabel;
+		std::unique_ptr<TextComponent> gameCount;
+
+		bool gamesLabelEnabled = false;
+		bool gameCountEnabled  = false;
+		bool fragmentedEnabled = false;
+	};
+
+	static std::unordered_map<const SystemView*, SystemInfoExtras> sInfoExtras;
+
+	static inline SystemInfoExtras& getInfoExtras(const SystemView* view)
+	{
+		return sInfoExtras[view];
+	}
+
+	static inline void setComponentOpacity(TextComponent* comp, float value01)
+	{
+		if (!comp) return;
+		const float clamped = std::max(0.0f, std::min(1.0f, value01));
+		comp->setOpacity((unsigned char)(clamped * 255.0f));
+	}
+
+	static inline float getComponentOpacity01(TextComponent* comp)
+	{
+		if (!comp) return 0.0f;
+		return comp->getOpacity() / 255.0f;
+	}
 }
 
 SystemView::SystemView(Window* window) :
@@ -130,8 +164,11 @@ SystemView::SystemView(Window* window) :
 	mExtrasFadeOpacity = 0.0f;
 	mScrollSnd.reset();
 
-	// asegurar entrada local
+	// asegurar entradas locales
 	getCarouselExtras(this);
+	SystemInfoExtras& infoExtras = getInfoExtras(this);
+	infoExtras.gamesLabel.reset(new TextComponent(window, "", Font::get(FONT_SIZE_SMALL), 0xFFFFFFFF, ALIGN_LEFT));
+	infoExtras.gameCount.reset(new TextComponent(window, "", Font::get(FONT_SIZE_SMALL), 0xFFFFFFFF, ALIGN_RIGHT));
 
 	setSize((float)Renderer::getScreenWidth(), (float)Renderer::getScreenHeight());
 	populate();
@@ -604,15 +641,29 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 	cancelAnimation(2);
 
 	std::string transition_style = Settings::getInstance()->getString("TransitionStyle");
-	bool goFast                   = transition_style == "instant";
-	const float infoStartOpacity  = mSystemInfo.getOpacity() / 255.f;
+	bool goFast                  = transition_style == "instant";
+
+	SystemInfoExtras& infoExtras = getInfoExtras(this);
+
+	const bool fragmented = infoExtras.fragmentedEnabled;
+	const float infoStartOpacity       = mSystemInfo.getOpacity() / 255.f;
+	const float gamesLabelStartOpacity = getComponentOpacity01(infoExtras.gamesLabel.get());
+	const float gameCountStartOpacity  = getComponentOpacity01(infoExtras.gameCount.get());
 
 	Animation* infoFadeOut = new LambdaAnimation(
-		[infoStartOpacity, this](float t)
+		[infoStartOpacity, gamesLabelStartOpacity, gameCountStartOpacity, fragmented, this](float t)
 		{
-			mSystemInfo.setOpacity((unsigned char)(Math::lerp(infoStartOpacity, 0.f, t) * 255));
+			if (!fragmented)
+			{
+				const float alpha = Math::lerp(infoStartOpacity, 0.f, t);
+				mSystemInfo.setOpacity((unsigned char)(alpha * 255));
+			}
+
+			SystemInfoExtras& extras = getInfoExtras(this);
+			setComponentOpacity(extras.gamesLabel.get(), Math::lerp(gamesLabelStartOpacity, 0.f, t));
+			setComponentOpacity(extras.gameCount.get(), Math::lerp(gameCountStartOpacity, 0.f, t));
 		},
-		(int)(infoStartOpacity * (goFast ? 10 : 150)));
+		(int)(std::max(infoStartOpacity, 0.01f) * (goFast ? 10 : 150)));
 
 	unsigned int gameCount = getSelected()->getDisplayedGameCount();
 	LocaleES& loc = LocaleES::getInstance();
@@ -623,10 +674,16 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 		[this, gameCount, &loc]()
 		{
 			std::stringstream ss;
+			SystemInfoExtras& extras = getInfoExtras(this);
 
 			if(!getSelected()->isGameSystem())
 			{
 				ss << loc.translate("CONFIGURATION");
+
+				if (extras.gamesLabel)
+					extras.gamesLabel->setText(loc.translate("CONFIGURATION"));
+				if (extras.gameCount)
+					extras.gameCount->setText("");
 			}
 			else
 			{
@@ -634,6 +691,16 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 				   << loc.translate(gameCount == 1 ? "GAME" : "GAMES")
 				   << " "
 				   << loc.translate("AVAILABLE");
+
+				if (extras.gamesLabel)
+					extras.gamesLabel->setText(loc.translate(gameCount == 1 ? "GAME" : "GAMES"));
+
+				if (extras.gameCount)
+				{
+					std::stringstream gc;
+					gc << gameCount;
+					extras.gameCount->setText(gc.str());
+				}
 			}
 
 			mSystemInfo.setText(ss.str());
@@ -642,9 +709,14 @@ void SystemView::onCursorChanged(const CursorState& /*state*/)
 		1);
 
 	Animation* infoFadeIn = new LambdaAnimation(
-		[this](float t)
+		[fragmented, this](float t)
 		{
-			mSystemInfo.setOpacity((unsigned char)(Math::lerp(0.f, 1.f, t) * 255));
+			if (!fragmented)
+				mSystemInfo.setOpacity((unsigned char)(Math::lerp(0.f, 1.f, t) * 255));
+
+			SystemInfoExtras& extras = getInfoExtras(this);
+			setComponentOpacity(extras.gamesLabel.get(), t);
+			setComponentOpacity(extras.gameCount.get(), t);
 		},
 		goFast ? 10 : 300);
 
@@ -729,25 +801,42 @@ void SystemView::render(const Transform4x4f& parentTrans)
 
 	Transform4x4f trans = getTransform() * parentTrans;
 
-	auto systemInfoZIndex = mSystemInfo.getZIndex();
-	auto minMax           = std::minmax(mCarousel.zIndex, systemInfoZIndex);
+	SystemInfoExtras& infoExtras = getInfoExtras(this);
 
-	renderExtras(trans, INT16_MIN, minMax.first);
+	float infoMinZ = mSystemInfo.getZIndex();
+	float infoMaxZ = mSystemInfo.getZIndex();
+
+	if (infoExtras.gamesLabelEnabled && infoExtras.gamesLabel)
+	{
+		infoMinZ = std::min(infoMinZ, infoExtras.gamesLabel->getZIndex());
+		infoMaxZ = std::max(infoMaxZ, infoExtras.gamesLabel->getZIndex());
+	}
+
+	if (infoExtras.gameCountEnabled && infoExtras.gameCount)
+	{
+		infoMinZ = std::min(infoMinZ, infoExtras.gameCount->getZIndex());
+		infoMaxZ = std::max(infoMaxZ, infoExtras.gameCount->getZIndex());
+	}
+
+	const float lowerZ = std::min(mCarousel.zIndex, infoMinZ);
+	const float upperZ = std::max(mCarousel.zIndex, infoMaxZ);
+
+	renderExtras(trans, INT16_MIN, lowerZ);
 	renderFade(trans);
 
-	if(mCarousel.zIndex > mSystemInfo.getZIndex())
+	if(mCarousel.zIndex > infoMinZ)
 		renderInfoBar(trans);
 	else
 		renderCarousel(trans);
 
-	renderExtras(trans, minMax.first, minMax.second);
+	renderExtras(trans, lowerZ, upperZ);
 
-	if(mCarousel.zIndex > mSystemInfo.getZIndex())
+	if(mCarousel.zIndex > infoMinZ)
 		renderCarousel(trans);
 	else
 		renderInfoBar(trans);
 
-	renderExtras(trans, minMax.second, INT16_MAX);
+	renderExtras(trans, upperZ, INT16_MAX);
 }
 
 std::vector<HelpPrompt> SystemView::getHelpPrompts()
@@ -816,6 +905,11 @@ void SystemView::getViewElements(const std::shared_ptr<ThemeData>& theme)
 
 	getDefaultElements();
 
+	SystemInfoExtras& infoExtras = getInfoExtras(this);
+	infoExtras.gamesLabelEnabled = false;
+	infoExtras.gameCountEnabled  = false;
+	infoExtras.fragmentedEnabled = false;
+
 	if(!theme->hasView("system"))
 		return;
 
@@ -826,6 +920,22 @@ void SystemView::getViewElements(const std::shared_ptr<ThemeData>& theme)
 	const ThemeData::ThemeElement* sysInfoElem = theme->getElement("system", "systemInfo", "text");
 	if(sysInfoElem)
 		mSystemInfo.applyTheme(theme, "system", "systemInfo", ThemeFlags::ALL);
+
+	const ThemeData::ThemeElement* gamesLabelElem = theme->getElement("system", "systemGames", "text");
+	if (gamesLabelElem && infoExtras.gamesLabel)
+	{
+		infoExtras.gamesLabel->applyTheme(theme, "system", "systemGames", ThemeFlags::ALL);
+		infoExtras.gamesLabelEnabled = true;
+	}
+
+	const ThemeData::ThemeElement* gameCountElem = theme->getElement("system", "systemGameCount", "text");
+	if (gameCountElem && infoExtras.gameCount)
+	{
+		infoExtras.gameCount->applyTheme(theme, "system", "systemGameCount", ThemeFlags::ALL);
+		infoExtras.gameCountEnabled = true;
+	}
+
+	infoExtras.fragmentedEnabled = (infoExtras.gamesLabelEnabled || infoExtras.gameCountEnabled);
 
 	mViewNeedsReload = false;
 }
@@ -838,7 +948,7 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 	const SystemCarouselExtras& extraCfg = getCarouselExtras(this);
 
 	Transform4x4f carouselTrans = trans;
-	carouselTrans.translate(Vector3f(mCarousel.pos.x(), mCarousel.pos.y(), 0.0));
+	carouselTrans.translate(Vector3f(mCarousel.pos.x(), mCarousel.pos.y(), 0.0f));
 	carouselTrans.translate(Vector3f(
 		mCarousel.origin.x() * mCarousel.size.x() * -1,
 		mCarousel.origin.y() * mCarousel.size.y() * -1,
@@ -1080,7 +1190,17 @@ void SystemView::renderCarousel(const Transform4x4f& trans)
 void SystemView::renderInfoBar(const Transform4x4f& trans)
 {
 	Renderer::setMatrix(trans);
-	mSystemInfo.render(trans);
+
+	SystemInfoExtras& infoExtras = getInfoExtras(this);
+
+	if (!infoExtras.fragmentedEnabled)
+		mSystemInfo.render(trans);
+
+	if (infoExtras.gamesLabelEnabled && infoExtras.gamesLabel && !infoExtras.gamesLabel->getValue().empty())
+		infoExtras.gamesLabel->render(trans);
+
+	if (infoExtras.gameCountEnabled && infoExtras.gameCount && !infoExtras.gameCount->getValue().empty())
+		infoExtras.gameCount->render(trans);
 }
 
 void SystemView::renderExtras(const Transform4x4f& trans, float lower, float upper)
@@ -1188,6 +1308,32 @@ void SystemView::getDefaultElements(void)
 	mSystemInfo.setColor(0x000000FF);
 	mSystemInfo.setZIndex(50);
 	mSystemInfo.setDefaultZIndex(50);
+
+	SystemInfoExtras& infoExtras = getInfoExtras(this);
+
+	if (infoExtras.gamesLabel)
+	{
+		infoExtras.gamesLabel->setSize(0.18f * mSize.x(), Font::get((int)(0.025f * mSize.y()), Font::getDefaultPath())->getLetterHeight() * 1.4f);
+		infoExtras.gamesLabel->setPosition(0.74f * mSize.x(), 0.74f * mSize.y());
+		infoExtras.gamesLabel->setFont(Font::get((int)(0.025f * mSize.y()), Font::getDefaultPath()));
+		infoExtras.gamesLabel->setColor(0xFFFFFFFF);
+		infoExtras.gamesLabel->setHorizontalAlignment(ALIGN_LEFT);
+		infoExtras.gamesLabel->setZIndex(55);
+		infoExtras.gamesLabel->setDefaultZIndex(55);
+		infoExtras.gamesLabel->setOpacity(0);
+	}
+
+	if (infoExtras.gameCount)
+	{
+		infoExtras.gameCount->setSize(0.08f * mSize.x(), Font::get((int)(0.04f * mSize.y()), Font::getDefaultPath())->getLetterHeight() * 1.4f);
+		infoExtras.gameCount->setPosition(0.90f * mSize.x(), 0.735f * mSize.y());
+		infoExtras.gameCount->setFont(Font::get((int)(0.04f * mSize.y()), Font::getDefaultPath()));
+		infoExtras.gameCount->setColor(0xFFFFFFFF);
+		infoExtras.gameCount->setHorizontalAlignment(ALIGN_RIGHT);
+		infoExtras.gameCount->setZIndex(56);
+		infoExtras.gameCount->setDefaultZIndex(56);
+		infoExtras.gameCount->setOpacity(0);
+	}
 }
 
 void SystemView::getCarouselFromTheme(const ThemeData::ThemeElement* elem)
