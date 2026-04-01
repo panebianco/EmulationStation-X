@@ -530,7 +530,9 @@ void Window::render()
 	renderScreenSaver();
 
 	const bool showClock = Settings::getInstance()->getBool("ShowClock");
-	if (showClock && !mRenderScreenSaver && mClockTextCache && mClockOutlineCache)
+const bool hasOverlayGui = mGuiStack.size() > 1;
+
+if (showClock && !hasOverlayGui && !mRenderScreenSaver && mClockTextCache && mClockOutlineCache)
 	{
 		float x = Renderer::getScreenWidth() * mClockPos.x();
 		float y = Renderer::getScreenHeight() * mClockPos.y();
@@ -562,9 +564,10 @@ void Window::render()
 
 	// Render network icon
 	if (Settings::getInstance()->getBool("ShowNetworkIcon") &&
-	    mNetworkConnected &&
-	    !mRenderScreenSaver &&
-	    mNetworkIcon)
+    !hasOverlayGui &&
+    mNetworkConnected &&
+    !mRenderScreenSaver &&
+    mNetworkIcon)
 	{
 		float x = 0.0f;
 		float y = 0.0f;
