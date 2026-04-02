@@ -105,6 +105,8 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "selectorImagePath", PATH },
 		{ "selectorImageTile", BOOLEAN },
 		{ "selectedColor", COLOR },
+		{ "selectorWidth", RESOLUTION_FLOAT },
+		{ "selectorHorizontalOffset", RESOLUTION_FLOAT },
 		{ "primaryColor", COLOR },
 		{ "secondaryColor", COLOR },
 		{ "fontPath", PATH },
@@ -114,6 +116,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "horizontalMargin", RESOLUTION_FLOAT },
 		{ "forceUppercase", BOOLEAN },
 		{ "lineSpacing", FLOAT },
+		{ "showRowNumbers", BOOLEAN },
 		{ "zIndex", FLOAT } } },
 
 	{ "container", {
