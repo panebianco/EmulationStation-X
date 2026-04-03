@@ -25,6 +25,7 @@ private:
 	// Bloques del menú principal
 	void openScraperSettings();
 	void openSkyscraperMenu();
+	void openGameImageSourceMenu();
 	void openSoundSettings();
 	void openUISettings();
 	void openOtherSettings();
@@ -33,7 +34,7 @@ private:
 	void openCollectionSystemSettings();
 	void openScreensaverOptions();
 
-	// NUEVO: opciones de tema internas (GuiThemeOptions)
+	// Opciones internas
 	void openThemeOptions();
 
 	// Helpers internos

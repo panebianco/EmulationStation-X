@@ -1,5 +1,3 @@
-// es-app/src/guis/GuiMenu.cpp
-
 #include "guis/GuiMenu.h"
 
 #include "components/OptionListComponent.h"
@@ -102,6 +100,7 @@ GuiMenu::GuiMenu(Window* window)
 	{
 		addEntry(_("SCRAPER").c_str(), menuColor, true, [this] { openScraperSettings(); });
 		addEntry(_("SKYSCRAPER").c_str(), menuColor, true, [this] { openSkyscraperMenu(); });
+		addEntry(_("GAME IMAGE SOURCE").c_str(), menuColor, true, [this] { openGameImageSourceMenu(); });
 		addEntry(_("SOUND SETTINGS").c_str(), menuColor, true, [this] { openSoundSettings(); });
 		addEntry(_("UI SETTINGS").c_str(), menuColor, true, [this] { openUISettings(); });
 		addEntry(_("GAME COLLECTION SETTINGS").c_str(), menuColor, true, [this] { openCollectionSystemSettings(); });
@@ -118,8 +117,7 @@ GuiMenu::GuiMenu(Window* window)
 
 	addChild(&mMenu);
 
-	// ✅ OCULTAR versión del menú (texto tipo "EMULATIONSTATION V...")
-	// Si algún día querés mostrarla solo en Debug, lo cambiamos aquí.
+	// ✅ OCULTAR versión del menú
 	addVersionInfo();
 
 	setSize(mMenu.getSize());
@@ -171,6 +169,37 @@ void GuiMenu::openSkyscraperMenu()
 	mWindow->pushGui(new GuiSkyscraperMenu(mWindow));
 }
 
+void GuiMenu::openGameImageSourceMenu()
+{
+	auto s = new GuiSettings(mWindow, _("GAME IMAGE SOURCE").c_str());
+
+	std::string currentImageSource = Settings::getInstance()->getString("GameImageSource");
+	if (currentImageSource.empty())
+		currentImageSource = "auto";
+
+	auto image_source = std::make_shared<OptionListComponent<std::string>>(mWindow, _("DISPLAY IMAGE TYPE").c_str(), false);
+	image_source->add(_("AUTO"), "auto", currentImageSource == "auto");
+	image_source->add(_("IMAGE"), "image", currentImageSource == "image");
+	image_source->add(_("THUMBNAIL"), "thumbnail", currentImageSource == "thumbnail");
+	image_source->add(_("SCREENSHOT"), "screenshot", currentImageSource == "screenshot");
+	image_source->add(_("MARQUEE"), "marquee", currentImageSource == "marquee");
+
+	s->addWithLabel(_("DISPLAY IMAGE TYPE").c_str(), image_source);
+	s->addSaveFunc([image_source] {
+		bool needReload = false;
+
+		if (Settings::getInstance()->getString("GameImageSource") != image_source->getSelected())
+			needReload = true;
+
+		Settings::getInstance()->setString("GameImageSource", image_source->getSelected());
+
+		if (needReload)
+			ViewController::get()->reloadAll();
+	});
+
+	mWindow->pushGui(s);
+}
+
 void GuiMenu::openSoundSettings()
 {
 	auto s = new GuiSettings(mWindow, _("SOUND SETTINGS").c_str());
@@ -197,7 +226,7 @@ void GuiMenu::openSoundSettings()
 		{
 			int currentBgmVol = Settings::getInstance()->getInt("BackgroundMusicVolume");
 			if (currentBgmVol <= 0)
-				currentBgmVol = 75; // valor inicial razonable
+				currentBgmVol = 75;
 
 			auto bgm_volume = std::make_shared<SliderComponent>(mWindow, 0.f, 100.f, 1.f, "%");
 			bgm_volume->setValue((float)currentBgmVol);
@@ -687,9 +716,6 @@ void GuiMenu::openUISettings()
 		Settings::getInstance()->setBool("ShowHelpPrompts", show_help->getState());
 	});
 
-	// ============================================================
-	// ✅ HELP ICON SET (ÚNICA OPCIÓN)
-	// ============================================================
 	{
 		auto iconset = std::make_shared<OptionListComponent<std::string>>(mWindow, _("HELP ICON SET").c_str(), false);
 
@@ -956,19 +982,6 @@ void GuiMenu::openQuitMenu()
 
 void GuiMenu::addVersionInfo()
 {
-	// ✅ Versión del menú desactivada intencionalmente (estilo consola).
-	// Mantengo el código comentado por si querés reactivar:
-	/*
-	std::string buildDate = (Settings::getInstance()->getBool("Debug")
-		? std::string("   (" + Utils::String::toUpper(PROGRAM_BUILT_STRING) + ")")
-		: std::string(""));
-
-	mVersion.setFont(Font::get(FONT_SIZE_SMALL));
-	mVersion.setColor(getVersionTextColor());
-	mVersion.setText("EMULATIONSTATION V" + Utils::String::toUpper(PROGRAM_VERSION_STRING) + buildDate);
-	mVersion.setHorizontalAlignment(ALIGN_CENTER);
-	addChild(&mVersion);
-	*/
 	mVersion.setVisible(false);
 }
 
@@ -989,7 +1002,6 @@ void GuiMenu::openThemeOptions()
 
 void GuiMenu::onSizeChanged()
 {
-	// Si algún día reactivás mVersion, esto ya queda listo.
 	mVersion.setSize(mSize.x(), 0);
 	mVersion.setPosition(0, mSize.y() - mVersion.getSize().y());
 }

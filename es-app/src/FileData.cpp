@@ -12,10 +12,30 @@
 #include "MameNames.h"
 #include "platform.h"
 #include "Scripting.h"
+#include "Settings.h"
 #include "SystemData.h"
 #include "VolumeControl.h"
 #include "Window.h"
 #include <assert.h>
+
+static inline std::string getPreferredGameImageSource()
+{
+	std::string source = Settings::getInstance()->getString("GameImageSource");
+	if (source.empty())
+		source = "auto";
+
+	source = Utils::String::toLower(source);
+
+	if (source != "auto" &&
+		source != "image" &&
+		source != "thumbnail" &&
+		source != "marquee")
+	{
+		source = "auto";
+	}
+
+	return source;
+}
 
 FileData::FileData(FileType type, const std::string& path, SystemEnvironmentData* envData, SystemData* system)
 	: mType(type), mPath(path), mSystem(system), mEnvData(envData), mSourceFileData(NULL), mParent(NULL), metadata(type == GAME ? GAME_METADATA : FOLDER_METADATA) // metadata is REALLY set in the constructor!
@@ -93,14 +113,16 @@ const std::string& FileData::getSortName()
 		return metadata.get("sortname");
 }
 
-const std::vector<FileData*>& FileData::getChildrenListToDisplay() {
-
+const std::vector<FileData*>& FileData::getChildrenListToDisplay()
+{
 	FileFilterIndex* idx = CollectionSystemManager::get()->getSystemToView(mSystem)->getIndex();
-	if (idx->isFiltered()) {
+	if (idx->isFiltered())
+	{
 		mFilteredChildren.clear();
 		for(auto it = mChildren.cbegin(); it != mChildren.cend(); it++)
 		{
-			if (idx->showFile((*it))) {
+			if (idx->showFile((*it)))
+			{
 				mFilteredChildren.push_back(*it);
 			}
 		}
@@ -152,24 +174,78 @@ const std::string FileData::getMarqueePath() const
 
 const std::string FileData::getImagePath() const
 {
-	std::string image = metadata.get("image");
-
-	// no image, try to use local image
-	if(image.empty())
+	auto getLocalImage = [this]() -> std::string
 	{
 		const char* extList[2] = { ".png", ".jpg" };
-		for(int i = 0; i < 2; i++)
+		for (int i = 0; i < 2; i++)
 		{
-			if(image.empty())
-			{
-				std::string path = mEnvData->mStartPath + "/images/" + getDisplayName() + "-image" + extList[i];
-				if(Utils::FileSystem::exists(path))
-					image = path;
-			}
+			std::string path = mEnvData->mStartPath + "/images/" + getDisplayName() + "-image" + extList[i];
+			if (Utils::FileSystem::exists(path))
+				return path;
 		}
-	}
+		return "";
+	};
 
-	return image;
+	auto getImageCandidate = [this, &getLocalImage]() -> std::string
+	{
+		std::string image = metadata.get("image");
+		if (image.empty() && Settings::getInstance()->getBool("LocalArt"))
+			image = getLocalImage();
+		return image;
+	};
+
+	auto getThumbnailCandidate = [this]() -> std::string
+	{
+		return getThumbnailPath();
+	};
+
+	auto getMarqueeCandidate = [this]() -> std::string
+	{
+		return getMarqueePath();
+	};
+
+	const std::string source = getPreferredGameImageSource();
+
+	if (source == "image")
+	{
+		std::string out = getImageCandidate();
+		if (!out.empty()) return out;
+
+		out = getThumbnailCandidate();
+		if (!out.empty()) return out;
+
+		return getMarqueeCandidate();
+	}
+	else if (source == "thumbnail")
+	{
+		std::string out = getThumbnailCandidate();
+		if (!out.empty()) return out;
+
+		out = getImageCandidate();
+		if (!out.empty()) return out;
+
+		return getMarqueeCandidate();
+	}
+	else if (source == "marquee")
+	{
+		std::string out = getMarqueeCandidate();
+		if (!out.empty()) return out;
+
+		out = getImageCandidate();
+		if (!out.empty()) return out;
+
+		return getThumbnailCandidate();
+	}
+	else // auto
+	{
+		std::string out = getImageCandidate();
+		if (!out.empty()) return out;
+
+		out = getThumbnailCandidate();
+		if (!out.empty()) return out;
+
+		return getMarqueeCandidate();
+	}
 }
 
 std::vector<FileData*> FileData::getFilesRecursive(unsigned int typeMask, bool displayedOnly) const
@@ -195,7 +271,8 @@ std::vector<FileData*> FileData::getFilesRecursive(unsigned int typeMask, bool d
 	return out;
 }
 
-std::string FileData::getKey() {
+std::string FileData::getKey()
+{
 	return getFileName();
 }
 
@@ -245,7 +322,6 @@ void FileData::removeChild(FileData* file)
 
 	// File somehow wasn't in our children.
 	assert(false);
-
 }
 
 void FileData::sort(ComparisonFunction& comparator, bool ascending)
@@ -314,7 +390,6 @@ void FileData::launchGame(Window* window)
 	window->normalizeNextUpdate();
 
 	//update number of times the game has been launched
-
 	FileData* gameToUpdate = getSourceFileData();
 
 	int timesPlayed = gameToUpdate->metadata.getInt("playcount") + 1;
@@ -346,7 +421,8 @@ CollectionFileData::~CollectionFileData()
 	mParent = NULL;
 }
 
-std::string CollectionFileData::getKey() {
+std::string CollectionFileData::getKey()
+{
 	return getFullPath();
 }
 
@@ -363,7 +439,8 @@ void CollectionFileData::refreshMetadata()
 
 const std::string& CollectionFileData::getName()
 {
-	if (mDirty) {
+	if (mDirty)
+	{
 		mCollectionFileName = Utils::String::removeParenthesis(mSourceFileData->metadata.get("name"));
 		mCollectionFileName += " [" + Utils::String::toUpper(mSourceFileData->getSystem()->getName()) + "]";
 		mDirty = false;
@@ -375,7 +452,8 @@ const std::string& CollectionFileData::getName()
 }
 
 // returns Sort Type based on a string description
-FileData::SortType getSortTypeFromString(std::string desc) {
+FileData::SortType getSortTypeFromString(std::string desc)
+{
 	std::vector<FileData::SortType> SortTypes = FileSorts::SortTypes;
 	// find it
 	for(unsigned int i = 0; i < FileSorts::SortTypes.size(); i++)

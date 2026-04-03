@@ -101,6 +101,7 @@ void Settings::setDefaults()
 	mBoolMap["BackgroundMusic"] = true;
 	mIntMap["BackgroundMusicVolume"] = 75;
 	mStringMap["BackgroundMusicSource"] = "auto";
+	mStringMap["GameImageSource"] = "auto";
 
 	mIntMap["ScreenSaverTime"] = 5 * Settings::ONE_MINUTE_IN_MS;
 	mIntMap["SystemSleepTime"] = 0 * Settings::ONE_MINUTE_IN_MS;
@@ -360,6 +361,9 @@ void Settings::processBackwardCompatibility()
 
 		if (mStringMap.find("LaunchTransitionStyle") == mStringMap.end())
 			mStringMap["LaunchTransitionStyle"] = itTransition->second;
+			
+			if (mStringMap["GameImageSource"].empty())
+	mStringMap["GameImageSource"] = "auto";
 	}
 
 	// Compatibilidad música de fondo
