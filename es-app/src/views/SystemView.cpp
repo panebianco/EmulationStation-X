@@ -174,6 +174,24 @@ SystemView::SystemView(Window* window) :
 	populate();
 }
 
+SystemView::~SystemView()
+{
+	// Limpiar extras estáticos antes del teardown global de Window/GUI.
+	auto itInfo = sInfoExtras.find(this);
+	if (itInfo != sInfoExtras.end())
+	{
+		itInfo->second.gamesLabel.reset();
+		itInfo->second.gameCount.reset();
+		sInfoExtras.erase(itInfo);
+	}
+
+	auto itCarousel = sCarouselExtras.find(this);
+	if (itCarousel != sCarouselExtras.end())
+	{
+		sCarouselExtras.erase(itCarousel);
+	}
+}
+
 void SystemView::populate()
 {
 	mEntries.clear();

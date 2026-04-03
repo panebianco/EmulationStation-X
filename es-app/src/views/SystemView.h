@@ -64,6 +64,7 @@ class SystemView : public IList<SystemViewData, SystemData*>
 {
 public:
 	SystemView(Window* window);
+	~SystemView() override;
 
 	void onShow() override;
 	void onHide() override;
