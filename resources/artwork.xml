@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<artwork>
+  <output type="screenshot"/>             
+  <output type="wheel"/>                  
+  <output type="box" resource="boxart"/>  
+  <output type="item" resource="cartridge"/>
+  <output type="texture" resource="texture"/> 
+  </artwork>
