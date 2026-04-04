@@ -101,7 +101,13 @@ void Settings::setDefaults()
 	mBoolMap["BackgroundMusic"] = true;
 	mIntMap["BackgroundMusicVolume"] = 75;
 	mStringMap["BackgroundMusicSource"] = "auto";
+
+	// Fuentes de arte configurables ES-X
 	mStringMap["GameImageSource"] = "auto";
+	mStringMap["GameThumbnailSource"] = "auto";
+	mStringMap["GameMarqueeSource"] = "auto";
+	mStringMap["GridImageSource"] = "auto";
+	mStringMap["VideoFallbackSource"] = "auto";
 
 	mIntMap["ScreenSaverTime"] = 5 * Settings::ONE_MINUTE_IN_MS;
 	mIntMap["SystemSleepTime"] = 0 * Settings::ONE_MINUTE_IN_MS;
@@ -361,9 +367,6 @@ void Settings::processBackwardCompatibility()
 
 		if (mStringMap.find("LaunchTransitionStyle") == mStringMap.end())
 			mStringMap["LaunchTransitionStyle"] = itTransition->second;
-			
-			if (mStringMap["GameImageSource"].empty())
-	mStringMap["GameImageSource"] = "auto";
 	}
 
 	// Compatibilidad música de fondo
@@ -387,6 +390,21 @@ void Settings::processBackwardCompatibility()
 
 	if (mStringMap["BackgroundMusicSource"].empty())
 		mStringMap["BackgroundMusicSource"] = "auto";
+
+	if (mStringMap["GameImageSource"].empty())
+		mStringMap["GameImageSource"] = "auto";
+
+	if (mStringMap["GameThumbnailSource"].empty())
+		mStringMap["GameThumbnailSource"] = "auto";
+
+	if (mStringMap["GameMarqueeSource"].empty())
+		mStringMap["GameMarqueeSource"] = "auto";
+
+	if (mStringMap["GridImageSource"].empty())
+		mStringMap["GridImageSource"] = "auto";
+
+	if (mStringMap["VideoFallbackSource"].empty())
+		mStringMap["VideoFallbackSource"] = "auto";
 
 	if (mIntMap.find("BackgroundMusicVolume") == mIntMap.end())
 		mIntMap["BackgroundMusicVolume"] = 75;

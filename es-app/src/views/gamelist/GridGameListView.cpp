@@ -213,14 +213,39 @@ bool GridGameListView::input(InputConfig* config, Input input)
 
 const std::string GridGameListView::getImagePath(FileData* file)
 {
+	if (!file)
+		return "";
+
+	// NUEVO:
+	// El grid debe respetar la preferencia global GridImageSource.
+	// Si el componente/grid del tema pide explícitamente MARQUEE, mantenemos
+	// esa compatibilidad como prioridad local.
 	ImageSource src = mGrid.getImageSource();
 
-	if (src == ImageSource::IMAGE)
-		return file->getImagePath();
-	else if (src == ImageSource::MARQUEE)
-		return file->getMarqueePath();
+	if (src == ImageSource::MARQUEE)
+	{
+		std::string marquee = file->getMarqueePath();
+		if (!marquee.empty())
+			return marquee;
+	}
 
-	return file->getThumbnailPath();
+	std::string gridImage = file->getGridImagePath();
+	if (!gridImage.empty())
+		return gridImage;
+
+	// Fallback final por seguridad
+	if (src == ImageSource::IMAGE)
+	{
+		std::string image = file->getImagePath();
+		if (!image.empty())
+			return image;
+	}
+
+	std::string thumb = file->getThumbnailPath();
+	if (!thumb.empty())
+		return thumb;
+
+	return file->getImagePath();
 }
 
 void GridGameListView::populateList(const std::vector<FileData*>& files)

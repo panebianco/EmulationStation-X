@@ -5,6 +5,8 @@
 #include "utils/FileSystemUtil.h"
 #include "MetaData.h"
 #include <unordered_map>
+#include <vector>
+#include <string>
 
 class SystemData;
 class Window;
@@ -33,11 +35,21 @@ FileType stringToFileType(const char* str);
 class FileData
 {
 public:
+	enum class ArtSlot
+	{
+		Image,
+		Thumbnail,
+		Marquee,
+		Grid,
+		VideoFallback
+	};
+
 	FileData(FileType type, const std::string& path, SystemEnvironmentData* envData, SystemData* system);
 	virtual ~FileData();
 
 	virtual const std::string& getName();
 	virtual const std::string& getSortName();
+
 	inline FileType getType() const { return mType; }
 	inline const std::string& getPath() const { return mPath; }
 	inline FileData* getParent() const { return mParent; }
@@ -45,10 +57,13 @@ public:
 	inline const std::vector<FileData*>& getChildren() const { return mChildren; }
 	inline SystemData* getSystem() const { return mSystem; }
 	inline SystemEnvironmentData* getSystemEnvData() const { return mEnvData; }
+
 	virtual const std::string getThumbnailPath() const;
 	virtual const std::string getVideoPath() const;
 	virtual const std::string getMarqueePath() const;
 	virtual const std::string getImagePath() const;
+	virtual const std::string getGridImagePath() const;
+	virtual const std::string getVideoFallbackPath() const;
 
 	const std::vector<FileData*>& getChildrenListToDisplay();
 	std::vector<FileData*> getFilesRecursive(unsigned int typeMask, bool displayedOnly = false) const;
@@ -82,12 +97,13 @@ public:
 		bool ascending;
 		std::string description;
 
-		SortType(ComparisonFunction* sortFunction, bool sortAscending, const std::string & sortDescription)
+		SortType(ComparisonFunction* sortFunction, bool sortAscending, const std::string& sortDescription)
 			: comparisonFunction(sortFunction), ascending(sortAscending), description(sortDescription) {}
 	};
 
 	void sort(const SortType& type);
 	std::string getSortDescription() { return mSortDesc; }
+
 	MetaDataList metadata;
 
 protected:
@@ -95,13 +111,31 @@ protected:
 	FileData* mParent;
 	std::string mSystemName;
 
+	// Art helpers
+	std::string getArtPathForSlot(ArtSlot slot) const;
+	std::string getArtBySource(const std::string& source) const;
+	std::vector<std::string> getFallbackOrderForSlot(ArtSlot slot, const std::string& preferred) const;
+
+	std::string getLocalArt(const std::string& suffix) const;
+	std::string getMetadataOrLocalArt(const std::string& key, const std::string& localSuffix) const;
+
+	std::string getImageCandidate() const;
+	std::string getThumbnailCandidate() const;
+	std::string getMarqueeCandidate() const;
+	std::string getBoxartCandidate() const;
+	std::string getScreenshotCandidate() const;
+	std::string getWheelCandidate() const;
+	std::string getTextureCandidate() const;
+	std::string getVideoCandidate() const;
+
 private:
 	void sort(ComparisonFunction& comparator, bool ascending = true);
+
 	FileType mType;
 	std::string mPath;
 	SystemEnvironmentData* mEnvData;
 	SystemData* mSystem;
-	std::unordered_map<std::string,FileData*> mChildrenByFilename;
+	std::unordered_map<std::string, FileData*> mChildrenByFilename;
 	std::vector<FileData*> mChildren;
 	std::vector<FileData*> mFilteredChildren;
 	std::string mSortDesc;
@@ -116,6 +150,7 @@ public:
 	void refreshMetadata();
 	FileData* getSourceFileData();
 	std::string getKey();
+
 private:
 	// needs to be updated when metadata changes
 	std::string mCollectionFileName;

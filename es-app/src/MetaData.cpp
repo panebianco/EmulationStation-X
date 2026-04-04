@@ -11,9 +11,13 @@ MetaDataDecl gameDecls[] = {
 	{"sortname",    MD_STRING,              "",                 false,      "SORTNAME",                "ENTER GAME SORT NAME"},
 	{"desc",        MD_MULTILINE_STRING,    "",                 false,      "DESCRIPTION",             "ENTER DESCRIPTION"},
 	{"image",       MD_PATH,                "",                 false,      "IMAGE",                   "ENTER PATH TO IMAGE"},
+	{"thumbnail",   MD_PATH,                "",                 false,      "THUMBNAIL",               "ENTER PATH TO THUMBNAIL"},
 	{"video",       MD_PATH,                "",                 false,      "VIDEO",                   "ENTER PATH TO VIDEO"},
 	{"marquee",     MD_PATH,                "",                 false,      "MARQUEE",                 "ENTER PATH TO MARQUEE"},
-	{"thumbnail",   MD_PATH,                "",                 false,      "THUMBNAIL",               "ENTER PATH TO THUMBNAIL"},
+	{"boxart",      MD_PATH,                "",                 false,      "BOXART",                  "ENTER PATH TO BOXART"},
+	{"screenshot",  MD_PATH,                "",                 false,      "SCREENSHOT",              "ENTER PATH TO SCREENSHOT"},
+	{"wheel",       MD_PATH,                "",                 false,      "WHEEL",                   "ENTER PATH TO WHEEL"},
+	{"texture",     MD_PATH,                "",                 false,      "TEXTURE",                 "ENTER PATH TO TEXTURE"},
 	{"rating",      MD_RATING,              "0",                false,      "RATING",                  "ENTER RATING"},
 	{"releasedate", MD_DATE,                "not-a-date-time",  false,      "RELEASE DATE",            "ENTER RELEASE DATE"},
 	{"developer",   MD_STRING,              "unknown",          false,      "DEVELOPER",               "ENTER GAME DEVELOPER"},
@@ -28,7 +32,8 @@ MetaDataDecl gameDecls[] = {
 };
 const std::vector<MetaDataDecl> gameMDD(gameDecls, gameDecls + sizeof(gameDecls) / sizeof(gameDecls[0]));
 
-const inline std::string blankDate() {
+const inline std::string blankDate()
+{
 	// blank date (1970-01-02) is used to render "" (see DateTimeComponent.cpp) for
 	// folder metadata when no date is provided (=default case)
 	return Utils::Time::timeToString(Utils::Time::BLANK_DATE, "%Y%m%d");
@@ -42,6 +47,10 @@ MetaDataDecl folderDecls[] = {
 	{"thumbnail",   MD_PATH,                "",                 false,      "THUMBNAIL",               "ENTER PATH TO THUMBNAIL"},
 	{"video",       MD_PATH,                "",                 false,      "VIDEO",                   "ENTER PATH TO VIDEO"},
 	{"marquee",     MD_PATH,                "",                 false,      "MARQUEE",                 "ENTER PATH TO MARQUEE"},
+	{"boxart",      MD_PATH,                "",                 false,      "BOXART",                  "ENTER PATH TO BOXART"},
+	{"screenshot",  MD_PATH,                "",                 false,      "SCREENSHOT",              "ENTER PATH TO SCREENSHOT"},
+	{"wheel",       MD_PATH,                "",                 false,      "WHEEL",                   "ENTER PATH TO WHEEL"},
+	{"texture",     MD_PATH,                "",                 false,      "TEXTURE",                 "ENTER PATH TO TEXTURE"},
 	{"rating",      MD_RATING,              "0",                false,      "RATING",                  "ENTER RATING"},
 	{"releasedate", MD_DATE,                blankDate(),        true,       "RELEASE DATE",            "ENTER RELEASE DATE"},
 	{"developer",   MD_STRING,              "",                 false,      "DEVELOPER",               "ENTER GAME DEVELOPER"},
@@ -53,7 +62,7 @@ const std::vector<MetaDataDecl> folderMDD(folderDecls, folderDecls + sizeof(fold
 
 const std::vector<MetaDataDecl>& getMDDByType(MetaDataListType type)
 {
-	switch(type)
+	switch (type)
 	{
 	case GAME_METADATA:
 		return gameMDD;
@@ -65,16 +74,13 @@ const std::vector<MetaDataDecl>& getMDDByType(MetaDataListType type)
 	return gameMDD;
 }
 
-
-
 MetaDataList::MetaDataList(MetaDataListType type)
 	: mType(type), mWasChanged(false)
 {
 	const std::vector<MetaDataDecl>& mdd = getMDD();
-	for(auto iter = mdd.cbegin(); iter != mdd.cend(); iter++)
+	for (auto iter = mdd.cbegin(); iter != mdd.cend(); iter++)
 		set(iter->key, iter->defaultValue);
 }
-
 
 MetaDataList MetaDataList::createFromXML(MetaDataListType type, pugi::xml_node& node, const std::string& relativeTo)
 {
@@ -82,19 +88,20 @@ MetaDataList MetaDataList::createFromXML(MetaDataListType type, pugi::xml_node& 
 
 	const std::vector<MetaDataDecl>& mdd = mdl.getMDD();
 
-	for(auto iter = mdd.cbegin(); iter != mdd.cend(); iter++)
+	for (auto iter = mdd.cbegin(); iter != mdd.cend(); iter++)
 	{
 		pugi::xml_node md = node.child(iter->key.c_str());
-		if(md)
+		if (md)
 		{
 			// if it's a path, resolve relative paths
 			std::string value = md.text().get();
 			if (iter->type == MD_PATH)
-			{
 				value = Utils::FileSystem::resolveRelativePath(value, relativeTo, true, true);
-			}
+
 			mdl.set(iter->key, value);
-		}else{
+		}
+		else
+		{
 			mdl.set(iter->key, iter->defaultValue);
 		}
 	}
@@ -106,14 +113,14 @@ void MetaDataList::appendToXML(pugi::xml_node& parent, bool ignoreDefaults, cons
 {
 	const std::vector<MetaDataDecl>& mdd = getMDD();
 
-	for(auto mddIter = mdd.cbegin(); mddIter != mdd.cend(); mddIter++)
+	for (auto mddIter = mdd.cbegin(); mddIter != mdd.cend(); mddIter++)
 	{
 		auto mapIter = mMap.find(mddIter->key);
-		if(mapIter != mMap.cend())
+		if (mapIter != mMap.cend())
 		{
 			// we have this value!
 			// if it's just the default (and we ignore defaults), don't write it
-			if(ignoreDefaults && mapIter->second == mddIter->defaultValue)
+			if (ignoreDefaults && mapIter->second == mddIter->defaultValue)
 				continue;
 
 			// try and make paths relative if we can
@@ -134,13 +141,14 @@ void MetaDataList::set(const std::string& key, const std::string& value)
 
 const std::string& MetaDataList::get(const std::string& key) const
 {
-	// FIX: avoid std::out_of_range when key does not exist (e.g. "boxart")
+	// avoid std::out_of_range when key does not exist
 	auto it = mMap.find(key);
 	if (it == mMap.end())
 	{
 		static const std::string empty;
 		return empty;
 	}
+
 	return it->second;
 }
 

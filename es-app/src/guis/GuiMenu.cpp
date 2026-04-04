@@ -82,6 +82,33 @@ namespace
 		if (snd)
 			snd->play();
 	}
+
+	inline std::string getArtSourceOrDefault(const std::string& key)
+	{
+		std::string value = Settings::getInstance()->getString(key);
+		if (value.empty())
+			value = "auto";
+		return Utils::String::toLower(value);
+	}
+
+	inline std::shared_ptr<OptionListComponent<std::string>> makeArtSourceOptionList(Window* window, const std::string& selected, bool allowNone = false)
+	{
+		auto list = std::make_shared<OptionListComponent<std::string>>(window, _("DISPLAY IMAGE TYPE").c_str(), false);
+
+		list->add(_("AUTO"), "auto", selected == "auto");
+		list->add(_("IMAGE"), "image", selected == "image");
+		list->add(_("THUMBNAIL"), "thumbnail", selected == "thumbnail");
+		list->add(_("MARQUEE"), "marquee", selected == "marquee");
+		list->add(_("BOXART"), "boxart", selected == "boxart");
+		list->add(_("SCREENSHOT"), "screenshot", selected == "screenshot");
+		list->add(_("WHEEL"), "wheel", selected == "wheel");
+		list->add(_("TEXTURE"), "texture", selected == "texture");
+
+		if (allowNone)
+			list->add(_("NONE"), "none", selected == "none");
+
+		return list;
+	}
 }
 
 GuiMenu::GuiMenu(Window* window)
@@ -173,25 +200,56 @@ void GuiMenu::openGameImageSourceMenu()
 {
 	auto s = new GuiSettings(mWindow, _("GAME IMAGE SOURCE").c_str());
 
-	std::string currentImageSource = Settings::getInstance()->getString("GameImageSource");
-	if (currentImageSource.empty())
-		currentImageSource = "auto";
+	const std::string currentImageSource         = getArtSourceOrDefault("GameImageSource");
+	const std::string currentThumbnailSource     = getArtSourceOrDefault("GameThumbnailSource");
+	const std::string currentMarqueeSource       = getArtSourceOrDefault("GameMarqueeSource");
+	const std::string currentGridSource          = getArtSourceOrDefault("GridImageSource");
+	const std::string currentVideoFallbackSource = getArtSourceOrDefault("VideoFallbackSource");
 
-	auto image_source = std::make_shared<OptionListComponent<std::string>>(mWindow, _("DISPLAY IMAGE TYPE").c_str(), false);
-	image_source->add(_("AUTO"), "auto", currentImageSource == "auto");
-	image_source->add(_("IMAGE"), "image", currentImageSource == "image");
-	image_source->add(_("THUMBNAIL"), "thumbnail", currentImageSource == "thumbnail");
-	image_source->add(_("SCREENSHOT"), "screenshot", currentImageSource == "screenshot");
-	image_source->add(_("MARQUEE"), "marquee", currentImageSource == "marquee");
-
+	auto image_source = makeArtSourceOptionList(mWindow, currentImageSource, false);
 	s->addWithLabel(_("DISPLAY IMAGE TYPE").c_str(), image_source);
-	s->addSaveFunc([image_source] {
+
+	auto thumbnail_source = makeArtSourceOptionList(mWindow, currentThumbnailSource, false);
+	s->addWithLabel(_("THUMBNAIL IMAGE TYPE").c_str(), thumbnail_source);
+
+	auto marquee_source = makeArtSourceOptionList(mWindow, currentMarqueeSource, false);
+	s->addWithLabel(_("MARQUEE IMAGE TYPE").c_str(), marquee_source);
+
+	auto grid_source = makeArtSourceOptionList(mWindow, currentGridSource, false);
+	s->addWithLabel(_("GRID IMAGE TYPE").c_str(), grid_source);
+
+	auto video_fallback_source = makeArtSourceOptionList(mWindow, currentVideoFallbackSource, true);
+	s->addWithLabel(_("VIDEO FALLBACK TYPE").c_str(), video_fallback_source);
+
+	s->addSaveFunc([image_source, thumbnail_source, marquee_source, grid_source, video_fallback_source] {
 		bool needReload = false;
 
-		if (Settings::getInstance()->getString("GameImageSource") != image_source->getSelected())
-			needReload = true;
+		const std::string oldImageSource         = getArtSourceOrDefault("GameImageSource");
+		const std::string oldThumbnailSource     = getArtSourceOrDefault("GameThumbnailSource");
+		const std::string oldMarqueeSource       = getArtSourceOrDefault("GameMarqueeSource");
+		const std::string oldGridSource          = getArtSourceOrDefault("GridImageSource");
+		const std::string oldVideoFallbackSource = getArtSourceOrDefault("VideoFallbackSource");
 
-		Settings::getInstance()->setString("GameImageSource", image_source->getSelected());
+		const std::string newImageSource         = image_source->getSelected();
+		const std::string newThumbnailSource     = thumbnail_source->getSelected();
+		const std::string newMarqueeSource       = marquee_source->getSelected();
+		const std::string newGridSource          = grid_source->getSelected();
+		const std::string newVideoFallbackSource = video_fallback_source->getSelected();
+
+		if (oldImageSource != newImageSource ||
+			oldThumbnailSource != newThumbnailSource ||
+			oldMarqueeSource != newMarqueeSource ||
+			oldGridSource != newGridSource ||
+			oldVideoFallbackSource != newVideoFallbackSource)
+		{
+			needReload = true;
+		}
+
+		Settings::getInstance()->setString("GameImageSource", newImageSource);
+		Settings::getInstance()->setString("GameThumbnailSource", newThumbnailSource);
+		Settings::getInstance()->setString("GameMarqueeSource", newMarqueeSource);
+		Settings::getInstance()->setString("GridImageSource", newGridSource);
+		Settings::getInstance()->setString("VideoFallbackSource", newVideoFallbackSource);
 
 		if (needReload)
 			ViewController::get()->reloadAll();
