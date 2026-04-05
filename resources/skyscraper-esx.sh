@@ -30,15 +30,30 @@ fail() {
 }
 
 normalize_lang() {
-    case "$1" in
-        es|en|fr|de|pt|it|nl|ja|ru) echo "$1" ;;
+    local raw="${1:-en}"
+    raw="${raw,,}"
+
+    case "$raw" in
+        es|es_*|es-*) echo "es" ;;
+        en|en_*|en-*) echo "en" ;;
+        fr|fr_*|fr-*) echo "fr" ;;
+        de|de_*|de-*) echo "de" ;;
+        pt|pt_*|pt-*) echo "pt" ;;
+        it|it_*|it-*) echo "it" ;;
+        nl|nl_*|nl-*) echo "nl" ;;
+        ja|ja_*|ja-*) echo "ja" ;;
+        ru|ru_*|ru-*) echo "ru" ;;
         *) echo "en" ;;
     esac
 }
 
 normalize_videos() {
-    case "$1" in
-        true|false) echo "$1" ;;
+    local raw="${1:-true}"
+    raw="${raw,,}"
+
+    case "$raw" in
+        true|1|yes|on) echo "true" ;;
+        false|0|no|off) echo "false" ;;
         *) echo "true" ;;
     esac
 }
@@ -125,7 +140,11 @@ update_config_videos() {
     replace_or_add_main_key "videos" "${videos}"
 }
 
-build_flags() {
+build_gather_flags() {
+    echo "unattend,skipped"
+}
+
+build_generate_flags() {
     echo "unattend,skipped,relative"
 }
 
@@ -150,9 +169,12 @@ run_generate() {
         --flags "${flags}"
 }
 
+cleanup() {
+    rm -f "${PID_FILE}"
+}
+
 run_foreground() {
-    local flags
-    flags="$(build_flags)"
+    trap cleanup EXIT INT TERM
 
     : > "${LOG_FILE}"
     {
@@ -170,31 +192,26 @@ run_foreground() {
     case "${ACTION}" in
         gather)
             write_status "running:gather:${SYSTEM_NAME}"
-            if run_gather "${flags}" >> "${LOG_FILE}" 2>&1; then
+            if run_gather "$(build_gather_flags)" >> "${LOG_FILE}" 2>&1; then
                 write_status "done:gather:${SYSTEM_NAME}"
             else
                 write_status "error:gather:${SYSTEM_NAME}"
-                rm -f "${PID_FILE}"
                 exit 1
             fi
             ;;
         generate)
             write_status "running:generate:${SYSTEM_NAME}"
-            if run_generate "${flags}" >> "${LOG_FILE}" 2>&1; then
+            if run_generate "$(build_generate_flags)" >> "${LOG_FILE}" 2>&1; then
                 write_status "done:generate:${SYSTEM_NAME}"
             else
                 write_status "error:generate:${SYSTEM_NAME}"
-                rm -f "${PID_FILE}"
                 exit 1
             fi
             ;;
         *)
-            rm -f "${PID_FILE}"
             fail "Unknown action: ${ACTION}"
             ;;
     esac
-
-    rm -f "${PID_FILE}"
 }
 
 status_only() {
@@ -214,7 +231,29 @@ stop_job() {
             write_status "stopped"
         fi
         rm -f "${PID_FILE}"
+    else
+        write_status "idle"
     fi
+}
+
+start_background() {
+    local real_action="$1"
+
+    if [[ -f "${PID_FILE}" ]]; then
+        local pid
+        pid="$(cat "${PID_FILE}" 2>/dev/null || true)"
+        if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+            write_status "running:${real_action}:${SYSTEM_NAME}"
+            exit 0
+        else
+            rm -f "${PID_FILE}"
+        fi
+    fi
+
+    write_status "starting:${real_action}:${SYSTEM_NAME}"
+
+    nohup "$0" "${real_action}" "${SYSTEM_NAME}" "${LANG_CODE}" "" "${VIDEOS_ENABLED}" >> "${LOG_FILE}" 2>&1 &
+    exit 0
 }
 
 main() {
@@ -226,6 +265,31 @@ main() {
         stop)
             stop_job
             exit 0
+            ;;
+        start-gather)
+            ensure_bin
+            ensure_config
+            ensure_system
+            LANG_CODE="$(normalize_lang "${LANG_CODE}")"
+            VIDEOS_ENABLED="$(normalize_videos "${VIDEOS_ENABLED}")"
+            update_config_lang "${LANG_CODE}" "$(build_lang_prios "${LANG_CODE}")"
+            update_config_videos "${VIDEOS_ENABLED}"
+            start_background "gather"
+            ;;
+        start-generate)
+            ensure_bin
+            ensure_config
+            ensure_system
+            LANG_CODE="$(normalize_lang "${LANG_CODE}")"
+            VIDEOS_ENABLED="$(normalize_videos "${VIDEOS_ENABLED}")"
+            update_config_lang "${LANG_CODE}" "$(build_lang_prios "${LANG_CODE}")"
+            update_config_videos "${VIDEOS_ENABLED}"
+            start_background "generate"
+            ;;
+        gather|generate)
+            ;;
+        *)
+            fail "Unknown action: ${ACTION}"
             ;;
     esac
 
