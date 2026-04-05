@@ -26,6 +26,7 @@
 
 ## Example Grid view
 ![Captura de pantalla_2026-03-02_13-12-38](https://github.com/user-attachments/assets/59498641-bc9f-4923-903d-c0f1f5121655)
+![photo_2026-04-04_09-59-24](https://github.com/user-attachments/assets/44ad1a7b-16ac-482f-afdc-014bb9e81dde)
 
 
 
