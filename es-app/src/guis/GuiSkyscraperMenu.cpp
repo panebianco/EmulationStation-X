@@ -261,12 +261,12 @@ namespace
 			setSize(Renderer::getScreenWidth() * 0.28f, Renderer::getScreenHeight() * 0.13f);
 			setPosition(
 				Renderer::getScreenWidth() * 0.69f,
-				Renderer::getScreenHeight() * 0.64f
+				Renderer::getScreenHeight() * 0.67f
 			);
 
-			mLine1.setPosition(18, 12);
-			mLine2.setPosition(18, 40);
-			mLine3.setPosition(18, 66);
+			mLine1.setPosition(18, 6);
+			mLine2.setPosition(18, 34);
+			mLine3.setPosition(18, 60);
 
 			addChild(&mLine1);
 			addChild(&mLine2);
