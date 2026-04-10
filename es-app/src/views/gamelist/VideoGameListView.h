@@ -33,6 +33,7 @@ private:
 	void initMDLabels();
 	void initMDValues();
 
+	ImageComponent mBackground;
 	ImageComponent mThumbnail;
 	ImageComponent mMarquee;
 	VideoComponent* mVideo;
@@ -56,8 +57,7 @@ private:
 	ScrollableContainer mDescContainer;
 	TextComponent mDescription;
 
-	bool		mVideoPlaying;
-
+	bool mVideoPlaying;
 };
 
 #endif // ES_APP_VIEWS_GAME_LIST_VIDEO_GAME_LIST_VIEW_H

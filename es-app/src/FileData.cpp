@@ -182,6 +182,35 @@ std::string FileData::getVideoCandidate() const
 	return video;
 }
 
+std::string FileData::getUniversalScreenshotCandidate() const
+{
+	if (mType != GAME)
+		return "";
+
+	const std::string romDir = Utils::FileSystem::getParent(mPath);
+	if (romDir.empty())
+		return "";
+
+	const std::string screenshotsDir = romDir + "/media/screenshots";
+	const std::string romStem = Utils::FileSystem::getStem(mPath);
+
+	const char* extList[3] = { ".png", ".jpg", ".jpeg" };
+
+	for (int i = 0; i < 3; i++)
+	{
+		const std::string candidate = screenshotsDir + "/" + romStem + extList[i];
+		if (Utils::FileSystem::exists(candidate))
+			return candidate;
+	}
+
+	return "";
+}
+
+std::string FileData::getBackgroundCandidate() const
+{
+	return getUniversalScreenshotCandidate();
+}
+
 std::string FileData::getArtBySource(const std::string& source) const
 {
 	if (source == "image")
@@ -357,6 +386,11 @@ const std::string FileData::getGridImagePath() const
 const std::string FileData::getVideoFallbackPath() const
 {
 	return getArtPathForSlot(ArtSlot::VideoFallback);
+}
+
+const std::string FileData::getBackgroundPath() const
+{
+	return getBackgroundCandidate();
 }
 
 const std::vector<FileData*>& FileData::getChildrenListToDisplay()

@@ -64,6 +64,7 @@ public:
 	virtual const std::string getImagePath() const;
 	virtual const std::string getGridImagePath() const;
 	virtual const std::string getVideoFallbackPath() const;
+	virtual const std::string getBackgroundPath() const;
 
 	const std::vector<FileData*>& getChildrenListToDisplay();
 	std::vector<FileData*> getFilesRecursive(unsigned int typeMask, bool displayedOnly = false) const;
@@ -127,6 +128,9 @@ protected:
 	std::string getWheelCandidate() const;
 	std::string getTextureCandidate() const;
 	std::string getVideoCandidate() const;
+
+	std::string getUniversalScreenshotCandidate() const;
+	std::string getBackgroundCandidate() const;
 
 private:
 	void sort(ComparisonFunction& comparator, bool ascending = true);

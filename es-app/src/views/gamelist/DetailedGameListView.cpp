@@ -9,6 +9,7 @@
 DetailedGameListView::DetailedGameListView(Window* window, FileData* root) :
 	BasicGameListView(window, root),
 	mDescContainer(window, DESCRIPTION_SCROLL_DELAY), mDescription(window),
+	mBackground(window),
 	mThumbnail(window),
 	mMarquee(window),
 	mImage(window),
@@ -27,6 +28,14 @@ DetailedGameListView::DetailedGameListView(Window* window, FileData* root) :
 	mList.setSize(mSize.x() * (0.50f - padding), mList.getSize().y());
 	mList.setAlignment(TextListComponent<FileData*>::ALIGN_LEFT);
 	mList.setCursorChangedCallback([&](const CursorState& /*state*/) { updateInfoPanel(); });
+
+	// Fondo dinámico por juego
+	mBackground.setOrigin(0.0f, 0.0f);
+	mBackground.setPosition(0.0f, 0.0f);
+	mBackground.setResize(mSize.x(), mSize.y());
+	mBackground.setDefaultZIndex(5);
+	mBackground.setVisible(false);
+	addChild(&mBackground);
 
 	// Imagen principal
 	mImage.setOrigin(0.5f, 0.5f);
@@ -122,6 +131,7 @@ void DetailedGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& them
 	BasicGameListView::onThemeChanged(theme);
 
 	using namespace ThemeFlags;
+	mBackground.applyTheme(theme, getName(), "md_background", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mThumbnail.applyTheme(theme, getName(), "md_thumbnail", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mMarquee.applyTheme(theme, getName(), "md_marquee", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mImage.applyTheme(theme, getName(), "md_image", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
@@ -244,10 +254,24 @@ void DetailedGameListView::updateInfoPanel()
 	if (file == NULL)
 	{
 		fadingOut = true;
+		mBackground.setImage("");
+		mBackground.setVisible(false);
 		mGameCounter.setValue("");
 	}
 	else
 	{
+		const std::string bgPath = file->getBackgroundPath();
+		if (!bgPath.empty())
+		{
+			mBackground.setImage(bgPath);
+			mBackground.setVisible(true);
+		}
+		else
+		{
+			mBackground.setImage("");
+			mBackground.setVisible(false);
+		}
+
 		mThumbnail.setImage(file->getThumbnailPath());
 		mMarquee.setImage(file->getMarqueePath());
 		mImage.setImage(file->getImagePath());
@@ -286,6 +310,7 @@ void DetailedGameListView::updateInfoPanel()
 	}
 
 	std::vector<GuiComponent*> comps = getMDValues();
+	comps.push_back(&mBackground);
 	comps.push_back(&mThumbnail);
 	comps.push_back(&mMarquee);
 	comps.push_back(&mImage);

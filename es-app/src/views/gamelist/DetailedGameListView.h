@@ -28,6 +28,7 @@ private:
 
 	int getCurrentGameIndex(FileData* file) const;
 
+	ImageComponent mBackground;
 	ImageComponent mThumbnail;
 	ImageComponent mMarquee;
 	ImageComponent mImage;
