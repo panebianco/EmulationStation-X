@@ -127,6 +127,7 @@ protected:
 	std::string getScreenshotCandidate() const;
 	std::string getWheelCandidate() const;
 	std::string getTextureCandidate() const;
+	std::string getFanartCandidate() const;
 	std::string getVideoCandidate() const;
 
 	std::string getUniversalScreenshotCandidate() const;

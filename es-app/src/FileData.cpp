@@ -36,6 +36,7 @@ static inline std::string getNormalizedSourceSetting(const std::string& settingN
 		value != "screenshot" &&
 		value != "wheel" &&
 		value != "texture" &&
+		value != "fanart" &&
 		value != "none")
 	{
 		value = defaultValue;
@@ -167,6 +168,34 @@ std::string FileData::getTextureCandidate() const
 	return getMetadataOrLocalArt("texture", "-texture");
 }
 
+std::string FileData::getFanartCandidate() const
+{
+	std::string fanart = metadata.get("fanart");
+	if (!fanart.empty())
+		return fanart;
+
+	if (mType != GAME)
+		return "";
+
+	const std::string romDir = Utils::FileSystem::getParent(mPath);
+	if (romDir.empty())
+		return "";
+
+	const std::string fanartDir = romDir + "/media/fanart";
+	const std::string romStem = Utils::FileSystem::getStem(mPath);
+
+	const char* extList[3] = { ".png", ".jpg", ".jpeg" };
+
+	for (int i = 0; i < 3; i++)
+	{
+		const std::string candidate = fanartDir + "/" + romStem + extList[i];
+		if (Utils::FileSystem::exists(candidate))
+			return candidate;
+	}
+
+	return "";
+}
+
 std::string FileData::getVideoCandidate() const
 {
 	std::string video = metadata.get("video");
@@ -208,7 +237,15 @@ std::string FileData::getUniversalScreenshotCandidate() const
 
 std::string FileData::getBackgroundCandidate() const
 {
-	return getUniversalScreenshotCandidate();
+	std::string fanart = getFanartCandidate();
+	if (!fanart.empty())
+		return fanart;
+
+	std::string screenshot = getScreenshotCandidate();
+	if (!screenshot.empty())
+		return screenshot;
+
+	return "";
 }
 
 std::string FileData::getArtBySource(const std::string& source) const
@@ -227,6 +264,8 @@ std::string FileData::getArtBySource(const std::string& source) const
 		return getWheelCandidate();
 	else if (source == "texture")
 		return getTextureCandidate();
+	else if (source == "fanart")
+		return getFanartCandidate();
 	else if (source == "none")
 		return "";
 
