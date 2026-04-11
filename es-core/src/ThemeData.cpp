@@ -113,6 +113,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "fontSize", RESOLUTION_FLOAT },
 		{ "scrollSound", PATH },
 		{ "alignment", STRING },
+		{ "orientation", STRING },
 		{ "horizontalMargin", RESOLUTION_FLOAT },
 		{ "forceUppercase", BOOLEAN },
 		{ "lineSpacing", FLOAT },

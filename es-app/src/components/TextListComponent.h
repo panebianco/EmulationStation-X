@@ -59,7 +59,14 @@ public:
 		ALIGN_RIGHT
 	};
 
+	enum Orientation
+	{
+		ORIENTATION_VERTICAL,
+		ORIENTATION_HORIZONTAL
+	};
+
 	inline void setAlignment(Alignment align) { mAlignment = align; }
+	inline void setOrientation(Orientation orientation) { mOrientation = orientation; }
 
 	inline void setCursorChangedCallback(const std::function<void(CursorState state)>& func) { mCursorChangedCallback = func; }
 
@@ -112,6 +119,7 @@ private:
 	int mMarqueeTime;
 
 	Alignment mAlignment;
+	Orientation mOrientation;
 	float mHorizontalMargin;
 
 	int viewportTop();
@@ -151,6 +159,7 @@ TextListComponent<T>::TextListComponent(Window* window) :
 
 	mHorizontalMargin = 0;
 	mAlignment = ALIGN_CENTER;
+	mOrientation = ORIENTATION_VERTICAL;
 
 	mFont = Font::get(FONT_SIZE_MEDIUM);
 	mUppercase = false;
@@ -204,8 +213,6 @@ void TextListComponent<T>::render(const Transform4x4f& parentTrans)
 	if (listCutoff > size())
 		listCutoff = size();
 
-	// Antes: centraba siempre verticalmente.
-	// Ahora: SystemData* arranca arriba por defecto, gamelist sigue igual.
 	float y;
 	if (mTopAligned)
 		y = 0.0f;
@@ -234,7 +241,6 @@ void TextListComponent<T>::render(const Transform4x4f& parentTrans)
 			mSelectorColorGradientHorizontal);
 	}
 
-	// clip to inside margins
 	Vector3f dim(mSize.x(), mSize.y(), 0);
 	dim = trans * dim - trans.translation();
 
@@ -285,7 +291,6 @@ void TextListComponent<T>::render(const Transform4x4f& parentTrans)
 
 		Transform4x4f drawTrans = trans;
 
-		// currently selected item text might be scrolling
 		if ((mCursor == i) && (mMarqueeOffset > 0))
 			drawTrans.translate(offset - Vector3f((float)mMarqueeOffset, 0, 0));
 		else
@@ -294,7 +299,6 @@ void TextListComponent<T>::render(const Transform4x4f& parentTrans)
 		Renderer::setMatrix(drawTrans);
 		font->renderTextCache(entry.data.textCache.get());
 
-		// render currently selected item text again if marquee is scrolled far enough for it to repeat
 		if ((mCursor == i) && (mMarqueeOffset2 < 0))
 		{
 			drawTrans = trans;
@@ -326,7 +330,6 @@ int TextListComponent<T>::viewportTop()
 
 	if (Settings::getInstance()->getBool("UseFullscreenPaging"))
 	{
-		// delta may be greater/less than +/-mViewportHeight on re-sorting of list
 		if (delta <= -mViewportHeight || delta >= mViewportHeight
 			|| delta < 0 && mCursor - mViewportTop < mViewportHeight / 2
 			|| delta > 0 && mCursor - mViewportTop > mViewportHeight / 2)
@@ -336,7 +339,6 @@ int TextListComponent<T>::viewportTop()
 	}
 	else
 	{
-		// put cursor in middle of visible list
 		topNew = mCursor - mViewportHeight / 2;
 	}
 
@@ -351,7 +353,13 @@ int TextListComponent<T>::viewportTop()
 template <typename T>
 bool TextListComponent<T>::input(InputConfig* config, Input input)
 {
-	bool isSingleStep = config->isMappedLike("down", input) || config->isMappedLike("up", input);
+	bool isSingleStep = false;
+
+	if (mOrientation == ORIENTATION_HORIZONTAL)
+		isSingleStep = config->isMappedLike("right", input) || config->isMappedLike("left", input);
+	else
+		isSingleStep = config->isMappedLike("down", input) || config->isMappedLike("up", input);
+
 	bool isPageStep = config->isMappedLike("rightshoulder", input) || config->isMappedLike("leftshoulder", input);
 
 	if (size() > 0 && (isSingleStep || isPageStep))
@@ -360,14 +368,21 @@ bool TextListComponent<T>::input(InputConfig* config, Input input)
 		{
 			int delta;
 			mCursorPrev = mCursor;
+
 			if (isSingleStep)
-				delta = config->isMappedLike("down", input) ? 1 : -1;
+			{
+				if (mOrientation == ORIENTATION_HORIZONTAL)
+					delta = config->isMappedLike("right", input) ? 1 : -1;
+				else
+					delta = config->isMappedLike("down", input) ? 1 : -1;
+			}
 			else
 			{
 				delta = Settings::getInstance()->getBool("UseFullscreenPaging") ? mViewportHeight : 10;
 				if (config->isMappedLike("leftshoulder", input))
 					delta = -delta;
 			}
+
 			listInput(delta);
 			return true;
 		}
@@ -387,11 +402,9 @@ void TextListComponent<T>::update(int deltaTime)
 
 	if (!isScrolling() && size() > 0)
 	{
-		// always reset the marquee offsets
 		mMarqueeOffset = 0;
 		mMarqueeOffset2 = 0;
 
-		// if we're not scrolling and this object's text goes outside our size, marquee it!
 		auto name = mEntries.at((unsigned int)mCursor).name;
 		std::string displayName = mUppercase ? Utils::String::toUpper(name) : name;
 
@@ -403,7 +416,6 @@ void TextListComponent<T>::update(int deltaTime)
 
 		if (textLength > limit)
 		{
-			// loop
 			const float speed = mFont->sizeText("ABCDEFGHIJKLMNOPQRSTUVWXYZ").x() * 0.247f;
 			const float delay = 3000;
 			const float scrollLength = textLength;
@@ -426,7 +438,6 @@ void TextListComponent<T>::update(int deltaTime)
 	GuiComponent::update(deltaTime);
 }
 
-// list management stuff
 template <typename T>
 void TextListComponent<T>::add(const std::string& name, const T& obj, unsigned int color)
 {
@@ -488,7 +499,6 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	const float selectorHeight = Math::max(mFont->getHeight(1.0f), (float)mFont->getSize()) * mLineSpacing;
 	setSelectorHeight(selectorHeight);
 
-	// scroll sound
 	if (properties & SOUND)
 	{
 		if (elem->has("scrollSound"))
@@ -525,6 +535,24 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 		}
 	}
 
+	if (elem->has("orientation"))
+	{
+		const std::string& str = elem->get<std::string>("orientation");
+		if (str == "horizontal")
+			setOrientation(ORIENTATION_HORIZONTAL);
+		else if (str == "vertical")
+			setOrientation(ORIENTATION_VERTICAL);
+		else
+		{
+			LOG(LogWarning) << "Unknown TextListComponent orientation \"" << str << "\"! Using vertical.";
+			setOrientation(ORIENTATION_VERTICAL);
+		}
+	}
+	else
+	{
+		setOrientation(ORIENTATION_VERTICAL);
+	}
+
 	if (properties & FORCE_UPPERCASE && elem->has("forceUppercase"))
 		setUppercase(elem->get<bool>("forceUppercase"));
 
@@ -549,17 +577,15 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 			setSelectorOffsetY(0.0f);
 		}
 
-		// nuevo: ancho del selector
 		if (elem->has("selectorWidth"))
 		{
 			setSelectorWidth(elem->get<float>("selectorWidth") * Renderer::getScreenWidth());
 		}
 		else
 		{
-			setSelectorWidth(0.0f); // 0 = usar ancho completo como fallback
+			setSelectorWidth(0.0f);
 		}
 
-		// nuevo: offset horizontal del selector
 		if (elem->has("selectorHorizontalOffset"))
 		{
 			float scale = this->mParent ? this->mParent->getSize().x() : (float)Renderer::getScreenWidth();

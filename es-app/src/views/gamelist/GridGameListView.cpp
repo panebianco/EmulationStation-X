@@ -26,7 +26,9 @@ namespace
 	static bool themeElemExists(const std::shared_ptr<ThemeData>& theme,
 		const std::string& view, const std::string& elem, const std::string& type)
 	{
-		if (!theme) return false;
+		if (!theme)
+			return false;
+
 		return theme->getElement(view, elem, type) != nullptr;
 	}
 
@@ -53,7 +55,8 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	ISimpleGameListView(window, root),
 	mGrid(window),
 	mBackground(window),
-	mOverlay(window),
+	mLblRating(window), mLblReleaseDate(window), mLblDeveloper(window), mLblPublisher(window),
+	mLblGenre(window), mLblPlayers(window), mLblLastPlayed(window), mLblPlayCount(window),
 	mMarquee(window),
 	mVideo(nullptr),
 	mVideoPlaying(false),
@@ -68,15 +71,7 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mPlayCount(window),
 	mName(window),
 	mDescContainer(window, DESCRIPTION_SCROLL_DELAY),
-	mDescription(window),
-	mLblRating(window),
-	mLblReleaseDate(window),
-	mLblDeveloper(window),
-	mLblPublisher(window),
-	mLblGenre(window),
-	mLblPlayers(window),
-	mLblLastPlayed(window),
-	mLblPlayCount(window)
+	mDescription(window)
 {
 	LocaleES& loc = LocaleES::getInstance();
 
@@ -89,25 +84,15 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mVideo = new VideoVlcComponent(window, getTitlePath());
 #endif
 
-	// Fondo dinámico por juego
+	// Fondo dinámico por juego: se comporta como fondo normal
 	mBackground.setOrigin(0.0f, 0.0f);
 	mBackground.setPosition(0.0f, 0.0f);
 	mBackground.setResize(mSize.x(), mSize.y());
-	mBackground.setDefaultZIndex(16);
+	mBackground.setDefaultZIndex(1);
 	mBackground.setVisible(false);
-	mBackground.setOpacity(255);
 	addChild(&mBackground);
 
-	// Overlay fijo por encima del fondo
-	mOverlay.setOrigin(0.0f, 0.0f);
-	mOverlay.setPosition(0.0f, 0.0f);
-	mOverlay.setResize(mSize.x(), mSize.y());
-	mOverlay.setDefaultZIndex(17);
-	mOverlay.setVisible(false);
-	mOverlay.setOpacity(255);
-	addChild(&mOverlay);
-
-	// GRID: columna izquierda
+	// Grid
 	mGrid.setPosition(mSize.x() * 0.05f, mSize.y() * 0.18f);
 	mGrid.setSize(mSize.x() * 0.55f, mSize.y() * 0.60f);
 	mGrid.setDefaultZIndex(20);
@@ -116,6 +101,7 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 
 	populateList(root->getChildrenListToDisplay());
 
+	// Labels
 	mLblRating.setText(loc.translate("RATING") + ": ");
 	addChild(&mLblRating);
 	addChild(&mRating);
@@ -149,6 +135,7 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	addChild(&mLblPlayCount);
 	addChild(&mPlayCount);
 
+	// Nombre
 	mName.setPosition(mSize.x() * 0.63f, mSize.y() * 0.18f);
 	mName.setSize(mSize.x() * 0.32f, 0);
 	mName.setDefaultZIndex(40);
@@ -157,6 +144,7 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mName.setHorizontalAlignment(ALIGN_CENTER);
 	addChild(&mName);
 
+	// Descripción
 	mDescContainer.setPosition(mSize.x() * 0.63f, mSize.y() * 0.44f);
 	mDescContainer.setSize(mSize.x() * 0.32f, mSize.y() - mDescContainer.getPosition().y());
 	mDescContainer.setAutoScroll(true);
@@ -167,6 +155,7 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mDescription.setSize(mDescContainer.getSize().x(), 0);
 	mDescContainer.addChild(&mDescription);
 
+	// Imagen
 	mImage.setOrigin(0.5f, 0.5f);
 	mImage.setPosition(2.0f, 2.0f);
 	mImage.setMaxSize(mSize.x(), mSize.y());
@@ -174,6 +163,7 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mImage.setVisible(false);
 	addChild(&mImage);
 
+	// Video
 	mVideo->setOrigin(0.5f, 0.5f);
 	mVideo->setPosition(2.0f, 2.0f);
 	mVideo->setSize(mSize.x(), mSize.y());
@@ -181,6 +171,7 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mVideo->setVisible(false);
 	addChild(mVideo);
 
+	// Marquee
 	mMarquee.setOrigin(0.5f, 0.5f);
 	mMarquee.setPosition(2.0f, 2.0f);
 	mMarquee.setMaxSize(mSize.x(), mSize.y());
@@ -188,8 +179,12 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mMarquee.setVisible(false);
 	addChild(&mMarquee);
 
-	for (auto* l : getMDLabels()) l->setVisible(false);
-	for (auto* v : getMDValues()) v->setVisible(false);
+	for (auto* l : getMDLabels())
+		l->setVisible(false);
+
+	for (auto* v : getMDValues())
+		v->setVisible(false);
+
 	mDescContainer.setVisible(false);
 	mDescription.setVisible(false);
 
@@ -203,6 +198,71 @@ GridGameListView::~GridGameListView()
 	delete mVideo;
 }
 
+void GridGameListView::onShow()
+{
+	GuiComponent::onShow();
+	updateInfoPanel();
+}
+
+void GridGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
+{
+	ISimpleGameListView::onThemeChanged(theme);
+
+	using namespace ThemeFlags;
+
+	mGrid.applyTheme(theme, getName(), "gamegrid", ALL);
+	mName.applyTheme(theme, getName(), "md_name", ALL);
+	mBackground.applyTheme(theme, getName(), "md_background", POSITION | SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mMarquee.applyTheme(theme, getName(), "md_marquee", POSITION | SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mImage.applyTheme(theme, getName(), "md_image", POSITION | SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mVideo->applyTheme(theme, getName(), "md_video", POSITION | SIZE | DELAY | Z_INDEX | ROTATION | VISIBLE);
+
+	initMDLabels();
+
+	applyIfExistsOrHide(mLblRating,      theme, getName(), "md_lbl_rating",      "text", ALL);
+	applyIfExistsOrHide(mLblReleaseDate, theme, getName(), "md_lbl_releasedate", "text", ALL);
+	applyIfExistsOrHide(mLblDeveloper,   theme, getName(), "md_lbl_developer",   "text", ALL);
+	applyIfExistsOrHide(mLblPublisher,   theme, getName(), "md_lbl_publisher",   "text", ALL);
+	applyIfExistsOrHide(mLblGenre,       theme, getName(), "md_lbl_genre",       "text", ALL);
+	applyIfExistsOrHide(mLblPlayers,     theme, getName(), "md_lbl_players",     "text", ALL);
+	applyIfExistsOrHide(mLblLastPlayed,  theme, getName(), "md_lbl_lastplayed",  "text", ALL);
+	applyIfExistsOrHide(mLblPlayCount,   theme, getName(), "md_lbl_playcount",   "text", ALL);
+
+	initMDValues();
+
+	applyIfExistsOrHide(mRating,      theme, getName(), "md_rating",      "rating",   ALL ^ ThemeFlags::TEXT);
+	applyIfExistsOrHide(mReleaseDate, theme, getName(), "md_releasedate", "datetime", ALL ^ ThemeFlags::TEXT);
+	applyIfExistsOrHide(mDeveloper,   theme, getName(), "md_developer",   "text",     ALL ^ ThemeFlags::TEXT);
+	applyIfExistsOrHide(mPublisher,   theme, getName(), "md_publisher",   "text",     ALL ^ ThemeFlags::TEXT);
+	applyIfExistsOrHide(mGenre,       theme, getName(), "md_genre",       "text",     ALL ^ ThemeFlags::TEXT);
+	applyIfExistsOrHide(mPlayers,     theme, getName(), "md_players",     "text",     ALL ^ ThemeFlags::TEXT);
+	applyIfExistsOrHide(mLastPlayed,  theme, getName(), "md_lastplayed",  "datetime", ALL ^ ThemeFlags::TEXT);
+	applyIfExistsOrHide(mPlayCount,   theme, getName(), "md_playcount",   "text",     ALL ^ ThemeFlags::TEXT);
+
+	applyIfExistsOrHide(mDescContainer, theme, getName(), "md_description", "text",
+		POSITION | SIZE | Z_INDEX | VISIBLE);
+
+	if (mDescContainer.isVisible())
+	{
+		mDescription.setVisible(true);
+		mDescription.setSize(mDescContainer.getSize().x(), 0);
+		mDescription.applyTheme(theme, getName(), "md_description",
+			ALL ^ (POSITION | SIZE | ThemeFlags::ORIGIN | TEXT | ROTATION));
+	}
+	else
+	{
+		mDescription.setVisible(false);
+	}
+
+	FileData* file = mGrid.getSelected();
+	populateList(mRoot->getChildrenListToDisplay());
+
+	if (file && !file->isPlaceHolder())
+		mGrid.setCursor(file);
+
+	sortChildren();
+}
+
 FileData* GridGameListView::getCursor()
 {
 	return mGrid.getSelected();
@@ -210,11 +270,88 @@ FileData* GridGameListView::getCursor()
 
 void GridGameListView::setCursor(FileData* file, bool refreshListCursorPos)
 {
-	if (!mGrid.setCursor(file) && (!file->isPlaceHolder()))
+	if (!file)
+		return;
+
+	if (!mGrid.setCursor(file) && !file->isPlaceHolder())
 	{
 		populateList(file->getParent()->getChildrenListToDisplay());
 		mGrid.setCursor(file);
 	}
+}
+
+bool GridGameListView::input(InputConfig* config, Input input)
+{
+	if (config->isMappedLike("left", input) || config->isMappedLike("right", input))
+		return GuiComponent::input(config, input);
+
+	return ISimpleGameListView::input(config, input);
+}
+
+std::vector<HelpPrompt> GridGameListView::getHelpPrompts()
+{
+	LocaleES& loc = LocaleES::getInstance();
+	std::vector<HelpPrompt> prompts;
+
+	if (Settings::getInstance()->getBool("QuickSystemSelect"))
+		prompts.push_back(HelpPrompt("lr", loc.translate("SYSTEM")));
+
+	prompts.push_back(HelpPrompt("up/down/left/right", loc.translate("CHOOSE")));
+	prompts.push_back(HelpPrompt("a", loc.translate("START")));
+	prompts.push_back(HelpPrompt("b", loc.translate("BACK")));
+
+	if (!UIModeController::getInstance()->isUIModeKid())
+		prompts.push_back(HelpPrompt("select", loc.translate("OPTIONS")));
+
+	if (mRoot->getSystem()->isGameSystem())
+		prompts.push_back(HelpPrompt("x", loc.translate("RANDOM")));
+
+	if (mRoot->getSystem()->isGameSystem() && !UIModeController::getInstance()->isUIModeKid())
+	{
+		std::string prompt = CollectionSystemManager::get()->getEditingCollection();
+		prompts.push_back(HelpPrompt("y", prompt));
+	}
+
+	return prompts;
+}
+
+void GridGameListView::launch(FileData* game)
+{
+	float screenWidth = (float)Renderer::getScreenWidth();
+	float screenHeight = (float)Renderer::getScreenHeight();
+
+	Vector3f target(screenWidth / 2.0f, screenHeight / 2.0f, 0);
+
+	if (mMarquee.hasImage() &&
+		(mMarquee.getPosition().x() < screenWidth && mMarquee.getPosition().x() > 0.0f &&
+		 mMarquee.getPosition().y() < screenHeight && mMarquee.getPosition().y() > 0.0f))
+	{
+		target = Vector3f(mMarquee.getCenter().x(), mMarquee.getCenter().y(), 0);
+	}
+	else if (mImage.hasImage() &&
+		(mImage.getPosition().x() < screenWidth && mImage.getPosition().x() > 2.0f &&
+		 mImage.getPosition().y() < screenHeight && mImage.getPosition().y() > 2.0f))
+	{
+		target = Vector3f(mImage.getCenter().x(), mImage.getCenter().y(), 0);
+	}
+	else if (mVideo->getPosition().x() < screenWidth && mVideo->getPosition().x() > 0.0f &&
+		mVideo->getPosition().y() < screenHeight && mVideo->getPosition().y() > 0.0f)
+	{
+		target = Vector3f(mVideo->getCenter().x(), mVideo->getCenter().y(), 0);
+	}
+
+	ViewController::get()->launch(game, target);
+}
+
+void GridGameListView::onFocusLost(void)
+{
+	mDescContainer.reset();
+}
+
+void GridGameListView::update(int deltaTime)
+{
+	ISimpleGameListView::update(deltaTime);
+	mVideo->update(deltaTime);
 }
 
 std::string GridGameListView::getQuickSystemSelectRightButton()
@@ -227,12 +364,165 @@ std::string GridGameListView::getQuickSystemSelectLeftButton()
 	return "leftshoulder";
 }
 
-bool GridGameListView::input(InputConfig* config, Input input)
+void GridGameListView::populateList(const std::vector<FileData*>& files)
 {
-	if (config->isMappedLike("left", input) || config->isMappedLike("right", input))
-		return GuiComponent::input(config, input);
+	mGrid.clear();
+	mHeaderText.setText(mRoot->getSystem()->getFullName());
 
-	return ISimpleGameListView::input(config, input);
+	if (!files.empty())
+	{
+		for (auto it = files.cbegin(); it != files.cend(); ++it)
+			mGrid.add((*it)->getName(), getImagePath(*it), *it);
+	}
+	else
+	{
+		addPlaceholder();
+	}
+}
+
+void GridGameListView::remove(FileData* game, bool deleteFile, bool refreshView)
+{
+	if (deleteFile)
+		Utils::FileSystem::removeFile(game->getPath());
+
+	FileData* parent = game->getParent();
+	if (getCursor() == game)
+	{
+		std::vector<FileData*> siblings = parent->getChildrenListToDisplay();
+		auto gameIter = std::find(siblings.cbegin(), siblings.cend(), game);
+		int gamePos = (int)std::distance(siblings.cbegin(), gameIter);
+
+		if (gameIter != siblings.cend())
+		{
+			if ((gamePos + 1) < (int)siblings.size())
+				setCursor(siblings.at(gamePos + 1));
+			else if ((gamePos - 1) >= 0)
+				setCursor(siblings.at(gamePos - 1));
+		}
+	}
+
+	mGrid.remove(game);
+	if (mGrid.size() == 0)
+		addPlaceholder();
+
+	delete game;
+
+	if (refreshView)
+		onFileChanged(parent, FILE_REMOVED);
+}
+
+void GridGameListView::addPlaceholder()
+{
+	LocaleES& loc = LocaleES::getInstance();
+
+	std::string placeholderName = loc.translate("NO ENTRIES FOUND");
+	if (placeholderName == "NO ENTRIES FOUND")
+		placeholderName = "<No Entries Found>";
+
+	FileData* placeholder = new FileData(
+		PLACEHOLDER,
+		placeholderName,
+		this->mRoot->getSystem()->getSystemEnvData(),
+		this->mRoot->getSystem());
+
+	mGrid.add(placeholder->getName(), "", placeholder);
+}
+
+void GridGameListView::updateInfoPanel()
+{
+	FileData* file = (mGrid.size() == 0 || mGrid.isScrolling()) ? nullptr : mGrid.getSelected();
+
+	bool fadingOut;
+	if (file == nullptr)
+	{
+		mBackground.setImage("");
+		mBackground.setVisible(false);
+
+		mVideo->setVideo("");
+		mVideo->setImage("");
+		mVideoPlaying = false;
+		fadingOut = true;
+	}
+	else
+	{
+		const std::string bgPath = file->getBackgroundPath();
+		if (!bgPath.empty())
+		{
+			mBackground.setImage(bgPath);
+			mBackground.setVisible(true);
+		}
+		else
+		{
+			mBackground.setImage("");
+			mBackground.setVisible(false);
+		}
+
+		if (!mVideo->setVideo(file->getVideoPath()))
+			mVideo->setDefaultVideo();
+
+		mVideoPlaying = true;
+
+		mVideo->setImage(file->getThumbnailPath());
+		mMarquee.setImage(file->getMarqueePath());
+		mImage.setImage(file->getImagePath());
+
+		if (mDescription.isVisible())
+		{
+			mDescription.setText(file->metadata.get("desc"));
+			mDescContainer.reset();
+		}
+
+		if (mRating.isVisible())      mRating.setValue(file->metadata.get("rating"));
+		if (mReleaseDate.isVisible()) mReleaseDate.setValue(file->metadata.get("releasedate"));
+		if (mDeveloper.isVisible())   mDeveloper.setValue(file->metadata.get("developer"));
+		if (mPublisher.isVisible())   mPublisher.setValue(file->metadata.get("publisher"));
+		if (mGenre.isVisible())       mGenre.setValue(file->metadata.get("genre"));
+		if (mPlayers.isVisible())     mPlayers.setValue(file->metadata.get("players"));
+
+		std::string displayName = file->metadata.get("name");
+		if (displayName.empty())
+			displayName = file->getName();
+		mName.setValue(displayName);
+
+		if (file->getType() == GAME)
+		{
+			if (mLastPlayed.isVisible())
+				mLastPlayed.setValue(file->metadata.get("lastplayed"));
+			if (mPlayCount.isVisible())
+				mPlayCount.setValue(file->metadata.get("playcount"));
+		}
+
+		fadingOut = false;
+	}
+
+	// El fondo no entra en el fade del panel
+	std::vector<GuiComponent*> comps = getMDValues();
+	comps.push_back(&mDescription);
+	comps.push_back(&mName);
+	comps.push_back(&mMarquee);
+	comps.push_back(mVideo);
+	comps.push_back(&mImage);
+
+	std::vector<TextComponent*> labels = getMDLabels();
+	comps.insert(comps.cend(), labels.cbegin(), labels.cend());
+
+	for (auto it = comps.cbegin(); it != comps.cend(); ++it)
+	{
+		GuiComponent* comp = *it;
+
+		if (!comp->isVisible())
+			continue;
+
+		if ((comp->isAnimationPlaying(0) && comp->isAnimationReversed(0) != fadingOut) ||
+			(!comp->isAnimationPlaying(0) && comp->getOpacity() != (fadingOut ? 0 : 255)))
+		{
+			auto func = [comp](float t)
+			{
+				comp->setOpacity((unsigned char)(Math::lerp(0.0f, 1.0f, t) * 255));
+			};
+			comp->setAnimation(new LambdaAnimation(func, 150), 0, nullptr, fadingOut);
+		}
+	}
 }
 
 const std::string GridGameListView::getImagePath(FileData* file)
@@ -267,92 +557,12 @@ const std::string GridGameListView::getImagePath(FileData* file)
 	return file->getImagePath();
 }
 
-void GridGameListView::populateList(const std::vector<FileData*>& files)
-{
-	mGrid.clear();
-	mHeaderText.setText(mRoot->getSystem()->getFullName());
-
-	if (files.size() > 0)
-	{
-		for (auto it = files.cbegin(); it != files.cend(); it++)
-			mGrid.add((*it)->getName(), getImagePath(*it), *it);
-	}
-	else
-	{
-		addPlaceholder();
-	}
-}
-
-void GridGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
-{
-	ISimpleGameListView::onThemeChanged(theme);
-
-	using namespace ThemeFlags;
-
-	mGrid.applyTheme(theme, getName(), "gamegrid", ALL);
-	mName.applyTheme(theme, getName(), "md_name", ALL);
-
-	mBackground.applyTheme(theme, getName(), "md_background", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
-	mBackground.setOpacity(255);
-
-	applyIfExistsOrHide(mOverlay, theme, getName(), "gamelist_deco", "image",
-		POSITION | ThemeFlags::SIZE | ThemeFlags::PATH | Z_INDEX | ROTATION | VISIBLE);
-	mOverlay.setOpacity(255);
-
-	mMarquee.applyTheme(theme, getName(), "md_marquee", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
-	mImage.applyTheme(theme, getName(), "md_image", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
-	mVideo->applyTheme(theme, getName(), "md_video", POSITION | ThemeFlags::SIZE | ThemeFlags::DELAY | Z_INDEX | ROTATION | VISIBLE);
-
-	initMDLabels();
-
-	applyIfExistsOrHide(mLblRating,      theme, getName(), "md_lbl_rating",      "text", ALL);
-	applyIfExistsOrHide(mLblReleaseDate, theme, getName(), "md_lbl_releasedate", "text", ALL);
-	applyIfExistsOrHide(mLblDeveloper,   theme, getName(), "md_lbl_developer",   "text", ALL);
-	applyIfExistsOrHide(mLblPublisher,   theme, getName(), "md_lbl_publisher",   "text", ALL);
-	applyIfExistsOrHide(mLblGenre,       theme, getName(), "md_lbl_genre",       "text", ALL);
-	applyIfExistsOrHide(mLblPlayers,     theme, getName(), "md_lbl_players",     "text", ALL);
-	applyIfExistsOrHide(mLblLastPlayed,  theme, getName(), "md_lbl_lastplayed",  "text", ALL);
-	applyIfExistsOrHide(mLblPlayCount,   theme, getName(), "md_lbl_playcount",   "text", ALL);
-
-	initMDValues();
-
-	applyIfExistsOrHide(mRating,      theme, getName(), "md_rating",      "rating",   ALL ^ ThemeFlags::TEXT);
-	applyIfExistsOrHide(mReleaseDate, theme, getName(), "md_releasedate", "datetime", ALL ^ ThemeFlags::TEXT);
-	applyIfExistsOrHide(mDeveloper,   theme, getName(), "md_developer",   "text",     ALL ^ ThemeFlags::TEXT);
-	applyIfExistsOrHide(mPublisher,   theme, getName(), "md_publisher",   "text",     ALL ^ ThemeFlags::TEXT);
-	applyIfExistsOrHide(mGenre,       theme, getName(), "md_genre",       "text",     ALL ^ ThemeFlags::TEXT);
-	applyIfExistsOrHide(mPlayers,     theme, getName(), "md_players",     "text",     ALL ^ ThemeFlags::TEXT);
-	applyIfExistsOrHide(mLastPlayed,  theme, getName(), "md_lastplayed",  "datetime", ALL ^ ThemeFlags::TEXT);
-	applyIfExistsOrHide(mPlayCount,   theme, getName(), "md_playcount",   "text",     ALL ^ ThemeFlags::TEXT);
-
-	applyIfExistsOrHide(mDescContainer, theme, getName(), "md_description", "text",
-		POSITION | ThemeFlags::SIZE | Z_INDEX | VISIBLE);
-
-	if (mDescContainer.isVisible())
-	{
-		mDescription.setVisible(true);
-		mDescription.setSize(mDescContainer.getSize().x(), 0);
-		mDescription.applyTheme(theme, getName(), "md_description",
-			ALL ^ (POSITION | ThemeFlags::SIZE | ThemeFlags::ORIGIN | TEXT | ROTATION));
-	}
-	else
-	{
-		mDescription.setVisible(false);
-	}
-
-	FileData* file = mGrid.getSelected();
-	populateList(mRoot->getChildrenListToDisplay());
-	mGrid.setCursor(file);
-
-	sortChildren();
-}
-
 void GridGameListView::initMDLabels()
 {
 	std::vector<TextComponent*> components = getMDLabels();
 
 	const unsigned int colCount = 2;
-	const unsigned int rowCount = (int)(components.size() / 2);
+	const unsigned int rowCount = (unsigned int)(components.size() / 2);
 
 	Vector3f start(mSize.x() * 0.63f, mSize.y() * 0.26f, 0.0f);
 
@@ -365,7 +575,9 @@ void GridGameListView::initMDLabels()
 		Vector3f pos(0.0f, 0.0f, 0.0f);
 
 		if (row == 0)
+		{
 			pos = start + Vector3f(colSize * (i / rowCount), 0, 0);
+		}
 		else
 		{
 			GuiComponent* lc = components[i - 1];
@@ -394,8 +606,8 @@ void GridGameListView::initMDValues()
 	mPlayCount.setFont(defaultFont);
 
 	float bottom = 0.0f;
-
 	const float colSize = (mSize.x() * 0.48f) / 2;
+
 	for (unsigned int i = 0; i < labels.size(); i++)
 	{
 		const float heightDiff = (labels[i]->getSize().y() - values[i]->getSize().y()) / 2;
@@ -409,174 +621,12 @@ void GridGameListView::initMDValues()
 	}
 
 	mDescContainer.setPosition(mDescContainer.getPosition().x(), bottom + mSize.y() * 0.01f);
-	mDescContainer.setSize(mDescContainer.getSize().x(), mSize.y() - mDescContainer.getPosition().y());
-}
 
-void GridGameListView::updateInfoPanel()
-{
-	FileData* file = (mGrid.size() == 0 || mGrid.isScrolling()) ? NULL : mGrid.getSelected();
+	float newHeight = mSize.y() - mDescContainer.getPosition().y();
+	if (newHeight < 0.0f)
+		newHeight = 0.0f;
 
-	bool fadingOut;
-	if (file == NULL)
-	{
-		mBackground.setImage("");
-		mBackground.setVisible(false);
-
-		mVideo->setVideo("");
-		mVideo->setImage("");
-		mVideoPlaying = false;
-		fadingOut = true;
-	}
-	else
-	{
-		const std::string bgPath = file->getBackgroundPath();
-		if (!bgPath.empty())
-		{
-			mBackground.setImage(bgPath);
-			mBackground.setOpacity(255);
-			mBackground.setVisible(true);
-		}
-		else
-		{
-			mBackground.setImage("");
-			mBackground.setVisible(false);
-		}
-
-		if (!mVideo->setVideo(file->getVideoPath()))
-			mVideo->setDefaultVideo();
-
-		mVideoPlaying = true;
-
-		mVideo->setImage(file->getThumbnailPath());
-		mMarquee.setImage(file->getMarqueePath());
-		mImage.setImage(file->getImagePath());
-
-		if (mDescription.isVisible())
-		{
-			mDescription.setText(file->metadata.get("desc"));
-			mDescContainer.reset();
-		}
-
-		if (mRating.isVisible())      mRating.setValue(file->metadata.get("rating"));
-		if (mReleaseDate.isVisible()) mReleaseDate.setValue(file->metadata.get("releasedate"));
-		if (mDeveloper.isVisible())   mDeveloper.setValue(file->metadata.get("developer"));
-		if (mPublisher.isVisible())   mPublisher.setValue(file->metadata.get("publisher"));
-		if (mGenre.isVisible())       mGenre.setValue(file->metadata.get("genre"));
-		if (mPlayers.isVisible())     mPlayers.setValue(file->metadata.get("players"));
-		mName.setValue(file->metadata.get("name"));
-
-		if (file->getType() == GAME)
-		{
-			if (mLastPlayed.isVisible()) mLastPlayed.setValue(file->metadata.get("lastplayed"));
-			if (mPlayCount.isVisible())  mPlayCount.setValue(file->metadata.get("playcount"));
-		}
-
-		fadingOut = false;
-	}
-
-	std::vector<GuiComponent*> comps = getMDValues();
-	comps.push_back(&mDescription);
-	comps.push_back(&mName);
-	comps.push_back(&mMarquee);
-	comps.push_back(mVideo);
-	comps.push_back(&mImage);
-
-	std::vector<TextComponent*> labels = getMDLabels();
-	comps.insert(comps.cend(), labels.cbegin(), labels.cend());
-
-	for (auto it = comps.cbegin(); it != comps.cend(); it++)
-	{
-		GuiComponent* comp = *it;
-
-		if (!comp->isVisible())
-			continue;
-
-		if ((comp->isAnimationPlaying(0) && comp->isAnimationReversed(0) != fadingOut) ||
-			(!comp->isAnimationPlaying(0) && comp->getOpacity() != (fadingOut ? 0 : 255)))
-		{
-			auto func = [comp](float t)
-			{
-				comp->setOpacity((unsigned char)(Math::lerp(0.0f, 1.0f, t) * 255));
-			};
-			comp->setAnimation(new LambdaAnimation(func, 150), 0, nullptr, fadingOut);
-		}
-	}
-}
-
-void GridGameListView::addPlaceholder()
-{
-	LocaleES& loc = LocaleES::getInstance();
-
-	std::string placeholderName = loc.translate("NO ENTRIES FOUND");
-	if (placeholderName == "NO ENTRIES FOUND")
-		placeholderName = "<No Entries Found>";
-
-	FileData* placeholder = new FileData(
-		PLACEHOLDER,
-		placeholderName,
-		this->mRoot->getSystem()->getSystemEnvData(),
-		this->mRoot->getSystem());
-
-	mGrid.add(placeholder->getName(), "", placeholder);
-}
-
-void GridGameListView::launch(FileData* game)
-{
-	float screenWidth = (float)Renderer::getScreenWidth();
-	float screenHeight = (float)Renderer::getScreenHeight();
-
-	Vector3f target(screenWidth / 2.0f, screenHeight / 2.0f, 0);
-
-	if (mMarquee.hasImage() &&
-		(mMarquee.getPosition().x() < screenWidth && mMarquee.getPosition().x() > 0.0f &&
-			mMarquee.getPosition().y() < screenHeight && mMarquee.getPosition().y() > 0.0f))
-	{
-		target = Vector3f(mMarquee.getCenter().x(), mMarquee.getCenter().y(), 0);
-	}
-	else if (mImage.hasImage() &&
-		(mImage.getPosition().x() < screenWidth && mImage.getPosition().x() > 2.0f &&
-			mImage.getPosition().y() < screenHeight && mImage.getPosition().y() > 2.0f))
-	{
-		target = Vector3f(mImage.getCenter().x(), mImage.getCenter().y(), 0);
-	}
-	else if (mVideo->getPosition().x() < screenWidth && mVideo->getPosition().x() > 0.0f &&
-		mVideo->getPosition().y() < screenHeight && mVideo->getPosition().y() > 0.0f)
-	{
-		target = Vector3f(mVideo->getCenter().x(), mVideo->getCenter().y(), 0);
-	}
-
-	ViewController::get()->launch(game, target);
-}
-
-void GridGameListView::remove(FileData* game, bool deleteFile, bool refreshView)
-{
-	if (deleteFile)
-		Utils::FileSystem::removeFile(game->getPath());
-
-	FileData* parent = game->getParent();
-	if (getCursor() == game)
-	{
-		std::vector<FileData*> siblings = parent->getChildrenListToDisplay();
-		auto gameIter = std::find(siblings.cbegin(), siblings.cend(), game);
-		int gamePos = (int)std::distance(siblings.cbegin(), gameIter);
-
-		if (gameIter != siblings.cend())
-		{
-			if ((gamePos + 1) < (int)siblings.size())
-				setCursor(siblings.at(gamePos + 1));
-			else if ((gamePos - 1) > 0)
-				setCursor(siblings.at(gamePos - 1));
-		}
-	}
-
-	mGrid.remove(game);
-	if (mGrid.size() == 0)
-		addPlaceholder();
-
-	delete game;
-
-	if (refreshView)
-		onFileChanged(parent, FILE_REMOVED);
+	mDescContainer.setSize(mDescContainer.getSize().x(), newHeight);
 }
 
 std::vector<TextComponent*> GridGameListView::getMDLabels()
@@ -605,49 +655,4 @@ std::vector<GuiComponent*> GridGameListView::getMDValues()
 	ret.push_back(&mLastPlayed);
 	ret.push_back(&mPlayCount);
 	return ret;
-}
-
-std::vector<HelpPrompt> GridGameListView::getHelpPrompts()
-{
-	LocaleES& loc = LocaleES::getInstance();
-
-	std::vector<HelpPrompt> prompts;
-
-	if (Settings::getInstance()->getBool("QuickSystemSelect"))
-		prompts.push_back(HelpPrompt("lr", loc.translate("SYSTEM")));
-
-	prompts.push_back(HelpPrompt("up/down/left/right", loc.translate("CHOOSE")));
-	prompts.push_back(HelpPrompt("a", loc.translate("START")));
-	prompts.push_back(HelpPrompt("b", loc.translate("BACK")));
-
-	if (!UIModeController::getInstance()->isUIModeKid())
-		prompts.push_back(HelpPrompt("select", loc.translate("OPTIONS")));
-
-	if (mRoot->getSystem()->isGameSystem())
-		prompts.push_back(HelpPrompt("x", loc.translate("RANDOM")));
-
-	if (mRoot->getSystem()->isGameSystem() && !UIModeController::getInstance()->isUIModeKid())
-	{
-		std::string prompt = CollectionSystemManager::get()->getEditingCollection();
-		prompts.push_back(HelpPrompt("y", prompt));
-	}
-
-	return prompts;
-}
-
-void GridGameListView::update(int deltaTime)
-{
-	ISimpleGameListView::update(deltaTime);
-	mVideo->update(deltaTime);
-}
-
-void GridGameListView::onShow()
-{
-	GuiComponent::onShow();
-	updateInfoPanel();
-}
-
-void GridGameListView::onFocusLost()
-{
-	mDescContainer.reset();
 }
