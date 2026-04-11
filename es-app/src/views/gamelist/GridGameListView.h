@@ -52,6 +52,8 @@ private:
 
 	TextComponent mLblRating, mLblReleaseDate, mLblDeveloper, mLblPublisher, mLblGenre, mLblPlayers, mLblLastPlayed, mLblPlayCount;
 
+	ImageComponent mBackground;
+	ImageComponent mOverlay;
 	ImageComponent mMarquee;
 	VideoComponent* mVideo;
 	bool mVideoPlaying;

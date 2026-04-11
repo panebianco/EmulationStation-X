@@ -51,22 +51,35 @@ namespace
 
 GridGameListView::GridGameListView(Window* window, FileData* root) :
 	ISimpleGameListView(window, root),
-	mGrid(window), mMarquee(window),
-	mImage(window),
+	mGrid(window),
+	mBackground(window),
+	mOverlay(window),
+	mMarquee(window),
 	mVideo(nullptr),
 	mVideoPlaying(false),
-	mDescContainer(window, DESCRIPTION_SCROLL_DELAY), mDescription(window),
-
-	mLblRating(window), mLblReleaseDate(window), mLblDeveloper(window), mLblPublisher(window),
-	mLblGenre(window), mLblPlayers(window), mLblLastPlayed(window), mLblPlayCount(window),
-
-	mRating(window), mReleaseDate(window), mDeveloper(window), mPublisher(window),
-	mGenre(window), mPlayers(window), mLastPlayed(window), mPlayCount(window),
-	mName(window)
+	mImage(window),
+	mRating(window),
+	mReleaseDate(window),
+	mDeveloper(window),
+	mPublisher(window),
+	mGenre(window),
+	mPlayers(window),
+	mLastPlayed(window),
+	mPlayCount(window),
+	mName(window),
+	mDescContainer(window, DESCRIPTION_SCROLL_DELAY),
+	mDescription(window),
+	mLblRating(window),
+	mLblReleaseDate(window),
+	mLblDeveloper(window),
+	mLblPublisher(window),
+	mLblGenre(window),
+	mLblPlayers(window),
+	mLblLastPlayed(window),
+	mLblPlayCount(window)
 {
 	LocaleES& loc = LocaleES::getInstance();
 
-	// Create the correct type of video window
 #ifdef _OMX_
 	if (Settings::getInstance()->getBool("VideoOmxPlayer"))
 		mVideo = new VideoPlayerComponent(window, "");
@@ -76,7 +89,25 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mVideo = new VideoVlcComponent(window, getTitlePath());
 #endif
 
-	// GRID: columna izquierda (fallback sin tema)
+	// Fondo dinámico por juego
+	mBackground.setOrigin(0.0f, 0.0f);
+	mBackground.setPosition(0.0f, 0.0f);
+	mBackground.setResize(mSize.x(), mSize.y());
+	mBackground.setDefaultZIndex(16);
+	mBackground.setVisible(false);
+	mBackground.setOpacity(255);
+	addChild(&mBackground);
+
+	// Overlay fijo por encima del fondo
+	mOverlay.setOrigin(0.0f, 0.0f);
+	mOverlay.setPosition(0.0f, 0.0f);
+	mOverlay.setResize(mSize.x(), mSize.y());
+	mOverlay.setDefaultZIndex(17);
+	mOverlay.setVisible(false);
+	mOverlay.setOpacity(255);
+	addChild(&mOverlay);
+
+	// GRID: columna izquierda
 	mGrid.setPosition(mSize.x() * 0.05f, mSize.y() * 0.18f);
 	mGrid.setSize(mSize.x() * 0.55f, mSize.y() * 0.60f);
 	mGrid.setDefaultZIndex(20);
@@ -85,7 +116,6 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 
 	populateList(root->getChildrenListToDisplay());
 
-	// metadata labels + values (localizados)
 	mLblRating.setText(loc.translate("RATING") + ": ");
 	addChild(&mLblRating);
 	addChild(&mRating);
@@ -119,7 +149,6 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	addChild(&mLblPlayCount);
 	addChild(&mPlayCount);
 
-	// Título del juego: columna derecha, arriba
 	mName.setPosition(mSize.x() * 0.63f, mSize.y() * 0.18f);
 	mName.setSize(mSize.x() * 0.32f, 0);
 	mName.setDefaultZIndex(40);
@@ -128,7 +157,6 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mName.setHorizontalAlignment(ALIGN_CENTER);
 	addChild(&mName);
 
-	// Descripción: columna derecha, debajo de la metadata
 	mDescContainer.setPosition(mSize.x() * 0.63f, mSize.y() * 0.44f);
 	mDescContainer.setSize(mSize.x() * 0.32f, mSize.y() - mDescContainer.getPosition().y());
 	mDescContainer.setAutoScroll(true);
@@ -139,7 +167,6 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mDescription.setSize(mDescContainer.getSize().x(), 0);
 	mDescContainer.addChild(&mDescription);
 
-	// Image
 	mImage.setOrigin(0.5f, 0.5f);
 	mImage.setPosition(2.0f, 2.0f);
 	mImage.setMaxSize(mSize.x(), mSize.y());
@@ -147,7 +174,6 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mImage.setVisible(false);
 	addChild(&mImage);
 
-	// Video
 	mVideo->setOrigin(0.5f, 0.5f);
 	mVideo->setPosition(2.0f, 2.0f);
 	mVideo->setSize(mSize.x(), mSize.y());
@@ -155,7 +181,6 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mVideo->setVisible(false);
 	addChild(mVideo);
 
-	// Marquee
 	mMarquee.setOrigin(0.5f, 0.5f);
 	mMarquee.setPosition(2.0f, 2.0f);
 	mMarquee.setMaxSize(mSize.x(), mSize.y());
@@ -163,7 +188,6 @@ GridGameListView::GridGameListView(Window* window, FileData* root) :
 	mMarquee.setVisible(false);
 	addChild(&mMarquee);
 
-	// Por defecto, no mostrar metadata/desc si el tema no la declara.
 	for (auto* l : getMDLabels()) l->setVisible(false);
 	for (auto* v : getMDValues()) v->setVisible(false);
 	mDescContainer.setVisible(false);
@@ -216,10 +240,6 @@ const std::string GridGameListView::getImagePath(FileData* file)
 	if (!file)
 		return "";
 
-	// NUEVO:
-	// El grid debe respetar la preferencia global GridImageSource.
-	// Si el componente/grid del tema pide explícitamente MARQUEE, mantenemos
-	// esa compatibilidad como prioridad local.
 	ImageSource src = mGrid.getImageSource();
 
 	if (src == ImageSource::MARQUEE)
@@ -233,7 +253,6 @@ const std::string GridGameListView::getImagePath(FileData* file)
 	if (!gridImage.empty())
 		return gridImage;
 
-	// Fallback final por seguridad
 	if (src == ImageSource::IMAGE)
 	{
 		std::string image = file->getImagePath();
@@ -270,17 +289,22 @@ void GridGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 
 	using namespace ThemeFlags;
 
-	// Base (se mantiene como antes: applyTheme normal; no se oculta por “no existir”)
 	mGrid.applyTheme(theme, getName(), "gamegrid", ALL);
 	mName.applyTheme(theme, getName(), "md_name", ALL);
+
+	mBackground.applyTheme(theme, getName(), "md_background", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mBackground.setOpacity(255);
+
+	applyIfExistsOrHide(mOverlay, theme, getName(), "gamelist_deco", "image",
+		POSITION | ThemeFlags::SIZE | ThemeFlags::PATH | Z_INDEX | ROTATION | VISIBLE);
+	mOverlay.setOpacity(255);
+
 	mMarquee.applyTheme(theme, getName(), "md_marquee", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mImage.applyTheme(theme, getName(), "md_image", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mVideo->applyTheme(theme, getName(), "md_video", POSITION | ThemeFlags::SIZE | ThemeFlags::DELAY | Z_INDEX | ROTATION | VISIBLE);
 
-	// ---- IMPORTANTE: primero fallback layout, luego tema pisa ----
 	initMDLabels();
 
-	// Labels: si existe en tema => applyTheme, si no => ocultar
 	applyIfExistsOrHide(mLblRating,      theme, getName(), "md_lbl_rating",      "text", ALL);
 	applyIfExistsOrHide(mLblReleaseDate, theme, getName(), "md_lbl_releasedate", "text", ALL);
 	applyIfExistsOrHide(mLblDeveloper,   theme, getName(), "md_lbl_developer",   "text", ALL);
@@ -290,10 +314,8 @@ void GridGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 	applyIfExistsOrHide(mLblLastPlayed,  theme, getName(), "md_lbl_lastplayed",  "text", ALL);
 	applyIfExistsOrHide(mLblPlayCount,   theme, getName(), "md_lbl_playcount",   "text", ALL);
 
-	// Fallback values (dependen de labels)
 	initMDValues();
 
-	// Values: si existe en tema => applyTheme, si no => ocultar
 	applyIfExistsOrHide(mRating,      theme, getName(), "md_rating",      "rating",   ALL ^ ThemeFlags::TEXT);
 	applyIfExistsOrHide(mReleaseDate, theme, getName(), "md_releasedate", "datetime", ALL ^ ThemeFlags::TEXT);
 	applyIfExistsOrHide(mDeveloper,   theme, getName(), "md_developer",   "text",     ALL ^ ThemeFlags::TEXT);
@@ -303,7 +325,6 @@ void GridGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 	applyIfExistsOrHide(mLastPlayed,  theme, getName(), "md_lastplayed",  "datetime", ALL ^ ThemeFlags::TEXT);
 	applyIfExistsOrHide(mPlayCount,   theme, getName(), "md_playcount",   "text",     ALL ^ ThemeFlags::TEXT);
 
-	// Description: solo si el tema la declara
 	applyIfExistsOrHide(mDescContainer, theme, getName(), "md_description", "text",
 		POSITION | ThemeFlags::SIZE | Z_INDEX | VISIBLE);
 
@@ -319,7 +340,6 @@ void GridGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 		mDescription.setVisible(false);
 	}
 
-	// Repopulate list in case new theme is displaying a different image. Preserve selection.
 	FileData* file = mGrid.getSelected();
 	populateList(mRoot->getChildrenListToDisplay());
 	mGrid.setCursor(file);
@@ -334,7 +354,6 @@ void GridGameListView::initMDLabels()
 	const unsigned int colCount = 2;
 	const unsigned int rowCount = (int)(components.size() / 2);
 
-	// Tabla de metadata en la columna derecha
 	Vector3f start(mSize.x() * 0.63f, mSize.y() * 0.26f, 0.0f);
 
 	const float colSize = (mSize.x() * 0.35f) / colCount;
@@ -346,9 +365,7 @@ void GridGameListView::initMDLabels()
 		Vector3f pos(0.0f, 0.0f, 0.0f);
 
 		if (row == 0)
-		{
 			pos = start + Vector3f(colSize * (i / rowCount), 0, 0);
-		}
 		else
 		{
 			GuiComponent* lc = components[i - 1];
@@ -402,6 +419,9 @@ void GridGameListView::updateInfoPanel()
 	bool fadingOut;
 	if (file == NULL)
 	{
+		mBackground.setImage("");
+		mBackground.setVisible(false);
+
 		mVideo->setVideo("");
 		mVideo->setImage("");
 		mVideoPlaying = false;
@@ -409,6 +429,19 @@ void GridGameListView::updateInfoPanel()
 	}
 	else
 	{
+		const std::string bgPath = file->getBackgroundPath();
+		if (!bgPath.empty())
+		{
+			mBackground.setImage(bgPath);
+			mBackground.setOpacity(255);
+			mBackground.setVisible(true);
+		}
+		else
+		{
+			mBackground.setImage("");
+			mBackground.setVisible(false);
+		}
+
 		if (!mVideo->setVideo(file->getVideoPath()))
 			mVideo->setDefaultVideo();
 
@@ -455,7 +488,6 @@ void GridGameListView::updateInfoPanel()
 	{
 		GuiComponent* comp = *it;
 
-		// No animar invisibles (no “revivir” metadata)
 		if (!comp->isVisible())
 			continue;
 
