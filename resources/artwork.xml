@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <artwork>
- <output type="cover"/>
-  <output type="screenshot"/>             
-  <output type="wheel"/>                   
-  <output type="texture" resource="texture"/> 
-  </artwork>
+  <output type="cover"/>
+  <output type="screenshot"/>
+  <output type="wheel"/>
+  <output type="texture"/>
+  <output type="fanart"/>
+</artwork>
