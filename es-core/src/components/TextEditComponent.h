@@ -34,10 +34,11 @@ public:
 
 	virtual std::vector<HelpPrompt> getHelpPrompts() override;
 
-private:
+	// Públicos solo para permitir uso externo controlado
 	void startEditing();
 	void stopEditing();
 
+private:
 	void onTextChanged();
 	void onCursorChanged();
 

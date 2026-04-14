@@ -63,7 +63,9 @@ void TextEditComponent::textInput(const char* text)
 				mText.erase(mText.begin() + newCursor, mText.begin() + mCursor);
 				mCursor = (unsigned int)newCursor;
 			}
-		}else{
+		}
+		else
+		{
 			mText.insert(mCursor, text);
 			mCursor += (unsigned int)strlen(text);
 		}
@@ -115,7 +117,9 @@ bool TextEditComponent::input(InputConfig* config, Input input)
 			if(isMultiline())
 			{
 				textInput("\n");
-			}else{
+			}
+			else
+			{
 				stopEditing();
 			}
 
@@ -131,15 +135,18 @@ bool TextEditComponent::input(InputConfig* config, Input input)
 		if(config->getDeviceId() != DEVICE_KEYBOARD && config->isMappedLike("up", input))
 		{
 			// TODO
-		}else if(config->getDeviceId() != DEVICE_KEYBOARD && config->isMappedLike("down", input))
+		}
+		else if(config->getDeviceId() != DEVICE_KEYBOARD && config->isMappedLike("down", input))
 		{
 			// TODO
-		}else if(cursor_left || cursor_right)
+		}
+		else if(cursor_left || cursor_right)
 		{
 			mCursorRepeatDir = cursor_left ? -1 : 1;
 			mCursorRepeatTimer = -(CURSOR_REPEAT_START_DELAY - CURSOR_REPEAT_SPEED);
 			moveCursor(mCursorRepeatDir);
-		} else if(config->getDeviceId() == DEVICE_KEYBOARD)
+		}
+		else if(config->getDeviceId() == DEVICE_KEYBOARD)
 		{
 			switch(input.id)
 			{
@@ -162,7 +169,7 @@ bool TextEditComponent::input(InputConfig* config, Input input)
 			}
 		}
 
-		//consume all input when editing text
+		// consume all input when editing text
 		return true;
 	}
 
@@ -219,20 +226,24 @@ void TextEditComponent::onCursorChanged()
 	{
 		Vector2f textSize = mFont->getWrappedTextCursorOffset(mText, getTextAreaSize().x(), mCursor);
 
-		if(mScrollOffset.y() + getTextAreaSize().y() < textSize.y() + mFont->getHeight()) //need to scroll down?
+		if(mScrollOffset.y() + getTextAreaSize().y() < textSize.y() + mFont->getHeight()) // need to scroll down?
 		{
 			mScrollOffset[1] = textSize.y() - getTextAreaSize().y() + mFont->getHeight();
-		}else if(mScrollOffset.y() > textSize.y()) //need to scroll up?
+		}
+		else if(mScrollOffset.y() > textSize.y()) // need to scroll up?
 		{
 			mScrollOffset[1] = textSize.y();
 		}
-	}else{
+	}
+	else
+	{
 		Vector2f cursorPos = mFont->sizeText(mText.substr(0, mCursor));
 
 		if(mScrollOffset.x() + getTextAreaSize().x() < cursorPos.x())
 		{
 			mScrollOffset[0] = cursorPos.x() - getTextAreaSize().x();
-		}else if(mScrollOffset.x() > cursorPos.x())
+		}
+		else if(mScrollOffset.x() > cursorPos.x())
 		{
 			mScrollOffset[0] = cursorPos.x();
 		}
@@ -271,7 +282,9 @@ void TextEditComponent::render(const Transform4x4f& parentTrans)
 		if(isMultiline())
 		{
 			cursorPos = mFont->getWrappedTextCursorOffset(mText, getTextAreaSize().x(), mCursor);
-		}else{
+		}
+		else
+		{
 			cursorPos = mFont->sizeText(mText.substr(0, mCursor));
 			cursorPos[1] = 0;
 		}
@@ -303,7 +316,9 @@ std::vector<HelpPrompt> TextEditComponent::getHelpPrompts()
 	{
 		prompts.push_back(HelpPrompt("up/down/left/right", "move cursor"));
 		prompts.push_back(HelpPrompt("b", "stop editing"));
-	}else{
+	}
+	else
+	{
 		prompts.push_back(HelpPrompt("a", "edit"));
 	}
 	return prompts;

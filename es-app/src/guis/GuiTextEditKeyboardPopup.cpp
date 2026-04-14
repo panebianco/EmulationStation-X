@@ -12,6 +12,9 @@
 #define KEYBOARD_PADDINGX (Renderer::getScreenWidth() * 0.02f)
 #define KEYBOARD_PADDINGY (Renderer::getScreenWidth() * 0.01f)
 
+#define DELETE_REPEAT_START_DELAY 600
+#define DELETE_REPEAT_SPEED 90
+
 namespace
 {
 	inline bool isMenuDark()
@@ -87,7 +90,7 @@ GuiTextEditKeyboardPopup::GuiTextEditKeyboardPopup(
 	updateCaseIndicator();
 
 	mGrid.setEntry(mTitle, Vector2i(0, 0), false, true);
-	mGrid.setEntry(mText, Vector2i(0, 1), true, false);
+	mGrid.setEntry(mText, Vector2i(0, 1), false, false);
 
 	addChild(mCaseIndicator.get());
 
@@ -146,6 +149,11 @@ GuiTextEditKeyboardPopup::GuiTextEditKeyboardPopup(
 		0.0f);
 
 	mText->setCursor((int)initValue.size());
+	mText->startEditing();
+	mTextEditActive = true;
+
+	// Foco inicial real al teclado virtual.
+	mGrid.setCursorTo(mKeyboardGrid);
 }
 
 void GuiTextEditKeyboardPopup::onSizeChanged()
@@ -200,17 +208,42 @@ void GuiTextEditKeyboardPopup::render(const Transform4x4f& parentTrans)
 
 bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
 {
+	auto deleteLastChar = [this]()
+	{
+		mText->textInput("\b");
+	};
+
+	auto insertText = [this](const std::string& txt)
+	{
+		mText->textInput(txt.c_str());
+	};
+
+	auto acceptAndClose = [this]()
+	{
+		if (mTextEditActive)
+		{
+			mText->stopEditing();
+			mTextEditActive = false;
+		}
+
+		mDeleteRepeat = false;
+		mDeleteRepeatTimer = 0;
+		mOkCallback(mText->getValue());
+		delete this;
+	};
+
 	const bool fromKeyboard = (config->getDeviceId() == DEVICE_KEYBOARD);
 	const bool keyboardBack =
 		fromKeyboard && mTextEditActive && config->isMappedLike("b", input);
 
+	// Teclado físico: comportamiento clásico
 	if (fromKeyboard && input.value)
 	{
 		if (mTextEditActive && input.id == SDLK_ESCAPE)
 		{
+			mText->stopEditing();
 			mTextEditActive = false;
 			mDeleteRepeatTimer = 0;
-			SDL_StopTextInput();
 			return true;
 		}
 
@@ -218,19 +251,16 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
 		{
 			if (mTextEditActive)
 			{
-				mTextEditActive = false;
-				mDeleteRepeatTimer = 0;
-				SDL_StopTextInput();
-				return true;
-			}
-
-			if (mGrid.getSelectedComponent() == mText)
-			{
-				mTextEditActive = true;
-				mDeleteRepeatTimer = 0;
-				SDL_StartTextInput();
-				mText->setCursor((int)mText->getValue().size());
-				return true;
+				if (!mMultiLine)
+				{
+					acceptAndClose();
+					return true;
+				}
+				else
+				{
+					mText->textInput("\n");
+					return true;
+				}
 			}
 		}
 
@@ -239,20 +269,53 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
 			if (mDeleteRepeatTimer > 0)
 				return true;
 
-			std::string value = mText->getValue();
-			if (!value.empty())
-			{
-				value.erase(value.size() - 1, 1);
-				mText->setValue(value);
-				mText->setCursor((int)value.size());
-			}
-
+			deleteLastChar();
 			mDeleteRepeatTimer = 140;
 			return true;
 		}
+	}
 
-		if (mTextEditActive)
+	// Mando: siempre forzar foco operativo al teclado virtual
+	if (!fromKeyboard)
+	{
+		if (mGrid.getSelectedComponent() != mKeyboardGrid)
+			mGrid.setCursorTo(mKeyboardGrid);
+
+		if (config->isMappedTo("start", input) && input.value)
+		{
+			acceptAndClose();
 			return true;
+		}
+
+		if (config->isMappedTo("leftshoulder", input))
+		{
+			if (input.value)
+			{
+				mDeleteRepeat = true;
+				mDeleteRepeatTimer = -(DELETE_REPEAT_START_DELAY - DELETE_REPEAT_SPEED);
+				deleteLastChar();
+			}
+			else
+			{
+				mDeleteRepeat = false;
+				mDeleteRepeatTimer = 0;
+			}
+			return true;
+		}
+
+		if (config->isMappedTo("rightshoulder", input) && input.value)
+		{
+			insertText(" ");
+			return true;
+		}
+
+		// Si A cae sobre el cuadro, no entrar a edición directa.
+		if (mGrid.getSelectedComponent() == mText &&
+			config->isMappedTo("a", input) && input.value)
+		{
+			mGrid.setCursorTo(mKeyboardGrid);
+			return true;
+		}
 	}
 
 	if ((fromKeyboard && input.value && input.id == SDLK_ESCAPE && !mTextEditActive) ||
@@ -268,11 +331,12 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
 				{
 					if (mTextEditActive)
 					{
+						mText->stopEditing();
 						mTextEditActive = false;
-						mDeleteRepeatTimer = 0;
-						SDL_StopTextInput();
 					}
 
+					mDeleteRepeat = false;
+					mDeleteRepeatTimer = 0;
 					mOkCallback(mText->getValue());
 					delete this;
 					return true;
@@ -282,11 +346,12 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
 				{
 					if (mTextEditActive)
 					{
+						mText->stopEditing();
 						mTextEditActive = false;
-						mDeleteRepeatTimer = 0;
-						SDL_StopTextInput();
 					}
 
+					mDeleteRepeat = false;
+					mDeleteRepeatTimer = 0;
 					delete this;
 					return true;
 				}));
@@ -295,11 +360,12 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
 		{
 			if (mTextEditActive)
 			{
+				mText->stopEditing();
 				mTextEditActive = false;
-				mDeleteRepeatTimer = 0;
-				SDL_StopTextInput();
 			}
 
+			mDeleteRepeat = false;
+			mDeleteRepeatTimer = 0;
 			delete this;
 		}
 
@@ -324,7 +390,17 @@ void GuiTextEditKeyboardPopup::update(int deltaTime)
 {
 	GuiComponent::update(deltaTime);
 
-	if (mDeleteRepeatTimer > 0)
+	if (mDeleteRepeat)
+	{
+		mDeleteRepeatTimer += deltaTime;
+
+		while (mDeleteRepeatTimer >= DELETE_REPEAT_SPEED)
+		{
+			mText->textInput("\b");
+			mDeleteRepeatTimer -= DELETE_REPEAT_SPEED;
+		}
+	}
+	else if (mDeleteRepeatTimer > 0)
 	{
 		mDeleteRepeatTimer -= deltaTime;
 		if (mDeleteRepeatTimer < 0)
@@ -334,7 +410,13 @@ void GuiTextEditKeyboardPopup::update(int deltaTime)
 
 std::vector<HelpPrompt> GuiTextEditKeyboardPopup::getHelpPrompts()
 {
-	return {};
+	std::vector<HelpPrompt> prompts;
+	prompts.push_back(HelpPrompt("a", "ELEGIR"));
+	prompts.push_back(HelpPrompt("b", "ATRAS"));
+	prompts.push_back(HelpPrompt("leftshoulder", "BORRAR"));
+	prompts.push_back(HelpPrompt("rightshoulder", "ESPACIO"));
+	prompts.push_back(HelpPrompt("start", "APLICAR"));
+	return prompts;
 }
 
 void GuiTextEditKeyboardPopup::updateCaseIndicator()
@@ -374,36 +456,28 @@ std::shared_ptr<KeyboardKeyComponent> GuiTextEditKeyboardPopup::makeButton(
 			key,
 			[this, key, shiftedKey]
 			{
-				std::string value = mText->getValue();
-
 				if (key == "✓")
 				{
 					if (mTextEditActive)
 					{
+						mText->stopEditing();
 						mTextEditActive = false;
-						mDeleteRepeatTimer = 0;
-						SDL_StopTextInput();
 					}
 
+					mDeleteRepeat = false;
+					mDeleteRepeatTimer = 0;
 					mOkCallback(mText->getValue());
 					delete this;
 					return;
 				}
 				else if (key == "⌫")
 				{
-					if (!value.empty())
-					{
-						value.erase(value.size() - 1, 1);
-						mText->setValue(value);
-						mText->setCursor((int)value.size());
-					}
+					mText->textInput("\b");
 					return;
 				}
 				else if (key == "␣")
 				{
-					value += " ";
-					mText->setValue(value);
-					mText->setCursor((int)value.size());
+					mText->textInput(" ");
 					return;
 				}
 				else if (key == "clr")
@@ -416,18 +490,17 @@ std::shared_ptr<KeyboardKeyComponent> GuiTextEditKeyboardPopup::makeButton(
 				{
 					if (mTextEditActive)
 					{
+						mText->stopEditing();
 						mTextEditActive = false;
-						mDeleteRepeatTimer = 0;
-						SDL_StopTextInput();
 					}
 
+					mDeleteRepeat = false;
+					mDeleteRepeatTimer = 0;
 					delete this;
 					return;
 				}
 
-				value += (mShift ? shiftedKey : key);
-				mText->setValue(value);
-				mText->setCursor((int)value.size());
+				mText->textInput((mShift ? shiftedKey : key).c_str());
 			});
 
 	KeyboardButton kb{ button, key, shiftedKey };
