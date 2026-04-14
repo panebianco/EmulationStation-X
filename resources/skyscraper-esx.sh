@@ -5,6 +5,7 @@ ACTION="${1:-}"
 SYSTEM_NAME="${2:-}"
 LANG_CODE="${3:-en}"
 VIDEOS_ENABLED="${5:-true}"
+ONLY_MISSING="${6:-true}"
 
 HOME_DIR="${HOME}"
 ROMDIR="${HOME_DIR}/RetroPie/roms"
@@ -48,6 +49,17 @@ normalize_lang() {
 }
 
 normalize_videos() {
+    local raw="${1:-true}"
+    raw="${raw,,}"
+
+    case "$raw" in
+        true|1|yes|on) echo "true" ;;
+        false|0|no|off) echo "false" ;;
+        *) echo "true" ;;
+    esac
+}
+
+normalize_only_missing() {
     local raw="${1:-true}"
     raw="${raw,,}"
 
@@ -141,11 +153,23 @@ update_config_videos() {
 }
 
 build_gather_flags() {
-    echo "unattend,skipped"
+    local flags="unattend,skipped"
+
+    if [[ "${ONLY_MISSING}" == "true" ]]; then
+        flags+=",onlymissing"
+    fi
+
+    echo "${flags}"
 }
 
 build_generate_flags() {
-    echo "unattend,skipped,relative"
+    local flags="unattend,skipped,relative"
+
+    if [[ "${ONLY_MISSING}" == "true" ]]; then
+        flags+=",onlymissing"
+    fi
+
+    echo "${flags}"
 }
 
 run_gather() {
@@ -182,6 +206,7 @@ run_foreground() {
         echo "SYSTEM_NAME=${SYSTEM_NAME}"
         echo "LANG_CODE=${LANG_CODE}"
         echo "VIDEOS_ENABLED=${VIDEOS_ENABLED}"
+        echo "ONLY_MISSING=${ONLY_MISSING}"
         echo "SKY_BIN=${SKY_BIN}"
         echo "ROMDIR=${ROMDIR}/${SYSTEM_NAME}"
         echo "-----"
@@ -252,7 +277,7 @@ start_background() {
 
     write_status "starting:${real_action}:${SYSTEM_NAME}"
 
-    nohup "$0" "${real_action}" "${SYSTEM_NAME}" "${LANG_CODE}" "" "${VIDEOS_ENABLED}" >> "${LOG_FILE}" 2>&1 &
+    nohup "$0" "${real_action}" "${SYSTEM_NAME}" "${LANG_CODE}" "" "${VIDEOS_ENABLED}" "${ONLY_MISSING}" >> "${LOG_FILE}" 2>&1 &
     exit 0
 }
 
@@ -272,6 +297,7 @@ main() {
             ensure_system
             LANG_CODE="$(normalize_lang "${LANG_CODE}")"
             VIDEOS_ENABLED="$(normalize_videos "${VIDEOS_ENABLED}")"
+            ONLY_MISSING="$(normalize_only_missing "${ONLY_MISSING}")"
             update_config_lang "${LANG_CODE}" "$(build_lang_prios "${LANG_CODE}")"
             update_config_videos "${VIDEOS_ENABLED}"
             start_background "gather"
@@ -282,6 +308,7 @@ main() {
             ensure_system
             LANG_CODE="$(normalize_lang "${LANG_CODE}")"
             VIDEOS_ENABLED="$(normalize_videos "${VIDEOS_ENABLED}")"
+            ONLY_MISSING="$(normalize_only_missing "${ONLY_MISSING}")"
             update_config_lang "${LANG_CODE}" "$(build_lang_prios "${LANG_CODE}")"
             update_config_videos "${VIDEOS_ENABLED}"
             start_background "generate"
@@ -299,6 +326,7 @@ main() {
 
     LANG_CODE="$(normalize_lang "${LANG_CODE}")"
     VIDEOS_ENABLED="$(normalize_videos "${VIDEOS_ENABLED}")"
+    ONLY_MISSING="$(normalize_only_missing "${ONLY_MISSING}")"
 
     update_config_lang "${LANG_CODE}" "$(build_lang_prios "${LANG_CODE}")"
     update_config_videos "${VIDEOS_ENABLED}"

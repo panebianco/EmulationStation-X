@@ -1,6 +1,7 @@
 #include "guis/GuiSkyscraperMenu.h"
 
 #include "components/TextComponent.h"
+#include "components/SwitchComponent.h"
 #include "guis/GuiInfoPopup.h"
 #include "guis/GuiMsgBox.h"
 #include "views/ViewController.h"
@@ -212,9 +213,15 @@ namespace
 	inline std::string getConfiguredSkyscraperVideos()
 	{
 		Settings* settings = Settings::getInstance();
-
 		std::string videos = settings->getString("SkyscraperVideos");
 		return normalizeBoolString(videos, true);
+	}
+
+	inline std::string getConfiguredSkyscraperOnlyMissing()
+	{
+		Settings* settings = Settings::getInstance();
+		std::string onlyMissing = settings->getString("SkyscraperOnlyMissing");
+		return normalizeBoolString(onlyMissing, true);
 	}
 
 	inline std::string getSkyscraperStatus()
@@ -526,6 +533,38 @@ GuiSkyscraperMenu::GuiSkyscraperMenu(Window* window)
 	}
 
 	{
+		auto onlyMissing = std::make_shared<SwitchComponent>(window);
+		onlyMissing->setState(getConfiguredSkyscraperOnlyMissing() == "true");
+
+		ComponentListRow row;
+		row.addElement(std::make_shared<TextComponent>(window, tr("ONLY MISSING"), font, textColor), true);
+		row.addElement(onlyMissing, false);
+		row.makeAcceptInputHandler([onlyMissing]
+		{
+			onlyMissing->setState(!onlyMissing->getState());
+			Settings::getInstance()->setString("SkyscraperOnlyMissing", onlyMissing->getState() ? "true" : "false");
+			Settings::getInstance()->saveFile();
+		});
+		mMenu.addRow(row);
+	}
+
+	{
+		auto videos = std::make_shared<SwitchComponent>(window);
+		videos->setState(getConfiguredSkyscraperVideos() == "true");
+
+		ComponentListRow row;
+		row.addElement(std::make_shared<TextComponent>(window, tr("VIDEOS"), font, textColor), true);
+		row.addElement(videos, false);
+		row.makeAcceptInputHandler([videos]
+		{
+			videos->setState(!videos->getState());
+			Settings::getInstance()->setString("SkyscraperVideos", videos->getState() ? "true" : "false");
+			Settings::getInstance()->saveFile();
+		});
+		mMenu.addRow(row);
+	}
+
+	{
 		ComponentListRow row;
 		auto txt = std::make_shared<TextComponent>(window, tr("OPEN LOG"), font, textColor);
 		row.addElement(txt, true);
@@ -580,6 +619,7 @@ int GuiSkyscraperMenu::launchScript(const std::string& action)
 	const std::string system = getCurrentSystem();
 	const std::string lang = getCurrentLanguage();
 	const std::string videos = getConfiguredSkyscraperVideos();
+	const std::string onlyMissing = getConfiguredSkyscraperOnlyMissing();
 
 	if (system.empty())
 	{
@@ -592,7 +632,8 @@ int GuiSkyscraperMenu::launchScript(const std::string& action)
 		" " + quote(action) +
 		" " + quote(system) +
 		" " + quote(lang) +
-		" \"\" " + quote(videos);
+		" \"\" " + quote(videos) +
+		" " + quote(onlyMissing);
 
 	LOG(LogInfo) << "Launching Skyscraper: " << cmd;
 
