@@ -40,6 +40,10 @@ private:
 	void updateCaseIndicator();
 	void shiftKeys();
 
+	void acceptAndClose();
+	void closeWithoutSaving();
+	void deleteLastChar();
+
 	std::shared_ptr<KeyboardKeyComponent> makeButton(
 		const std::string& key,
 		const std::string& shiftedKey);
