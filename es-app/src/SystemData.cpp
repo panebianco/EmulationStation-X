@@ -1,5 +1,5 @@
 #include "SystemData.h"
-
+#include "LocaleES.h"
 #include "utils/FileSystemUtil.h"
 #include "CollectionSystemManager.h"
 #include "FileFilterIndex.h"
@@ -402,7 +402,7 @@ bool SystemData::loadConfig(Window* window)
 		delete pThreadPool;
 
 		if (window != NULL)
-			window->renderLoadingScreen("Favorites", systemCount == 0 ? 0 : (float)currentSystem / (float)systemCount);
+			window->renderLoadingScreen(es_translate("Favorites"), systemCount == 0 ? 0 : (float)currentSystem / (float)systemCount);
 
 		CollectionSystemManager::get()->updateSystemsList();
 	}

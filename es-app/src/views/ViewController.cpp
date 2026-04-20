@@ -1,5 +1,5 @@
 #include "views/ViewController.h"
-
+#include "LocaleES.h"
 #include "animations/Animation.h"
 #include "animations/LambdaAnimation.h"
 #include "animations/LaunchAnimation.h"
@@ -84,7 +84,7 @@ void ViewController::goToStart()
 
 void ViewController::ReloadAndGoToStart()
 {
-	mWindow->renderLoadingScreen("Loading...");
+	mWindow->renderLoadingScreen(es_translate("Loading..."));
 	ViewController::get()->reloadAll();
 	ViewController::get()->goToStart();
 }

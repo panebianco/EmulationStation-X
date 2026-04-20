@@ -363,10 +363,10 @@ int main(int argc, char* argv[])
 		}
 
 		if (splashScreen)
-		{
-			std::string progressText = "Loading system config...";
-			window.renderLoadingScreen(progressText);
-		}
+{
+	std::string progressText = es_translate("Loading system config...");
+	window.renderLoadingScreen(progressText);
+}
 	}
 
 	const char* errorMsg = NULL;
@@ -397,7 +397,7 @@ int main(int argc, char* argv[])
 	ViewController::get()->preload();
 
 	if(splashScreen)
-		window.renderLoadingScreen("Done.");
+	window.renderLoadingScreen(es_translate("Done."));
 
 	InputManager::getInstance()->init();
 
