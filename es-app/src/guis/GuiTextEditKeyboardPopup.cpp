@@ -41,6 +41,59 @@ namespace
 	{
 		return isMenuDark() ? 0xB0B0B0FF : 0x555555FF;
 	}
+
+	inline bool isPrintableKey(SDL_Keycode key)
+	{
+		// Letras
+		if (key >= SDLK_a && key <= SDLK_z)
+			return true;
+
+		// Números superiores
+		if (key >= SDLK_0 && key <= SDLK_9)
+			return true;
+
+		// Numpad
+		if (key >= SDLK_KP_0 && key <= SDLK_KP_9)
+			return true;
+
+		switch (key)
+		{
+			case SDLK_SPACE:
+			case SDLK_COMMA:
+			case SDLK_PERIOD:
+			case SDLK_SEMICOLON:
+			case SDLK_COLON:
+			case SDLK_MINUS:
+			case SDLK_UNDERSCORE:
+			case SDLK_PLUS:
+			case SDLK_EQUALS:
+			case SDLK_EXCLAIM:
+			case SDLK_QUOTEDBL:
+			case SDLK_HASH:
+			case SDLK_DOLLAR:
+			case SDLK_PERCENT:
+			case SDLK_AMPERSAND:
+			case SDLK_QUOTE:
+			case SDLK_LEFTPAREN:
+			case SDLK_RIGHTPAREN:
+			case SDLK_ASTERISK:
+			case SDLK_SLASH:
+			case SDLK_BACKSLASH:
+			case SDLK_QUESTION:
+			case SDLK_AT:
+			case SDLK_LEFTBRACKET:
+			case SDLK_RIGHTBRACKET:
+			case SDLK_BACKQUOTE:
+			case SDLK_CARET:
+			case SDLK_LESS:
+			case SDLK_GREATER:
+				return true;
+			default:
+				break;
+		}
+
+		return false;
+	}
 }
 
 GuiTextEditKeyboardPopup::GuiTextEditKeyboardPopup(
@@ -240,43 +293,65 @@ void GuiTextEditKeyboardPopup::render(const Transform4x4f& parentTrans)
 bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
 {
 	const bool fromKeyboard = (config->getDeviceId() == DEVICE_KEYBOARD);
-	const bool keyboardBack = fromKeyboard && mTextEditActive && config->isMappedLike("b", input);
 
-	if (fromKeyboard && input.value)
+	if (fromKeyboard && mTextEditActive)
 	{
-		if (mTextEditActive && input.id == SDLK_ESCAPE)
+		if (input.value && (input.id == SDLK_RETURN || input.id == SDLK_KP_ENTER))
+		{
+			if (!mMultiLine)
+			{
+				acceptAndClose();
+				return true;
+			}
+			else
+			{
+				mText->textInput("\n");
+				return true;
+			}
+		}
+
+		if (input.value && input.id == SDLK_ESCAPE)
 		{
 			mText->stopEditing();
 			mTextEditActive = false;
+			mDeleteRepeat = false;
 			mDeleteRepeatTimer = 0;
 			return true;
 		}
 
-		if (input.id == SDLK_RETURN || input.id == SDLK_KP_ENTER)
+		if (input.id == SDLK_BACKSPACE || input.id == SDLK_DELETE)
 		{
-			if (mTextEditActive)
+			if (input.value)
 			{
-				if (!mMultiLine)
-				{
-					acceptAndClose();
-					return true;
-				}
-				else
-				{
-					mText->textInput("\n");
-					return true;
-				}
+				mDeleteRepeat = true;
+				mDeleteRepeatTimer = -(DELETE_REPEAT_START_DELAY - DELETE_REPEAT_SPEED);
+				deleteLastChar();
 			}
+			else
+			{
+				mDeleteRepeat = false;
+				mDeleteRepeatTimer = 0;
+			}
+			return true;
 		}
 
-		if (mTextEditActive && (input.id == SDLK_BACKSPACE || input.id == SDLK_DELETE))
-		{
-			if (mDeleteRepeatTimer > 0)
-				return true;
-
-			deleteLastChar();
-			mDeleteRepeatTimer = 140;
+		if (isPrintableKey((SDL_Keycode)input.id))
 			return true;
+
+		switch ((SDL_Keycode)input.id)
+		{
+			case SDLK_LSHIFT:
+			case SDLK_RSHIFT:
+			case SDLK_LCTRL:
+			case SDLK_RCTRL:
+			case SDLK_LALT:
+			case SDLK_RALT:
+			case SDLK_LGUI:
+			case SDLK_RGUI:
+			case SDLK_CAPSLOCK:
+				return true;
+			default:
+				break;
 		}
 	}
 
@@ -291,7 +366,6 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
 			return true;
 		}
 
-		// Cuadrado = borrar
 		if (config->isMappedTo("x", input))
 		{
 			if (input.value)
@@ -308,13 +382,14 @@ bool GuiTextEditKeyboardPopup::input(InputConfig* config, Input input)
 			return true;
 		}
 
-		// Triángulo = espacio
 		if (config->isMappedTo("y", input) && input.value)
 		{
 			mText->textInput(" ");
 			return true;
 		}
 	}
+
+	const bool keyboardBack = fromKeyboard && mTextEditActive && config->isMappedLike("b", input);
 
 	if ((fromKeyboard && input.value && input.id == SDLK_ESCAPE && !mTextEditActive) ||
 		(!keyboardBack && input.value && config->isMappedTo("b", input)))
