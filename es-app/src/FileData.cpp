@@ -32,6 +32,7 @@ static inline std::string getNormalizedSourceSetting(const std::string& settingN
 		value != "image" &&
 		value != "thumbnail" &&
 		value != "marquee" &&
+		value != "cover" &&
 		value != "boxart" &&
 		value != "screenshot" &&
 		value != "wheel" &&
@@ -148,6 +149,11 @@ std::string FileData::getMarqueeCandidate() const
 	return getMetadataOrLocalArt("marquee", "-marquee");
 }
 
+std::string FileData::getCoverCandidate() const
+{
+	return getMetadataOrLocalArt("cover", "-cover");
+}
+
 std::string FileData::getBoxartCandidate() const
 {
 	return getMetadataOrLocalArt("boxart", "-boxart");
@@ -256,6 +262,8 @@ std::string FileData::getArtBySource(const std::string& source) const
 		return getThumbnailCandidate();
 	else if (source == "marquee")
 		return getMarqueeCandidate();
+	else if (source == "cover")
+		return getCoverCandidate();
 	else if (source == "boxart")
 		return getBoxartCandidate();
 	else if (source == "screenshot")
@@ -297,6 +305,7 @@ std::vector<std::string> FileData::getFallbackOrderForSlot(ArtSlot slot, const s
 		appendUnique(preferred);
 		appendUnique("image");
 		appendUnique("thumbnail");
+		appendUnique("cover");
 		appendUnique("boxart");
 		appendUnique("screenshot");
 		appendUnique("texture");
@@ -308,6 +317,7 @@ std::vector<std::string> FileData::getFallbackOrderForSlot(ArtSlot slot, const s
 		appendUnique(preferred);
 		appendUnique("thumbnail");
 		appendUnique("image");
+		appendUnique("cover");
 		appendUnique("boxart");
 		appendUnique("screenshot");
 		appendUnique("marquee");
@@ -333,6 +343,7 @@ std::vector<std::string> FileData::getFallbackOrderForSlot(ArtSlot slot, const s
 		appendUnique(preferred);
 		appendUnique("image");
 		appendUnique("thumbnail");
+		appendUnique("cover");
 		appendUnique("boxart");
 		appendUnique("screenshot");
 		appendUnique("texture");
@@ -344,6 +355,7 @@ std::vector<std::string> FileData::getFallbackOrderForSlot(ArtSlot slot, const s
 		appendUnique(preferred);
 		appendUnique("image");
 		appendUnique("thumbnail");
+		appendUnique("cover");
 		appendUnique("boxart");
 		appendUnique("screenshot");
 		appendUnique("texture");
@@ -430,6 +442,31 @@ const std::string FileData::getVideoFallbackPath() const
 const std::string FileData::getBackgroundPath() const
 {
 	return getBackgroundCandidate();
+}
+
+const std::string FileData::getCoverPath() const
+{
+	return getCoverCandidate();
+}
+
+const std::string FileData::getScreenshotPath() const
+{
+	return getScreenshotCandidate();
+}
+
+const std::string FileData::getWheelPath() const
+{
+	return getWheelCandidate();
+}
+
+const std::string FileData::getTexturePath() const
+{
+	return getTextureCandidate();
+}
+
+const std::string FileData::getFanartPath() const
+{
+	return getFanartCandidate();
 }
 
 const std::vector<FileData*>& FileData::getChildrenListToDisplay()

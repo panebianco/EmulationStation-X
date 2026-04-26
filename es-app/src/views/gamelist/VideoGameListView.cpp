@@ -21,11 +21,16 @@ VideoGameListView::VideoGameListView(Window* window, FileData* root) :
 	BasicGameListView(window, root),
 	mDescContainer(window, DESCRIPTION_SCROLL_DELAY), mDescription(window),
 	mBackground(window),
-	mThumbnail(window),
-	mMarquee(window),
-	mVideo(nullptr),
-	mImage(window),
-	mVideoPlaying(false),
+mThumbnail(window),
+mMarquee(window),
+mVideo(nullptr),
+mImage(window),
+mCover(window),
+mScreenshot(window),
+mWheel(window),
+mTexture(window),
+mFanart(window),
+mVideoPlaying(false),
 
 	mLblRating(window), mLblReleaseDate(window), mLblDeveloper(window), mLblPublisher(window),
 	mLblGenre(window), mLblPlayers(window), mLblLastPlayed(window), mLblPlayCount(window),
@@ -89,6 +94,46 @@ VideoGameListView::VideoGameListView(Window* window, FileData* root) :
 	mMarquee.setDefaultZIndex(35);
 	mMarquee.setVisible(false);
 	addChild(&mMarquee);
+	
+		// ES-X Cover
+	mCover.setOrigin(0.5f, 0.5f);
+	mCover.setPosition(2.0f, 2.0f);
+	mCover.setMaxSize(mSize.x(), mSize.y());
+	mCover.setDefaultZIndex(34);
+	mCover.setVisible(false);
+	addChild(&mCover);
+
+	// ES-X Screenshot
+	mScreenshot.setOrigin(0.5f, 0.5f);
+	mScreenshot.setPosition(2.0f, 2.0f);
+	mScreenshot.setMaxSize(mSize.x(), mSize.y());
+	mScreenshot.setDefaultZIndex(33);
+	mScreenshot.setVisible(false);
+	addChild(&mScreenshot);
+
+	// ES-X Wheel
+	mWheel.setOrigin(0.5f, 0.5f);
+	mWheel.setPosition(2.0f, 2.0f);
+	mWheel.setMaxSize(mSize.x(), mSize.y());
+	mWheel.setDefaultZIndex(36);
+	mWheel.setVisible(false);
+	addChild(&mWheel);
+
+	// ES-X Texture
+	mTexture.setOrigin(0.5f, 0.5f);
+	mTexture.setPosition(2.0f, 2.0f);
+	mTexture.setMaxSize(mSize.x(), mSize.y());
+	mTexture.setDefaultZIndex(32);
+	mTexture.setVisible(false);
+	addChild(&mTexture);
+
+	// ES-X Fanart
+	mFanart.setOrigin(0.5f, 0.5f);
+	mFanart.setPosition(2.0f, 2.0f);
+	mFanart.setMaxSize(mSize.x(), mSize.y());
+	mFanart.setDefaultZIndex(6);
+	mFanart.setVisible(false);
+	addChild(&mFanart);
 
 	LocaleES& loc = LocaleES::getInstance();
 	loc.loadFromSettings();
@@ -163,6 +208,11 @@ void VideoGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 	mImage.applyTheme(theme, getName(), "md_image", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
 	mVideo->applyTheme(theme, getName(), "md_video", POSITION | ThemeFlags::SIZE | ThemeFlags::DELAY | Z_INDEX | ROTATION | VISIBLE);
 	mName.applyTheme(theme, getName(), "md_name", ALL);
+	mCover.applyTheme(theme, getName(), "md_cover", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mScreenshot.applyTheme(theme, getName(), "md_screenshot", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mWheel.applyTheme(theme, getName(), "md_wheel", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mTexture.applyTheme(theme, getName(), "md_texture", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
+	mFanart.applyTheme(theme, getName(), "md_fanart", POSITION | ThemeFlags::SIZE | Z_INDEX | ROTATION | VISIBLE);
 
 	initMDLabels();
 	std::vector<TextComponent*> labels = getMDLabels();
@@ -264,6 +314,11 @@ void VideoGameListView::updateInfoPanel()
 	bool fadingOut;
 	if (file == NULL)
 	{
+				mCover.setImage("");
+		mScreenshot.setImage("");
+		mWheel.setImage("");
+		mTexture.setImage("");
+		mFanart.setImage("");
 		mBackground.setImage("");
 		mBackground.setVisible(false);
 
@@ -296,6 +351,12 @@ void VideoGameListView::updateInfoPanel()
 		mMarquee.setImage(file->getMarqueePath());
 		mImage.setImage(file->getImagePath());
 
+		mCover.setImage(file->getCoverPath());
+		mScreenshot.setImage(file->getScreenshotPath());
+		mWheel.setImage(file->getWheelPath());
+		mTexture.setImage(file->getTexturePath());
+		mFanart.setImage(file->getFanartPath());
+
 		mDescription.setText(file->metadata.get("desc"));
 		mDescContainer.reset();
 
@@ -322,12 +383,19 @@ void VideoGameListView::updateInfoPanel()
 	}
 
 	std::vector<GuiComponent*> comps = getMDValues();
-	comps.push_back(&mBackground);
+		comps.push_back(&mBackground);
 	comps.push_back(&mThumbnail);
 	comps.push_back(&mMarquee);
 	comps.push_back(mVideo);
 	comps.push_back(&mDescription);
 	comps.push_back(&mImage);
+
+	comps.push_back(&mCover);
+	comps.push_back(&mScreenshot);
+	comps.push_back(&mWheel);
+	comps.push_back(&mTexture);
+	comps.push_back(&mFanart);
+
 	comps.push_back(&mName);
 
 	std::vector<TextComponent*> labels = getMDLabels();

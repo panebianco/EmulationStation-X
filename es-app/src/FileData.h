@@ -66,6 +66,13 @@ public:
 	virtual const std::string getVideoFallbackPath() const;
 	virtual const std::string getBackgroundPath() const;
 
+	// ES-X extended media slots
+	virtual const std::string getCoverPath() const;
+	virtual const std::string getScreenshotPath() const;
+	virtual const std::string getWheelPath() const;
+	virtual const std::string getTexturePath() const;
+	virtual const std::string getFanartPath() const;
+
 	const std::vector<FileData*>& getChildrenListToDisplay();
 	std::vector<FileData*> getFilesRecursive(unsigned int typeMask, bool displayedOnly = false) const;
 
@@ -123,6 +130,7 @@ protected:
 	std::string getImageCandidate() const;
 	std::string getThumbnailCandidate() const;
 	std::string getMarqueeCandidate() const;
+	std::string getCoverCandidate() const;
 	std::string getBoxartCandidate() const;
 	std::string getScreenshotCandidate() const;
 	std::string getWheelCandidate() const;

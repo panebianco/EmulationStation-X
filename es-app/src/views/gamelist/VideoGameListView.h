@@ -39,6 +39,13 @@ private:
 	VideoComponent* mVideo;
 	ImageComponent mImage;
 
+	// ES-X extended media slots
+	ImageComponent mCover;
+	ImageComponent mScreenshot;
+	ImageComponent mWheel;
+	ImageComponent mTexture;
+	ImageComponent mFanart;
+
 	TextComponent mLblRating, mLblReleaseDate, mLblDeveloper, mLblPublisher, mLblGenre, mLblPlayers, mLblLastPlayed, mLblPlayCount;
 
 	RatingComponent mRating;
