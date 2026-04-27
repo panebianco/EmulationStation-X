@@ -93,7 +93,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "autoScrollDelay", FLOAT }
 	} },
 
-	{ "textlist", {
+{ "textlist", {
 	{ "pos", RESOLUTION_PAIR },
 	{ "size", RESOLUTION_PAIR },
 	{ "origin", NORMALIZED_PAIR },
@@ -115,22 +115,37 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "alignment", STRING },
 	{ "orientation", STRING },
 
-	// ES-X: modo carrusel opcional para gamelist/textlist horizontal
+	// ES-X: modo carrusel opcional para gamelist/textlist
 	{ "carouselMode", BOOLEAN },
-{ "carouselLoop", BOOLEAN },
-{ "maxLogoCount", FLOAT },
-{ "logoScale", FLOAT },
-{ "minLogoOpacity", FLOAT },
-{ "logoSpacingX", RESOLUTION_FLOAT },
-{ "carouselItemColor", COLOR },
-{ "carouselSelectedItemColor", COLOR },
-{ "carouselTextMaxLines", FLOAT },
+	{ "carouselLoop", BOOLEAN },
+	{ "maxLogoCount", FLOAT },
+	{ "logoScale", FLOAT },
+	{ "minLogoOpacity", FLOAT },
+	{ "scaledLogoSpacing", FLOAT },
+
+	// ES-X: tamaño/alineación estilo systemcarousel
+	{ "logoSize", NORMALIZED_PAIR },
+	{ "logoAlignment", STRING },
+
+	// ES-X: espaciado y offsets
+	{ "logoSpacingX", RESOLUTION_FLOAT },
+	{ "logoOffset", RESOLUTION_PAIR },
+	{ "logoOffsetX", RESOLUTION_FLOAT },
+	{ "logoOffsetY", RESOLUTION_FLOAT },
+	{ "selectedLogoOffsetX", RESOLUTION_FLOAT },
+	{ "selectedLogoOffsetY", RESOLUTION_FLOAT },
+
+	// ES-X: apariencia de tarjetas
+	{ "carouselItemColor", COLOR },
+	{ "carouselSelectedItemColor", COLOR },
+	{ "carouselTextMaxLines", FLOAT },
 
 	{ "horizontalMargin", RESOLUTION_FLOAT },
 	{ "forceUppercase", BOOLEAN },
 	{ "lineSpacing", FLOAT },
 	{ "showRowNumbers", BOOLEAN },
 	{ "zIndex", FLOAT } } },
+
 
 	{ "container", {
 		{ "pos", RESOLUTION_PAIR },

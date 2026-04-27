@@ -3,6 +3,7 @@
 #define ES_APP_COMPONENTS_TEXT_LIST_COMPONENT_H
 
 #include "components/IList.h"
+#include "components/ImageComponent.h"
 #include "math/Misc.h"
 #include "utils/StringUtil.h"
 #include "Log.h"
@@ -65,6 +66,15 @@ public:
 	{
 		ORIENTATION_VERTICAL,
 		ORIENTATION_HORIZONTAL
+	};
+
+	enum CarouselLogoAlignment
+	{
+		CAROUSEL_ALIGN_LEFT,
+		CAROUSEL_ALIGN_CENTER,
+		CAROUSEL_ALIGN_RIGHT,
+		CAROUSEL_ALIGN_TOP,
+		CAROUSEL_ALIGN_BOTTOM
 	};
 
 	inline void setAlignment(Alignment align) { mAlignment = align; }
@@ -156,6 +166,15 @@ private:
 	float mCarouselLogoScale;
 	float mCarouselMinLogoOpacity;
 	float mCarouselLogoSpacingX;
+	float mCarouselScaledLogoSpacing;
+
+	Vector2f mCarouselLogoSize;
+	CarouselLogoAlignment mCarouselLogoAlignment;
+
+	float mCarouselLogoOffsetX;
+	float mCarouselLogoOffsetY;
+	float mCarouselSelectedLogoOffsetX;
+	float mCarouselSelectedLogoOffsetY;
 
 	// Cámara visual del carrusel.
 	// mCursor sigue siendo la selección real; esto solo suaviza el render.
@@ -205,6 +224,16 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselLogoScale = 1.20f;
 	mCarouselMinLogoOpacity = 0.45f;
 	mCarouselLogoSpacingX = 0.0f;
+	mCarouselScaledLogoSpacing = 0.0f;
+
+	mCarouselLogoSize = Vector2f::Zero();
+	mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
+
+	mCarouselLogoOffsetX = 0.0f;
+	mCarouselLogoOffsetY = 0.0f;
+	mCarouselSelectedLogoOffsetX = 0.0f;
+	mCarouselSelectedLogoOffsetY = 0.0f;
+
 	mCarouselCamOffset = 0.0f;
 
 	mCarouselItemColor = 0x00000088;
@@ -224,12 +253,9 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 	if (visibleCount < 1)
 		visibleCount = 1;
 
-	// Si NO hay loop, no tiene sentido pedir más tarjetas que entradas reales.
-	// Si hay loop, sí permitimos que se repitan visualmente.
 	if (!mCarouselLoop && visibleCount > size())
 		visibleCount = size();
 
-	// Mejor impar para tener centro visual.
 	if (visibleCount > 1 && (visibleCount % 2) == 0)
 		visibleCount--;
 
@@ -241,9 +267,28 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 	const float baseTextHeight = Math::max(font->getHeight(1.0f), (float)font->getSize());
 
-	float itemWidth = (mSelectorWidth > 0.0f) ? mSelectorWidth : (mSize.x() / (float)visibleCount);
+	float itemWidth = 0.0f;
+	float itemHeight = 0.0f;
+
+	if (mCarouselLogoSize.x() > 1.0f)
+		itemWidth = mCarouselLogoSize.x();
+	else if (mSelectorWidth > 0.0f)
+		itemWidth = mSelectorWidth;
+	else
+		itemWidth = mSize.x() / (float)visibleCount;
+
+	if (mCarouselLogoSize.y() > 1.0f)
+		itemHeight = mCarouselLogoSize.y();
+	else if (mSelectorHeight > 1.0f && mSelectorHeight <= mSize.y())
+		itemHeight = mSelectorHeight;
+	else
+		itemHeight = baseTextHeight * 4.0f;
+
 	if (itemWidth <= 1.0f)
 		itemWidth = mSize.x() / 5.0f;
+
+	if (itemHeight <= 1.0f)
+		itemHeight = baseTextHeight * 4.0f;
 
 	float spacing = mCarouselLogoSpacingX;
 	if (spacing <= 1.0f)
@@ -251,12 +296,8 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 	if (spacing <= 1.0f)
 		spacing = itemWidth;
 
-	float itemHeight = mSelectorHeight;
-	if (itemHeight <= 1.0f || itemHeight > mSize.y())
-		itemHeight = baseTextHeight * 4.0f;
-
-	const float centerX = mSize.x() * 0.5f;
-	const float centerY = (mSize.y() * 0.5f) + mSelectorOffsetY;
+	const float centerX = (mSize.x() * 0.5f) + mCarouselLogoOffsetX;
+	const float centerY = (mSize.y() * 0.5f) + mSelectorOffsetY + mCarouselLogoOffsetY;
 
 	Vector3f dim(mSize.x(), mSize.y(), 0);
 	dim = trans * dim - trans.translation();
@@ -265,7 +306,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		Vector2i((int)trans.translation().x(), (int)trans.translation().y()),
 		Vector2i((int)dim.x(), (int)dim.y()));
 
-	int visualCenter = (int)mCarouselCamOffset;
+	int visualCenter = (int)std::round(mCarouselCamOffset);
 
 	if (!mCarouselLoop)
 	{
@@ -278,7 +319,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 	int start = visualCenter - sideCount - buffer;
 	int end   = visualCenter + sideCount + buffer;
 
-	// Con una sola entrada, no repetimos la misma tarjeta por todos lados.
 	if (size() == 1)
 	{
 		start = 0;
@@ -416,8 +456,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		return lines;
 	};
 
-	// Buscar la posición virtual más cercana al centro que representa al cursor real.
-	// Esto evita que, con loop, el seleccionado se dibuje lejos cuando también existe una copia visual cerca.
 	int activeVirtualPos = mCursor;
 	float bestActiveDistance = 99999.0f;
 
@@ -465,27 +503,47 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 		float opacity01 = minOpacity + ((1.0f - minOpacity) * influence);
 
-		if (selected)
-			opacity01 = 1.0f;
+		float itemCenterX = centerX + (distance * spacing);
+		float itemCenterY = centerY;
 
-		const float itemCenterX = centerX + (distance * spacing);
+		// Imitación de scaledLogoSpacing de SystemView.
+		// Cuando el central escala, empuja laterales para que no se encimen.
+		if (mCarouselScaledLogoSpacing != 0.0f && absDistance > 0.001f)
+		{
+			float logoDiffX = ((spacing * mCarouselLogoScale) - spacing)
+				/ 2.0f * mCarouselScaledLogoSpacing;
+
+			if (distance < 0.0f)
+				itemCenterX -= logoDiffX;
+			else
+				itemCenterX += logoDiffX;
+		}
+
+		if (selected)
+		{
+			itemCenterX += mCarouselSelectedLogoOffsetX;
+			itemCenterY += mCarouselSelectedLogoOffsetY;
+		}
+
 		const float scaledW = itemWidth * scale;
 		const float scaledH = itemHeight * scale;
 
-		unsigned int bgColor = selected ? mCarouselSelectedItemColor : mCarouselItemColor;
+		const bool visuallyCentered = (std::fabs(distance) < 0.50f);
+
+		unsigned int bgColor = (selected && visuallyCentered) ? mCarouselSelectedItemColor : mCarouselItemColor;
 		bgColor = applyOpacity(bgColor, opacity01);
 
 		Renderer::setMatrix(trans);
 		Renderer::drawRect(
 			itemCenterX - (scaledW * 0.5f),
-			centerY - (scaledH * 0.5f),
+			itemCenterY - (scaledH * 0.5f),
 			scaledW,
 			scaledH,
 			bgColor,
 			bgColor);
 
 		unsigned int textColor;
-		if (selected && mSelectedColor)
+		if (selected && visuallyCentered && mSelectedColor)
 			textColor = mSelectedColor;
 		else
 			textColor = mColors[entry.data.colorId];
@@ -507,6 +565,11 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 		float y = -(totalTextHeight * 0.5f);
 
+		if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
+			y = -(itemHeight * 0.5f) + (itemHeight * 0.08f);
+		else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
+			y = (itemHeight * 0.5f) - totalTextHeight - (itemHeight * 0.08f);
+
 		for (size_t line = 0; line < lines.size(); line++)
 		{
 			TextCache* cache = font->buildTextCache(lines[line], 0, 0, 0x000000FF);
@@ -514,13 +577,13 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 			float textX = -(cache->metrics.size.x() * 0.5f);
 
-			if (mAlignment == ALIGN_LEFT)
+			if (mCarouselLogoAlignment == CAROUSEL_ALIGN_LEFT || mAlignment == ALIGN_LEFT)
 				textX = -(itemWidth * 0.5f) + (itemWidth * 0.06f);
-			else if (mAlignment == ALIGN_RIGHT)
+			else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT || mAlignment == ALIGN_RIGHT)
 				textX = (itemWidth * 0.5f) - cache->metrics.size.x() - (itemWidth * 0.06f);
 
 			Transform4x4f drawTrans = trans;
-			drawTrans.translate(Vector3f(itemCenterX, centerY, 0.0f));
+			drawTrans.translate(Vector3f(itemCenterX, itemCenterY, 0.0f));
 			drawTrans.scale(Vector3f(scale, scale, 1.0f));
 			drawTrans.translate(Vector3f(textX, y, 0.0f));
 
@@ -532,7 +595,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		}
 	};
 
-	// Laterales primero.
 	for (int virtualPos = start; virtualPos <= end; virtualPos++)
 	{
 		if (virtualPos == activeVirtualPos)
@@ -541,8 +603,11 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		renderEntry(virtualPos, false);
 	}
 
-	// El cursor real, en su copia visual más cercana al centro, se dibuja encima.
-	renderEntry(activeVirtualPos, true);
+	// Importante:
+	// La tarjeta activa se salta arriba para dibujar los laterales primero,
+	// pero luego DEBE renderizarse al final para quedar encima.
+	if (getRealIndex(activeVirtualPos) >= 0)
+		renderEntry(activeVirtualPos, true);
 
 	Renderer::popClipRect();
 
@@ -778,8 +843,6 @@ void TextListComponent<T>::update(int deltaTime)
 	{
 		float target = (float)mCursor;
 
-		// Si el loop visual está activo, mover la cámara por el camino más corto.
-		// Esto evita saltos feos cuando el índice visual cruza de último a primero.
 		if (mCarouselLoop && size() > 1)
 		{
 			float diff = target - mCarouselCamOffset;
@@ -799,13 +862,10 @@ void TextListComponent<T>::update(int deltaTime)
 		}
 		else
 		{
-			// Suavizado simple.
-			// Menor divisor = más rápido. Mayor divisor = más suave/lento.
 			float factor = Math::min(1.0f, (float)deltaTime / 110.0f);
 			mCarouselCamOffset += diff * factor;
 		}
 
-		// Normalizar cámara para que no crezca indefinidamente en loop.
 		if (mCarouselLoop && size() > 1)
 		{
 			while (mCarouselCamOffset < 0.0f)
@@ -993,7 +1053,7 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 
 	mCarouselMaxLogoCount = 5;
 	if (elem->has("maxLogoCount"))
-		mCarouselMaxLogoCount = (int)Math::round(elem->get<float>("maxLogoCount"));
+		mCarouselMaxLogoCount = (int)std::round(elem->get<float>("maxLogoCount"));
 
 	mCarouselLogoScale = 1.20f;
 	if (elem->has("logoScale"))
@@ -1003,12 +1063,67 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	if (elem->has("minLogoOpacity"))
 		mCarouselMinLogoOpacity = elem->get<float>("minLogoOpacity");
 
+	mCarouselScaledLogoSpacing = 0.0f;
+	if (elem->has("scaledLogoSpacing"))
+		mCarouselScaledLogoSpacing = elem->get<float>("scaledLogoSpacing");
+
 	mCarouselLogoSpacingX = 0.0f;
 	if (elem->has("logoSpacingX"))
 	{
 		float scale = this->mParent ? this->mParent->getSize().x() : (float)Renderer::getScreenWidth();
 		mCarouselLogoSpacingX = elem->get<float>("logoSpacingX") * scale;
 	}
+
+	mCarouselLogoSize = Vector2f::Zero();
+	if (elem->has("logoSize"))
+	{
+		Vector2f logoSize = elem->get<Vector2f>("logoSize");
+		mCarouselLogoSize = Vector2f(
+			logoSize.x() * Renderer::getScreenWidth(),
+			logoSize.y() * Renderer::getScreenHeight());
+	}
+
+	mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
+	if (elem->has("logoAlignment"))
+	{
+		const std::string& str = elem->get<std::string>("logoAlignment");
+
+		if (str == "left")
+			mCarouselLogoAlignment = CAROUSEL_ALIGN_LEFT;
+		else if (str == "right")
+			mCarouselLogoAlignment = CAROUSEL_ALIGN_RIGHT;
+		else if (str == "top")
+			mCarouselLogoAlignment = CAROUSEL_ALIGN_TOP;
+		else if (str == "bottom")
+			mCarouselLogoAlignment = CAROUSEL_ALIGN_BOTTOM;
+		else
+			mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
+	}
+
+	mCarouselLogoOffsetX = 0.0f;
+	mCarouselLogoOffsetY = 0.0f;
+
+	if (elem->has("logoOffset"))
+	{
+		Vector2f v = elem->get<Vector2f>("logoOffset");
+		mCarouselLogoOffsetX = v.x() * Renderer::getScreenWidth();
+		mCarouselLogoOffsetY = v.y() * Renderer::getScreenHeight();
+	}
+
+	if (elem->has("logoOffsetX"))
+		mCarouselLogoOffsetX = elem->get<float>("logoOffsetX") * Renderer::getScreenWidth();
+
+	if (elem->has("logoOffsetY"))
+		mCarouselLogoOffsetY = elem->get<float>("logoOffsetY") * Renderer::getScreenHeight();
+
+	mCarouselSelectedLogoOffsetX = 0.0f;
+	mCarouselSelectedLogoOffsetY = 0.0f;
+
+	if (elem->has("selectedLogoOffsetX"))
+		mCarouselSelectedLogoOffsetX = elem->get<float>("selectedLogoOffsetX") * Renderer::getScreenWidth();
+
+	if (elem->has("selectedLogoOffsetY"))
+		mCarouselSelectedLogoOffsetY = elem->get<float>("selectedLogoOffsetY") * Renderer::getScreenHeight();
 
 	mCarouselItemColor = 0x00000088;
 	if (elem->has("carouselItemColor"))
@@ -1020,7 +1135,7 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 
 	mCarouselTextMaxLines = 2;
 	if (elem->has("carouselTextMaxLines"))
-		mCarouselTextMaxLines = (int)Math::round(elem->get<float>("carouselTextMaxLines"));
+		mCarouselTextMaxLines = (int)std::round(elem->get<float>("carouselTextMaxLines"));
 
 	if (mCarouselTextMaxLines < 1)
 		mCarouselTextMaxLines = 1;
