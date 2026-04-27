@@ -117,6 +117,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 
 	// ES-X: modo carrusel opcional para gamelist/textlist horizontal
 	{ "carouselMode", BOOLEAN },
+{ "carouselLoop", BOOLEAN },
 { "maxLogoCount", FLOAT },
 { "logoScale", FLOAT },
 { "minLogoOpacity", FLOAT },

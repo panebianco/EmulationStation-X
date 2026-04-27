@@ -12,6 +12,7 @@
 #include <memory>
 #include <type_traits>
 #include <vector>
+#include <cmath>
 
 class TextCache;
 class SystemData;
@@ -150,10 +151,15 @@ private:
 
 	// ES-X: modo carrusel opcional para textlist/gamelist.
 	bool mCarouselMode;
+	bool mCarouselLoop;
 	int mCarouselMaxLogoCount;
 	float mCarouselLogoScale;
 	float mCarouselMinLogoOpacity;
 	float mCarouselLogoSpacingX;
+
+	// Cámara visual del carrusel.
+	// mCursor sigue siendo la selección real; esto solo suaviza el render.
+	float mCarouselCamOffset;
 
 	// ES-X: tarjetas y texto controlado del carrusel.
 	unsigned int mCarouselItemColor;
@@ -194,10 +200,12 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mShowRowNumbers = false;
 
 	mCarouselMode = false;
+	mCarouselLoop = false;
 	mCarouselMaxLogoCount = 5;
 	mCarouselLogoScale = 1.20f;
 	mCarouselMinLogoOpacity = 0.45f;
 	mCarouselLogoSpacingX = 0.0f;
+	mCarouselCamOffset = 0.0f;
 
 	mCarouselItemColor = 0x00000088;
 	mCarouselSelectedItemColor = 0x101020CC;
@@ -215,9 +223,13 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 	int visibleCount = mCarouselMaxLogoCount;
 	if (visibleCount < 1)
 		visibleCount = 1;
-	if (visibleCount > size())
+
+	// Si NO hay loop, no tiene sentido pedir más tarjetas que entradas reales.
+	// Si hay loop, sí permitimos que se repitan visualmente.
+	if (!mCarouselLoop && visibleCount > size())
 		visibleCount = size();
 
+	// Mejor impar para tener centro visual.
 	if (visibleCount > 1 && (visibleCount % 2) == 0)
 		visibleCount--;
 
@@ -225,6 +237,8 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		visibleCount = 1;
 
 	const int sideCount = visibleCount / 2;
+	const int buffer = (mCarouselLoop && size() > 1) ? 2 : 1;
+
 	const float baseTextHeight = Math::max(font->getHeight(1.0f), (float)font->getSize());
 
 	float itemWidth = (mSelectorWidth > 0.0f) ? mSelectorWidth : (mSize.x() / (float)visibleCount);
@@ -251,24 +265,49 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		Vector2i((int)trans.translation().x(), (int)trans.translation().y()),
 		Vector2i((int)dim.x(), (int)dim.y()));
 
-	int start = mCursor - sideCount;
-	int end = mCursor + sideCount;
+	int visualCenter = (int)mCarouselCamOffset;
 
-	if (start < 0)
+	if (!mCarouselLoop)
 	{
-		end += -start;
-		start = 0;
+		if (visualCenter < 0)
+			visualCenter = 0;
+		if (visualCenter >= size())
+			visualCenter = size() - 1;
 	}
 
-	if (end >= size())
+	int start = visualCenter - sideCount - buffer;
+	int end   = visualCenter + sideCount + buffer;
+
+	// Con una sola entrada, no repetimos la misma tarjeta por todos lados.
+	if (size() == 1)
 	{
-		int diff = end - (size() - 1);
-		start -= diff;
-		end = size() - 1;
+		start = 0;
+		end = 0;
 	}
 
-	if (start < 0)
-		start = 0;
+	auto getRealIndex = [&](int virtualIndex) -> int
+	{
+		if (size() <= 0)
+			return -1;
+
+		if (mCarouselLoop && size() > 1)
+		{
+			int index = virtualIndex;
+
+			while (index < 0)
+				index += size();
+
+			while (index >= size())
+				index -= size();
+
+			return index;
+		}
+
+		if (virtualIndex < 0 || virtualIndex >= size())
+			return -1;
+
+		return virtualIndex;
+	};
 
 	auto applyOpacity = [](unsigned int color, float opacity01) -> unsigned int
 	{
@@ -377,14 +416,44 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		return lines;
 	};
 
-	auto renderEntry = [&](int i, bool selected)
-	{
-		typename IList<TextListData, T>::Entry& entry = mEntries.at((unsigned int)i);
+	// Buscar la posición virtual más cercana al centro que representa al cursor real.
+	// Esto evita que, con loop, el seleccionado se dibuje lejos cuando también existe una copia visual cerca.
+	int activeVirtualPos = mCursor;
+	float bestActiveDistance = 99999.0f;
 
-		float distance = (float)(i - mCursor);
+	for (int virtualPos = start; virtualPos <= end; virtualPos++)
+	{
+		int realIndex = getRealIndex(virtualPos);
+		if (realIndex < 0)
+			continue;
+
+		if (realIndex == mCursor)
+		{
+			float d = (float)virtualPos - mCarouselCamOffset;
+			float ad = d < 0.0f ? -d : d;
+
+			if (ad < bestActiveDistance)
+			{
+				bestActiveDistance = ad;
+				activeVirtualPos = virtualPos;
+			}
+		}
+	}
+
+	auto renderEntry = [&](int virtualPos, bool selected)
+	{
+		int realIndex = getRealIndex(virtualPos);
+		if (realIndex < 0)
+			return;
+
+		typename IList<TextListData, T>::Entry& entry = mEntries.at((unsigned int)realIndex);
+
+		float distance = (float)virtualPos - mCarouselCamOffset;
 		float absDistance = distance < 0.0f ? -distance : distance;
 
-		float scale = selected ? mCarouselLogoScale : 1.0f;
+		float influence = Math::max(0.0f, 1.0f - absDistance);
+
+		float scale = 1.0f + ((mCarouselLogoScale - 1.0f) * influence);
 		if (scale < 0.1f)
 			scale = 1.0f;
 
@@ -394,10 +463,10 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		if (minOpacity > 1.0f)
 			minOpacity = 1.0f;
 
-		float opacity01 = selected ? 1.0f : minOpacity;
+		float opacity01 = minOpacity + ((1.0f - minOpacity) * influence);
 
-		if (!selected && sideCount > 0 && absDistance <= 1.0f)
-			opacity01 = Math::max(minOpacity, 0.70f);
+		if (selected)
+			opacity01 = 1.0f;
 
 		const float itemCenterX = centerX + (distance * spacing);
 		const float scaledW = itemWidth * scale;
@@ -426,7 +495,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		std::string displayName = mUppercase ? Utils::String::toUpper(entry.name) : entry.name;
 
 		if (mShowRowNumbers)
-			displayName = std::to_string(i + 1) + ". " + displayName;
+			displayName = std::to_string(realIndex + 1) + ". " + displayName;
 
 		const float maxTextWidth = itemWidth * 0.86f;
 		std::vector<std::string> lines = makeLines(displayName, maxTextWidth, mCarouselTextMaxLines);
@@ -463,16 +532,17 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		}
 	};
 
-	for (int i = start; i <= end; i++)
+	// Laterales primero.
+	for (int virtualPos = start; virtualPos <= end; virtualPos++)
 	{
-		if (i == mCursor)
+		if (virtualPos == activeVirtualPos)
 			continue;
 
-		renderEntry(i, false);
+		renderEntry(virtualPos, false);
 	}
 
-	if (mCursor >= start && mCursor <= end)
-		renderEntry(mCursor, true);
+	// El cursor real, en su copia visual más cercana al centro, se dibuja encima.
+	renderEntry(activeVirtualPos, true);
 
 	Renderer::popClipRect();
 
@@ -704,6 +774,52 @@ void TextListComponent<T>::update(int deltaTime)
 {
 	listUpdate(deltaTime);
 
+	if (mCarouselMode && mOrientation == ORIENTATION_HORIZONTAL && size() > 0)
+	{
+		float target = (float)mCursor;
+
+		// Si el loop visual está activo, mover la cámara por el camino más corto.
+		// Esto evita saltos feos cuando el índice visual cruza de último a primero.
+		if (mCarouselLoop && size() > 1)
+		{
+			float diff = target - mCarouselCamOffset;
+			float half = (float)size() * 0.5f;
+
+			if (diff > half)
+				target -= (float)size();
+			else if (diff < -half)
+				target += (float)size();
+		}
+
+		float diff = target - mCarouselCamOffset;
+
+		if (std::fabs(diff) < 0.001f)
+		{
+			mCarouselCamOffset = target;
+		}
+		else
+		{
+			// Suavizado simple.
+			// Menor divisor = más rápido. Mayor divisor = más suave/lento.
+			float factor = Math::min(1.0f, (float)deltaTime / 110.0f);
+			mCarouselCamOffset += diff * factor;
+		}
+
+		// Normalizar cámara para que no crezca indefinidamente en loop.
+		if (mCarouselLoop && size() > 1)
+		{
+			while (mCarouselCamOffset < 0.0f)
+				mCarouselCamOffset += (float)size();
+
+			while (mCarouselCamOffset >= (float)size())
+				mCarouselCamOffset -= (float)size();
+		}
+	}
+	else if (size() > 0)
+	{
+		mCarouselCamOffset = (float)mCursor;
+	}
+
 	if (!isScrolling() && size() > 0)
 	{
 		mMarqueeOffset = 0;
@@ -760,6 +876,14 @@ void TextListComponent<T>::onCursorChanged(const CursorState& state)
 	mMarqueeOffset = 0;
 	mMarqueeOffset2 = 0;
 	mMarqueeTime = 0;
+
+	if (size() > 0)
+	{
+		if (!mCarouselMode)
+			mCarouselCamOffset = (float)mCursor;
+		else if (mCarouselCamOffset < 0.0f || mCarouselCamOffset >= (float)size())
+			mCarouselCamOffset = (float)mCursor;
+	}
 
 	if (mCursorChangedCallback)
 		mCursorChangedCallback(state);
@@ -862,6 +986,10 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	mCarouselMode = false;
 	if (elem->has("carouselMode"))
 		mCarouselMode = elem->get<bool>("carouselMode");
+
+	mCarouselLoop = false;
+	if (elem->has("carouselLoop"))
+		mCarouselLoop = elem->get<bool>("carouselLoop");
 
 	mCarouselMaxLogoCount = 5;
 	if (elem->has("maxLogoCount"))
