@@ -8,8 +8,10 @@
 #include "Log.h"
 #include "Settings.h"
 #include "Sound.h"
+
 #include <memory>
 #include <type_traits>
+#include <vector>
 
 class TextCache;
 class SystemData;
@@ -40,7 +42,6 @@ public:
 	using IList<TextListData, T>::isScrolling;
 	using IList<TextListData, T>::stopScrolling;
 
-	// flag to re-evaluate list cursor position in visible list section
 	static constexpr int REFRESH_LIST_CURSOR_POS = -1;
 
 	TextListComponent(Window* window);
@@ -93,7 +94,6 @@ public:
 	inline void setColor(unsigned int id, unsigned int color) { mColors[id] = color; }
 	inline void setLineSpacing(float lineSpacing) { mLineSpacing = lineSpacing; }
 
-	// nuevos helpers
 	inline void setSelectorWidth(float selectorWidth) { mSelectorWidth = selectorWidth; }
 	inline void setSelectorHorizontalOffset(float selectorHorizontalOffset) { mSelectorHorizontalOffset = selectorHorizontalOffset; }
 	inline void setTopAligned(bool topAligned) { mTopAligned = topAligned; }
@@ -111,6 +111,7 @@ protected:
 		if (!mScrollSound.empty())
 			Sound::get(mScrollSound)->play();
 	}
+
 	virtual void onCursorChanged(const CursorState& state) override;
 
 private:
@@ -123,6 +124,8 @@ private:
 	float mHorizontalMargin;
 
 	int viewportTop();
+	void renderHorizontalCarousel(const Transform4x4f& trans);
+
 	std::function<void(CursorState state)> mCursorChangedCallback;
 
 	std::shared_ptr<Font> mFont;
@@ -140,11 +143,22 @@ private:
 	int mViewportHeight;
 	int mCursorPrev = -1;
 
-	// mejoras nuevas
 	float mSelectorWidth;
 	float mSelectorHorizontalOffset;
 	bool mTopAligned;
 	bool mShowRowNumbers;
+
+	// ES-X: modo carrusel opcional para textlist/gamelist.
+	bool mCarouselMode;
+	int mCarouselMaxLogoCount;
+	float mCarouselLogoScale;
+	float mCarouselMinLogoOpacity;
+	float mCarouselLogoSpacingX;
+
+	// ES-X: tarjetas y texto controlado del carrusel.
+	unsigned int mCarouselItemColor;
+	unsigned int mCarouselSelectedItemColor;
+	int mCarouselTextMaxLines;
 
 	ImageComponent mSelectorImage;
 };
@@ -176,9 +190,295 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mSelectorWidth = 0.0f;
 	mSelectorHorizontalOffset = 0.0f;
 
-	// Para listas de sistemas, por defecto se ven mejor arrancando arriba
 	mTopAligned = std::is_same<T, SystemData*>::value;
 	mShowRowNumbers = false;
+
+	mCarouselMode = false;
+	mCarouselMaxLogoCount = 5;
+	mCarouselLogoScale = 1.20f;
+	mCarouselMinLogoOpacity = 0.45f;
+	mCarouselLogoSpacingX = 0.0f;
+
+	mCarouselItemColor = 0x00000088;
+	mCarouselSelectedItemColor = 0x101020CC;
+	mCarouselTextMaxLines = 2;
+}
+
+template <typename T>
+void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
+{
+	std::shared_ptr<Font>& font = mFont;
+
+	if (size() == 0)
+		return;
+
+	int visibleCount = mCarouselMaxLogoCount;
+	if (visibleCount < 1)
+		visibleCount = 1;
+	if (visibleCount > size())
+		visibleCount = size();
+
+	if (visibleCount > 1 && (visibleCount % 2) == 0)
+		visibleCount--;
+
+	if (visibleCount < 1)
+		visibleCount = 1;
+
+	const int sideCount = visibleCount / 2;
+	const float baseTextHeight = Math::max(font->getHeight(1.0f), (float)font->getSize());
+
+	float itemWidth = (mSelectorWidth > 0.0f) ? mSelectorWidth : (mSize.x() / (float)visibleCount);
+	if (itemWidth <= 1.0f)
+		itemWidth = mSize.x() / 5.0f;
+
+	float spacing = mCarouselLogoSpacingX;
+	if (spacing <= 1.0f)
+		spacing = itemWidth + mHorizontalMargin;
+	if (spacing <= 1.0f)
+		spacing = itemWidth;
+
+	float itemHeight = mSelectorHeight;
+	if (itemHeight <= 1.0f || itemHeight > mSize.y())
+		itemHeight = baseTextHeight * 4.0f;
+
+	const float centerX = mSize.x() * 0.5f;
+	const float centerY = (mSize.y() * 0.5f) + mSelectorOffsetY;
+
+	Vector3f dim(mSize.x(), mSize.y(), 0);
+	dim = trans * dim - trans.translation();
+
+	Renderer::pushClipRect(
+		Vector2i((int)trans.translation().x(), (int)trans.translation().y()),
+		Vector2i((int)dim.x(), (int)dim.y()));
+
+	int start = mCursor - sideCount;
+	int end = mCursor + sideCount;
+
+	if (start < 0)
+	{
+		end += -start;
+		start = 0;
+	}
+
+	if (end >= size())
+	{
+		int diff = end - (size() - 1);
+		start -= diff;
+		end = size() - 1;
+	}
+
+	if (start < 0)
+		start = 0;
+
+	auto applyOpacity = [](unsigned int color, float opacity01) -> unsigned int
+	{
+		if (opacity01 < 0.0f)
+			opacity01 = 0.0f;
+		if (opacity01 > 1.0f)
+			opacity01 = 1.0f;
+
+		unsigned int baseAlpha = color & 0x000000FF;
+		unsigned int alpha = (unsigned int)((float)baseAlpha * opacity01);
+
+		if (alpha > 255)
+			alpha = 255;
+
+		return (color & 0xFFFFFF00) | alpha;
+	};
+
+	auto truncateToWidth = [&](std::string text, float maxWidth) -> std::string
+	{
+		text = Utils::String::trim(text);
+
+		if (text.empty())
+			return "";
+
+		if (font->sizeText(text).x() <= maxWidth)
+			return text;
+
+		const std::string dots = "...";
+
+		while (text.size() > 1 && font->sizeText(text + dots).x() > maxWidth)
+			text.pop_back();
+
+		return text + dots;
+	};
+
+	auto makeLines = [&](const std::string& original, float maxWidth, int maxLines) -> std::vector<std::string>
+	{
+		std::vector<std::string> lines;
+
+		if (maxLines < 1)
+			maxLines = 1;
+		if (maxLines > 3)
+			maxLines = 3;
+
+		std::string text = Utils::String::trim(original);
+
+		if (text.empty())
+		{
+			lines.push_back("");
+			return lines;
+		}
+
+		if (maxLines == 1)
+		{
+			lines.push_back(truncateToWidth(text, maxWidth));
+			return lines;
+		}
+
+		if (font->sizeText(text).x() <= maxWidth)
+		{
+			lines.push_back(text);
+			return lines;
+		}
+
+		std::vector<std::string> words = Utils::String::delimitedStringToVector(text, " ");
+		std::string current;
+
+		for (size_t i = 0; i < words.size(); i++)
+		{
+			std::string candidate = current.empty() ? words[i] : current + " " + words[i];
+
+			if (font->sizeText(candidate).x() <= maxWidth || current.empty())
+			{
+				current = candidate;
+			}
+			else
+			{
+				lines.push_back(truncateToWidth(current, maxWidth));
+				current = words[i];
+
+				if ((int)lines.size() >= maxLines - 1)
+				{
+					std::string rest = current;
+					for (size_t j = i + 1; j < words.size(); j++)
+						rest += " " + words[j];
+
+					lines.push_back(truncateToWidth(rest, maxWidth));
+
+					if ((int)lines.size() > maxLines)
+						lines.resize((size_t)maxLines);
+
+					return lines;
+				}
+			}
+		}
+
+		if (!current.empty())
+			lines.push_back(truncateToWidth(current, maxWidth));
+
+		if (lines.empty())
+			lines.push_back(truncateToWidth(text, maxWidth));
+
+		if ((int)lines.size() > maxLines)
+			lines.resize((size_t)maxLines);
+
+		return lines;
+	};
+
+	auto renderEntry = [&](int i, bool selected)
+	{
+		typename IList<TextListData, T>::Entry& entry = mEntries.at((unsigned int)i);
+
+		float distance = (float)(i - mCursor);
+		float absDistance = distance < 0.0f ? -distance : distance;
+
+		float scale = selected ? mCarouselLogoScale : 1.0f;
+		if (scale < 0.1f)
+			scale = 1.0f;
+
+		float minOpacity = mCarouselMinLogoOpacity;
+		if (minOpacity < 0.0f)
+			minOpacity = 0.0f;
+		if (minOpacity > 1.0f)
+			minOpacity = 1.0f;
+
+		float opacity01 = selected ? 1.0f : minOpacity;
+
+		if (!selected && sideCount > 0 && absDistance <= 1.0f)
+			opacity01 = Math::max(minOpacity, 0.70f);
+
+		const float itemCenterX = centerX + (distance * spacing);
+		const float scaledW = itemWidth * scale;
+		const float scaledH = itemHeight * scale;
+
+		unsigned int bgColor = selected ? mCarouselSelectedItemColor : mCarouselItemColor;
+		bgColor = applyOpacity(bgColor, opacity01);
+
+		Renderer::setMatrix(trans);
+		Renderer::drawRect(
+			itemCenterX - (scaledW * 0.5f),
+			centerY - (scaledH * 0.5f),
+			scaledW,
+			scaledH,
+			bgColor,
+			bgColor);
+
+		unsigned int textColor;
+		if (selected && mSelectedColor)
+			textColor = mSelectedColor;
+		else
+			textColor = mColors[entry.data.colorId];
+
+		textColor = applyOpacity(textColor, opacity01);
+
+		std::string displayName = mUppercase ? Utils::String::toUpper(entry.name) : entry.name;
+
+		if (mShowRowNumbers)
+			displayName = std::to_string(i + 1) + ". " + displayName;
+
+		const float maxTextWidth = itemWidth * 0.86f;
+		std::vector<std::string> lines = makeLines(displayName, maxTextWidth, mCarouselTextMaxLines);
+
+		const float lineGap = baseTextHeight * 0.15f;
+		const float totalTextHeight =
+			(lines.size() * baseTextHeight) +
+			(lines.size() > 1 ? ((lines.size() - 1) * lineGap) : 0.0f);
+
+		float y = -(totalTextHeight * 0.5f);
+
+		for (size_t line = 0; line < lines.size(); line++)
+		{
+			TextCache* cache = font->buildTextCache(lines[line], 0, 0, 0x000000FF);
+			cache->setColor(textColor);
+
+			float textX = -(cache->metrics.size.x() * 0.5f);
+
+			if (mAlignment == ALIGN_LEFT)
+				textX = -(itemWidth * 0.5f) + (itemWidth * 0.06f);
+			else if (mAlignment == ALIGN_RIGHT)
+				textX = (itemWidth * 0.5f) - cache->metrics.size.x() - (itemWidth * 0.06f);
+
+			Transform4x4f drawTrans = trans;
+			drawTrans.translate(Vector3f(itemCenterX, centerY, 0.0f));
+			drawTrans.scale(Vector3f(scale, scale, 1.0f));
+			drawTrans.translate(Vector3f(textX, y, 0.0f));
+
+			Renderer::setMatrix(drawTrans);
+			font->renderTextCache(cache);
+			delete cache;
+
+			y += baseTextHeight + lineGap;
+		}
+	};
+
+	for (int i = start; i <= end; i++)
+	{
+		if (i == mCursor)
+			continue;
+
+		renderEntry(i, false);
+	}
+
+	if (mCursor >= start && mCursor <= end)
+		renderEntry(mCursor, true);
+
+	Renderer::popClipRect();
+
+	listRenderTitleOverlay(trans);
+
+	GuiComponent::renderChildren(trans);
 }
 
 template <typename T>
@@ -191,14 +491,18 @@ void TextListComponent<T>::render(const Transform4x4f& parentTrans)
 	if (size() == 0)
 		return;
 
+	if (mOrientation == ORIENTATION_HORIZONTAL && mCarouselMode)
+	{
+		renderHorizontalCarousel(trans);
+		return;
+	}
+
 	const float entrySize = Math::max(font->getHeight(1.0f), (float)font->getSize()) * mLineSpacing;
 
-	// number of list entries that can fit on the screen
 	mViewportHeight = (int)(mSize.y() / entrySize);
 
 	if (mViewportTop == REFRESH_LIST_CURSOR_POS)
 	{
-		// returning from screen saver activated game launch or screensaver press 'A'
 		mViewportTop = mCursor - mViewportHeight / 2;
 		mCursorPrev = -1;
 	}
@@ -476,6 +780,7 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 		return;
 
 	using namespace ThemeFlags;
+
 	if (properties & COLOR)
 	{
 		if (elem->has("selectorColor"))
@@ -528,6 +833,7 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 			else
 				LOG(LogError) << "Unknown TextListComponent alignment \"" << str << "\"!";
 		}
+
 		if (elem->has("horizontalMargin"))
 		{
 			mHorizontalMargin = elem->get<float>("horizontalMargin") *
@@ -552,6 +858,46 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	{
 		setOrientation(ORIENTATION_VERTICAL);
 	}
+
+	mCarouselMode = false;
+	if (elem->has("carouselMode"))
+		mCarouselMode = elem->get<bool>("carouselMode");
+
+	mCarouselMaxLogoCount = 5;
+	if (elem->has("maxLogoCount"))
+		mCarouselMaxLogoCount = (int)Math::round(elem->get<float>("maxLogoCount"));
+
+	mCarouselLogoScale = 1.20f;
+	if (elem->has("logoScale"))
+		mCarouselLogoScale = elem->get<float>("logoScale");
+
+	mCarouselMinLogoOpacity = 0.45f;
+	if (elem->has("minLogoOpacity"))
+		mCarouselMinLogoOpacity = elem->get<float>("minLogoOpacity");
+
+	mCarouselLogoSpacingX = 0.0f;
+	if (elem->has("logoSpacingX"))
+	{
+		float scale = this->mParent ? this->mParent->getSize().x() : (float)Renderer::getScreenWidth();
+		mCarouselLogoSpacingX = elem->get<float>("logoSpacingX") * scale;
+	}
+
+	mCarouselItemColor = 0x00000088;
+	if (elem->has("carouselItemColor"))
+		mCarouselItemColor = elem->get<unsigned int>("carouselItemColor");
+
+	mCarouselSelectedItemColor = 0x101020CC;
+	if (elem->has("carouselSelectedItemColor"))
+		mCarouselSelectedItemColor = elem->get<unsigned int>("carouselSelectedItemColor");
+
+	mCarouselTextMaxLines = 2;
+	if (elem->has("carouselTextMaxLines"))
+		mCarouselTextMaxLines = (int)Math::round(elem->get<float>("carouselTextMaxLines"));
+
+	if (mCarouselTextMaxLines < 1)
+		mCarouselTextMaxLines = 1;
+	if (mCarouselTextMaxLines > 3)
+		mCarouselTextMaxLines = 3;
 
 	if (properties & FORCE_UPPERCASE && elem->has("forceUppercase"))
 		setUppercase(elem->get<bool>("forceUppercase"));
