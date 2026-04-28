@@ -97,6 +97,11 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "pos", RESOLUTION_PAIR },
 	{ "size", RESOLUTION_PAIR },
 	{ "origin", NORMALIZED_PAIR },
+
+	// ES-X: alias visual estilo carousel.
+	// En modo carrusel textual, <color> funciona como color base de tarjeta.
+	{ "color", COLOR },
+
 	{ "selectorHeight", RESOLUTION_FLOAT },
 	{ "selectorOffsetY", RESOLUTION_FLOAT },
 	{ "selectorColor", COLOR },
@@ -113,6 +118,11 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "fontSize", RESOLUTION_FLOAT },
 	{ "scrollSound", PATH },
 	{ "alignment", STRING },
+
+	// IMPORTANTE:
+	// orientation queda como control real del textlist.
+	// horizontal = izquierda/derecha mueve juegos.
+	// vertical = arriba/abajo mueve juegos.
 	{ "orientation", STRING },
 
 	// ES-X: modo carrusel opcional para gamelist/textlist
@@ -128,7 +138,9 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "logoAlignment", STRING },
 
 	// ES-X: espaciado y offsets
+	{ "logoSpacing", RESOLUTION_PAIR },
 	{ "logoSpacingX", RESOLUTION_FLOAT },
+	{ "logoSpacingY", RESOLUTION_FLOAT },
 	{ "logoOffset", RESOLUTION_PAIR },
 	{ "logoOffsetX", RESOLUTION_FLOAT },
 	{ "logoOffsetY", RESOLUTION_FLOAT },

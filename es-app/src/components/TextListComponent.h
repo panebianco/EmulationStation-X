@@ -4,6 +4,7 @@
 
 #include "components/IList.h"
 #include "components/ImageComponent.h"
+#include "animations/LambdaAnimation.h"
 #include "math/Misc.h"
 #include "utils/StringUtil.h"
 #include "Log.h"
@@ -166,6 +167,7 @@ private:
 	float mCarouselLogoScale;
 	float mCarouselMinLogoOpacity;
 	float mCarouselLogoSpacingX;
+	float mCarouselLogoSpacingY;
 	float mCarouselScaledLogoSpacing;
 
 	Vector2f mCarouselLogoSize;
@@ -224,6 +226,7 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselLogoScale = 1.20f;
 	mCarouselMinLogoOpacity = 0.45f;
 	mCarouselLogoSpacingX = 0.0f;
+	mCarouselLogoSpacingY = 0.0f;
 	mCarouselScaledLogoSpacing = 0.0f;
 
 	mCarouselLogoSize = Vector2f::Zero();
@@ -456,29 +459,16 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		return lines;
 	};
 
-	int activeVirtualPos = mCursor;
-	float bestActiveDistance = 99999.0f;
+	// ES-X:
+	// El elemento que se dibuja encima debe ser el centro visual del carrusel,
+	// no necesariamente el cursor lógico. Durante la animación, mCursor y la
+	// cámara visual pueden no coincidir, y eso causaba saltos raros.
+	int activeVirtualPos = visualCenter;
 
-	for (int virtualPos = start; virtualPos <= end; virtualPos++)
-	{
-		int realIndex = getRealIndex(virtualPos);
-		if (realIndex < 0)
-			continue;
+	if (getRealIndex(activeVirtualPos) < 0)
+		activeVirtualPos = mCursor;
 
-		if (realIndex == mCursor)
-		{
-			float d = (float)virtualPos - mCarouselCamOffset;
-			float ad = d < 0.0f ? -d : d;
-
-			if (ad < bestActiveDistance)
-			{
-				bestActiveDistance = ad;
-				activeVirtualPos = virtualPos;
-			}
-		}
-	}
-
-	auto renderEntry = [&](int virtualPos, bool selected)
+	auto renderEntry = [&](int virtualPos, bool /*active*/)
 	{
 		int realIndex = getRealIndex(virtualPos);
 		if (realIndex < 0)
@@ -506,12 +496,19 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		float itemCenterX = centerX + (distance * spacing);
 		float itemCenterY = centerY;
 
-		// Imitación de scaledLogoSpacing de SystemView.
-		// Cuando el central escala, empuja laterales para que no se encimen.
+		// ES-X:
+		// Separación dinámica alrededor del centro.
+		// El central puede crecer/subir sin "pegarse" tanto a sus vecinos.
 		if (mCarouselScaledLogoSpacing != 0.0f && absDistance > 0.001f)
 		{
-			float logoDiffX = ((spacing * mCarouselLogoScale) - spacing)
-				/ 2.0f * mCarouselScaledLogoSpacing;
+			float pushInfluence = Math::min(absDistance, 1.0f);
+			float scaleBonus = Math::max(0.0f, mCarouselLogoScale - 1.0f);
+
+			float logoDiffX = spacing *
+				scaleBonus *
+				0.5f *
+				mCarouselScaledLogoSpacing *
+				pushInfluence;
 
 			if (distance < 0.0f)
 				itemCenterX -= logoDiffX;
@@ -519,18 +516,21 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				itemCenterX += logoDiffX;
 		}
 
-		if (selected)
+		// ES-X:
+		// El offset del seleccionado entra por cercanía visual al centro,
+		// no solamente por cursor lógico. Esto evita el "pegoteo" al deslizar.
+		if (influence > 0.001f)
 		{
-			itemCenterX += mCarouselSelectedLogoOffsetX;
-			itemCenterY += mCarouselSelectedLogoOffsetY;
+			itemCenterX += mCarouselSelectedLogoOffsetX * influence;
+			itemCenterY += mCarouselSelectedLogoOffsetY * influence;
 		}
 
 		const float scaledW = itemWidth * scale;
 		const float scaledH = itemHeight * scale;
 
-		const bool visuallyCentered = (std::fabs(distance) < 0.50f);
+		const bool visuallyCentered = (influence > 0.001f);
 
-		unsigned int bgColor = (selected && visuallyCentered) ? mCarouselSelectedItemColor : mCarouselItemColor;
+		unsigned int bgColor = visuallyCentered ? mCarouselSelectedItemColor : mCarouselItemColor;
 		bgColor = applyOpacity(bgColor, opacity01);
 
 		Renderer::setMatrix(trans);
@@ -543,7 +543,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			bgColor);
 
 		unsigned int textColor;
-		if (selected && visuallyCentered && mSelectedColor)
+		if (visuallyCentered && mSelectedColor)
 			textColor = mSelectedColor;
 		else
 			textColor = mColors[entry.data.colorId];
@@ -603,9 +603,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		renderEntry(virtualPos, false);
 	}
 
-	// Importante:
-	// La tarjeta activa se salta arriba para dibujar los laterales primero,
-	// pero luego DEBE renderizarse al final para quedar encima.
+	// El elemento visualmente central se dibuja al final para quedar encima.
 	if (getRealIndex(activeVirtualPos) >= 0)
 		renderEntry(activeVirtualPos, true);
 
@@ -839,46 +837,10 @@ void TextListComponent<T>::update(int deltaTime)
 {
 	listUpdate(deltaTime);
 
-	if (mCarouselMode && mOrientation == ORIENTATION_HORIZONTAL && size() > 0)
-	{
-		float target = (float)mCursor;
-
-		if (mCarouselLoop && size() > 1)
-		{
-			float diff = target - mCarouselCamOffset;
-			float half = (float)size() * 0.5f;
-
-			if (diff > half)
-				target -= (float)size();
-			else if (diff < -half)
-				target += (float)size();
-		}
-
-		float diff = target - mCarouselCamOffset;
-
-		if (std::fabs(diff) < 0.001f)
-		{
-			mCarouselCamOffset = target;
-		}
-		else
-		{
-			float factor = Math::min(1.0f, (float)deltaTime / 110.0f);
-			mCarouselCamOffset += diff * factor;
-		}
-
-		if (mCarouselLoop && size() > 1)
-		{
-			while (mCarouselCamOffset < 0.0f)
-				mCarouselCamOffset += (float)size();
-
-			while (mCarouselCamOffset >= (float)size())
-				mCarouselCamOffset -= (float)size();
-		}
-	}
-	else if (size() > 0)
-	{
+	// La cámara del carrusel se anima desde onCursorChanged().
+	// Si no está en modo carrusel, se sincroniza directo con el cursor.
+	if ((!mCarouselMode || mOrientation != ORIENTATION_HORIZONTAL) && size() > 0)
 		mCarouselCamOffset = (float)mCursor;
-	}
 
 	if (!isScrolling() && size() > 0)
 	{
@@ -939,10 +901,58 @@ void TextListComponent<T>::onCursorChanged(const CursorState& state)
 
 	if (size() > 0)
 	{
-		if (!mCarouselMode)
+		if (mCarouselMode && mOrientation == ORIENTATION_HORIZONTAL)
+		{
+			float startPos = mCarouselCamOffset;
+			float posMax = (float)size();
+			float target = (float)mCursor;
+			float endPos = target;
+
+			if (startPos < 0.0f || startPos >= posMax)
+				startPos = target;
+
+			if (mCarouselLoop && size() > 1)
+			{
+				float dist = std::fabs(endPos - startPos);
+
+				// Buscar el camino más corto, como hace el carrusel real.
+				if (std::fabs(target + posMax - startPos) < dist)
+					endPos = target + posMax;
+
+				if (std::fabs(target - posMax - startPos) < dist)
+					endPos = target - posMax;
+			}
+
+			this->cancelAnimation(0);
+
+			Animation* anim = new LambdaAnimation(
+				[this, startPos, endPos, posMax](float t)
+				{
+					// Easing parecido al usado por carruseles reales.
+					t = 1.0f - (1.0f - t) * (1.0f - t);
+
+					float f = (endPos * t) + (startPos * (1.0f - t));
+
+					if (posMax > 0.0f)
+					{
+						while (f < 0.0f)
+							f += posMax;
+
+						while (f >= posMax)
+							f -= posMax;
+					}
+
+					mCarouselCamOffset = f;
+				},
+				400);
+
+			this->setAnimation(anim, 0, nullptr, false, 0);
+		}
+		else
+		{
+			this->cancelAnimation(0);
 			mCarouselCamOffset = (float)mCursor;
-		else if (mCarouselCamOffset < 0.0f || mCarouselCamOffset >= (float)size())
-			mCarouselCamOffset = (float)mCursor;
+		}
 	}
 
 	if (mCursorChangedCallback)
@@ -1025,16 +1035,27 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 		}
 	}
 
-	if (elem->has("orientation"))
+	// ES-X:
+	// Acepta el lenguaje clásico de textlist:
+	//   <orientation>horizontal</orientation>
+	// y también el lenguaje estilo carousel:
+	//   <type>horizontal</type>
+	std::string orientation;
+
+	if (elem->has("type"))
+		orientation = elem->get<std::string>("type");
+	else if (elem->has("orientation"))
+		orientation = elem->get<std::string>("orientation");
+
+	if (!orientation.empty())
 	{
-		const std::string& str = elem->get<std::string>("orientation");
-		if (str == "horizontal")
+		if (orientation == "horizontal")
 			setOrientation(ORIENTATION_HORIZONTAL);
-		else if (str == "vertical")
+		else if (orientation == "vertical")
 			setOrientation(ORIENTATION_VERTICAL);
 		else
 		{
-			LOG(LogWarning) << "Unknown TextListComponent orientation \"" << str << "\"! Using vertical.";
+			LOG(LogWarning) << "Unknown TextListComponent orientation/type \"" << orientation << "\"! Using vertical.";
 			setOrientation(ORIENTATION_VERTICAL);
 		}
 	}
@@ -1067,20 +1088,35 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	if (elem->has("scaledLogoSpacing"))
 		mCarouselScaledLogoSpacing = elem->get<float>("scaledLogoSpacing");
 
+	// ES-X:
+	// Espaciado estilo systemcarousel.
+	// logoSpacing usa el rectángulo interno del textlist, no toda la pantalla.
 	mCarouselLogoSpacingX = 0.0f;
-	if (elem->has("logoSpacingX"))
+	mCarouselLogoSpacingY = 0.0f;
+
+	if (elem->has("logoSpacing"))
 	{
-		float scale = this->mParent ? this->mParent->getSize().x() : (float)Renderer::getScreenWidth();
-		mCarouselLogoSpacingX = elem->get<float>("logoSpacingX") * scale;
+		Vector2f v = elem->get<Vector2f>("logoSpacing");
+		mCarouselLogoSpacingX = v.x() * mSize.x();
+		mCarouselLogoSpacingY = v.y() * mSize.y();
 	}
+
+	if (elem->has("logoSpacingX"))
+		mCarouselLogoSpacingX = elem->get<float>("logoSpacingX") * mSize.x();
+
+	if (elem->has("logoSpacingY"))
+		mCarouselLogoSpacingY = elem->get<float>("logoSpacingY") * mSize.y();
 
 	mCarouselLogoSize = Vector2f::Zero();
 	if (elem->has("logoSize"))
 	{
 		Vector2f logoSize = elem->get<Vector2f>("logoSize");
+
+		// ES-X:
+		// Igual que SystemView: el tamaño vive dentro del rectángulo del carrusel/textlist.
 		mCarouselLogoSize = Vector2f(
-			logoSize.x() * Renderer::getScreenWidth(),
-			logoSize.y() * Renderer::getScreenHeight());
+			logoSize.x() * mSize.x(),
+			logoSize.y() * mSize.y());
 	}
 
 	mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
@@ -1096,6 +1132,8 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 			mCarouselLogoAlignment = CAROUSEL_ALIGN_TOP;
 		else if (str == "bottom")
 			mCarouselLogoAlignment = CAROUSEL_ALIGN_BOTTOM;
+		else if (str == "center")
+			mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
 		else
 			mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
 	}
@@ -1106,26 +1144,37 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	if (elem->has("logoOffset"))
 	{
 		Vector2f v = elem->get<Vector2f>("logoOffset");
-		mCarouselLogoOffsetX = v.x() * Renderer::getScreenWidth();
-		mCarouselLogoOffsetY = v.y() * Renderer::getScreenHeight();
+
+		// ES-X:
+		// Offset relativo al rectángulo del textlist.
+		mCarouselLogoOffsetX = v.x() * mSize.x();
+		mCarouselLogoOffsetY = v.y() * mSize.y();
 	}
 
 	if (elem->has("logoOffsetX"))
-		mCarouselLogoOffsetX = elem->get<float>("logoOffsetX") * Renderer::getScreenWidth();
+		mCarouselLogoOffsetX = elem->get<float>("logoOffsetX") * mSize.x();
 
 	if (elem->has("logoOffsetY"))
-		mCarouselLogoOffsetY = elem->get<float>("logoOffsetY") * Renderer::getScreenHeight();
+		mCarouselLogoOffsetY = elem->get<float>("logoOffsetY") * mSize.y();
 
 	mCarouselSelectedLogoOffsetX = 0.0f;
 	mCarouselSelectedLogoOffsetY = 0.0f;
 
 	if (elem->has("selectedLogoOffsetX"))
-		mCarouselSelectedLogoOffsetX = elem->get<float>("selectedLogoOffsetX") * Renderer::getScreenWidth();
+		mCarouselSelectedLogoOffsetX = elem->get<float>("selectedLogoOffsetX") * mSize.x();
 
 	if (elem->has("selectedLogoOffsetY"))
-		mCarouselSelectedLogoOffsetY = elem->get<float>("selectedLogoOffsetY") * Renderer::getScreenHeight();
+		mCarouselSelectedLogoOffsetY = elem->get<float>("selectedLogoOffsetY") * mSize.y();
 
 	mCarouselItemColor = 0x00000088;
+
+	// ES-X:
+	// Alias estilo carousel real.
+	// <color> funciona como color base de tarjeta/fondo del item.
+	if (elem->has("color"))
+		mCarouselItemColor = elem->get<unsigned int>("color");
+
+	// Nombre específico de ES-X, por si el tema quiere sobrescribir.
 	if (elem->has("carouselItemColor"))
 		mCarouselItemColor = elem->get<unsigned int>("carouselItemColor");
 
