@@ -1103,23 +1103,44 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	if (elem->has("carouselMode"))
 		mCarouselMode = elem->get<bool>("carouselMode");
 
+	// ES-X:
+	// Base estándar del modo carrusel.
+	// Primero se crea una estructura usable por defecto; luego el tema
+	// puede pisar cada valor con sus propias propiedades.
 	mCarouselLoop = false;
+	mCarouselMaxLogoCount = 5;
+	mCarouselLogoScale = 1.20f;
+	mCarouselMinLogoOpacity = 0.45f;
+	mCarouselScaledLogoSpacing = 0.0f;
+	mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
+	mCarouselLogoSize = Vector2f::Zero();
+
+	if (mCarouselMode)
+	{
+		// Preset base tipo tarjeta/portada.
+		// Con un textlist de size 1.00 x 0.32 y logoScale 1.30,
+		// la tarjeta central queda cerca de 0.172 x 0.305 de pantalla.
+		mCarouselLoop = true;
+		mCarouselMaxLogoCount = 9;
+		mCarouselLogoScale = 1.30f;
+		mCarouselMinLogoOpacity = 0.75f;
+		mCarouselScaledLogoSpacing = 0.58f;
+		mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
+		mCarouselLogoSize = Vector2f(0.132f * mSize.x(), 0.733f * mSize.y());
+	}
+
 	if (elem->has("carouselLoop"))
 		mCarouselLoop = elem->get<bool>("carouselLoop");
 
-	mCarouselMaxLogoCount = 5;
 	if (elem->has("maxLogoCount"))
 		mCarouselMaxLogoCount = (int)std::round(elem->get<float>("maxLogoCount"));
 
-	mCarouselLogoScale = 1.20f;
 	if (elem->has("logoScale"))
 		mCarouselLogoScale = elem->get<float>("logoScale");
 
-	mCarouselMinLogoOpacity = 0.45f;
 	if (elem->has("minLogoOpacity"))
 		mCarouselMinLogoOpacity = elem->get<float>("minLogoOpacity");
 
-	mCarouselScaledLogoSpacing = 0.0f;
 	if (elem->has("scaledLogoSpacing"))
 		mCarouselScaledLogoSpacing = elem->get<float>("scaledLogoSpacing");
 
@@ -1139,7 +1160,8 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	if (elem->has("logoSpacingY"))
 		mCarouselLogoSpacingY = elem->get<float>("logoSpacingY") * mSize.y();
 
-	mCarouselLogoSize = Vector2f::Zero();
+	// ES-X:
+	// Si el tema define logoSize, pisa el preset base.
 	if (elem->has("logoSize"))
 	{
 		Vector2f logoSize = elem->get<Vector2f>("logoSize");
@@ -1150,7 +1172,8 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 			logoSize.y() * mSize.y());
 	}
 
-	mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
+	// ES-X:
+	// Si el tema define logoAlignment, pisa el preset base.
 	if (elem->has("logoAlignment"))
 	{
 		const std::string& str = elem->get<std::string>("logoAlignment");
