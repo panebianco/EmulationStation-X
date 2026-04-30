@@ -125,13 +125,20 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	// vertical = arriba/abajo mueve juegos.
 	{ "orientation", STRING },
 
-	// ES-X: modo carrusel opcional para gamelist/textlist
+		// ES-X: modo carrusel opcional para gamelist/textlist
 	{ "carouselMode", BOOLEAN },
 	{ "carouselLoop", BOOLEAN },
 	{ "maxLogoCount", FLOAT },
 	{ "logoScale", FLOAT },
 	{ "minLogoOpacity", FLOAT },
 	{ "scaledLogoSpacing", FLOAT },
+
+	// ES-X: imagen interna de tarjeta en modo carrusel
+	{ "carouselImage", BOOLEAN },
+	{ "carouselImageType", STRING },
+	{ "carouselImageFit", STRING },
+	{ "carouselImagePadding", NORMALIZED_PAIR },
+	{ "carouselShowText", BOOLEAN },
 
 	// ES-X: tamaño/alineación estilo systemcarousel
 	{ "logoSize", NORMALIZED_PAIR },

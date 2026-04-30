@@ -10,6 +10,7 @@
 #include "Log.h"
 #include "Settings.h"
 #include "Sound.h"
+#include "FileData.h"
 
 #include <cassert>
 #include <cmath>
@@ -25,7 +26,28 @@ struct TextListData
 {
 	unsigned int colorId;
 	std::shared_ptr<TextCache> textCache;
+
+	// ES-X: imagen cacheada para modo carrusel.
+	std::shared_ptr<ImageComponent> carouselImage;
+	std::string carouselImagePath;
 };
+
+namespace TextListCarouselArt
+{
+	inline std::string getImagePath(FileData* file, const std::string& imageType)
+	{
+		if (!file)
+			return "";
+
+		return file->getCarouselImagePath(imageType);
+	}
+
+	template <typename U>
+	inline std::string getImagePath(const U&, const std::string&)
+	{
+		return "";
+	}
+}
 
 // A graphical list. Supports multiple colors for rows and scrolling.
 template <typename T>
@@ -194,6 +216,12 @@ private:
 	unsigned int mCarouselSelectedItemColor;
 	int mCarouselTextMaxLines;
 
+	// ES-X: imagen interna de tarjeta en modo carrusel.
+	bool mCarouselImage;
+	std::string mCarouselImageType;
+	std::string mCarouselImageFit;
+	Vector2f mCarouselImagePadding;
+
 	ImageComponent mSelectorImage;
 };
 
@@ -249,6 +277,11 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselItemColor = 0x00000088;
 	mCarouselSelectedItemColor = 0x101020CC;
 	mCarouselTextMaxLines = 2;
+
+	mCarouselImage = false;
+	mCarouselImageType = "auto";
+	mCarouselImageFit = "contain";
+	mCarouselImagePadding = Vector2f(0.04f, 0.04f);
 }
 
 template <typename T>
@@ -566,6 +599,51 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			scaledH,
 			bgColor,
 			bgColor);
+
+		// ES-X:
+		// Imagen interna de tarjeta.
+		// Usa FileData::getGridImagePath() cuando el textlist contiene juegos.
+		// La imagen vive dentro de la tarjeta ya escalada por logoScale.
+		std::string imagePath;
+
+		if (mCarouselImage)
+			imagePath = TextListCarouselArt::getImagePath(entry.object, mCarouselImageType);
+
+		if (mCarouselImage && !imagePath.empty())
+		{
+			if (!entry.data.carouselImage)
+				entry.data.carouselImage = std::shared_ptr<ImageComponent>(new ImageComponent(this->mWindow, false, true));
+
+			if (entry.data.carouselImagePath != imagePath)
+			{
+				entry.data.carouselImagePath = imagePath;
+				entry.data.carouselImage->setImage(imagePath);
+			}
+
+			const float padX = scaledW * mCarouselImagePadding.x();
+			const float padY = scaledH * mCarouselImagePadding.y();
+
+			const float imageW = Math::max(1.0f, scaledW - (padX * 2.0f));
+			const float imageH = Math::max(1.0f, scaledH - (padY * 2.0f));
+
+			entry.data.carouselImage->uncrop();
+
+			if (mCarouselImageFit == "cover")
+				entry.data.carouselImage->setMinSize(imageW, imageH);
+			else if (mCarouselImageFit == "stretch")
+				entry.data.carouselImage->setResize(imageW, imageH);
+			else
+				entry.data.carouselImage->setMaxSize(imageW, imageH);
+
+			entry.data.carouselImage->setOrigin(0.5f, 0.5f);
+			entry.data.carouselImage->setPosition(
+				drawX + (scaledW * 0.5f),
+				drawY + (scaledH * 0.5f),
+				0.0f);
+
+			entry.data.carouselImage->setOpacity((unsigned char)(opacity01 * 255.0f));
+			entry.data.carouselImage->render(trans);
+		}
 
 		unsigned int textColor;
 		if (visuallyCentered && mSelectedColor)
@@ -1102,6 +1180,47 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	mCarouselMode = false;
 	if (elem->has("carouselMode"))
 		mCarouselMode = elem->get<bool>("carouselMode");
+
+	// ES-X:
+	// Por defecto, si carouselMode está activo, intenta mostrar imagen interna.
+	// Si no hay imagen disponible, sigue mostrando solo tarjeta/texto.
+mCarouselImage = mCarouselMode;
+mCarouselImageType = "auto";
+mCarouselImageFit = "contain";
+mCarouselImagePadding = Vector2f(0.04f, 0.04f);
+
+if (elem->has("carouselImage"))
+	mCarouselImage = elem->get<bool>("carouselImage");
+
+if (elem->has("carouselImageType"))
+{
+	mCarouselImageType = Utils::String::toLower(elem->get<std::string>("carouselImageType"));
+
+	if (mCarouselImageType != "auto" &&
+		mCarouselImageType != "image" &&
+		mCarouselImageType != "thumbnail" &&
+		mCarouselImageType != "marquee" &&
+		mCarouselImageType != "cover" &&
+		mCarouselImageType != "boxart" &&
+		mCarouselImageType != "screenshot" &&
+		mCarouselImageType != "wheel" &&
+		mCarouselImageType != "texture" &&
+		mCarouselImageType != "fanart" &&
+		mCarouselImageType != "none")
+	{
+		LOG(LogWarning) << "Unknown carouselImageType \"" << mCarouselImageType << "\"! Using auto.";
+		mCarouselImageType = "auto";
+	}
+}
+
+if (mCarouselImageType == "none")
+	mCarouselImage = false;
+
+if (elem->has("carouselImageFit"))
+	mCarouselImageFit = Utils::String::toLower(elem->get<std::string>("carouselImageFit"));
+
+if (elem->has("carouselImagePadding"))
+	mCarouselImagePadding = elem->get<Vector2f>("carouselImagePadding");
 
 	// ES-X:
 	// Base estándar del modo carrusel.

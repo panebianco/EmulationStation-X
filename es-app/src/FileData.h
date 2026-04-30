@@ -4,9 +4,10 @@
 
 #include "utils/FileSystemUtil.h"
 #include "MetaData.h"
+
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include <string>
 
 class SystemData;
 class Window;
@@ -41,6 +42,7 @@ public:
 		Thumbnail,
 		Marquee,
 		Grid,
+		Carousel,
 		VideoFallback
 	};
 
@@ -63,10 +65,17 @@ public:
 	virtual const std::string getMarqueePath() const;
 	virtual const std::string getImagePath() const;
 	virtual const std::string getGridImagePath() const;
+
+	// ES-X: imagen para carrusel fake de gamelist.
+	// Sin parámetro mantiene compatibilidad con el comportamiento anterior.
+	// Con parámetro permite que el tema use <carouselImageType>.
+	virtual const std::string getCarouselImagePath() const;
+	virtual const std::string getCarouselImagePath(const std::string& preferredType) const;
+
 	virtual const std::string getVideoFallbackPath() const;
 	virtual const std::string getBackgroundPath() const;
 
-	// ES-X extended media slots
+	// ES-X extended media slots.
 	virtual const std::string getCoverPath() const;
 	virtual const std::string getScreenshotPath() const;
 	virtual const std::string getWheelPath() const;
@@ -76,29 +85,34 @@ public:
 	const std::vector<FileData*>& getChildrenListToDisplay();
 	std::vector<FileData*> getFilesRecursive(unsigned int typeMask, bool displayedOnly = false) const;
 
-	void addChild(FileData* file); // Error if mType != FOLDER
-	void removeChild(FileData* file); //Error if mType != FOLDER
+	void addChild(FileData* file); // Error if mType != FOLDER.
+	void removeChild(FileData* file); // Error if mType != FOLDER.
 
-	inline bool isPlaceHolder() { return mType == PLACEHOLDER; };
+	inline bool isPlaceHolder() { return mType == PLACEHOLDER; }
 
-	virtual inline void refreshMetadata() { return; };
+	virtual inline void refreshMetadata() { return; }
 
 	virtual std::string getKey();
 	const bool isArcadeAsset();
-	inline std::string getFullPath() { return getPath(); };
-	inline std::string getFileName() { return Utils::FileSystem::getFileName(getPath()); };
-	virtual FileData* getSourceFileData();
-	inline std::string getSystemName() const { return mSystemName; };
 
-	// Returns our best guess at the "real" name for this file (will attempt to perform MAME name translation)
+	inline std::string getFullPath() { return getPath(); }
+	inline std::string getFileName() { return Utils::FileSystem::getFileName(getPath()); }
+
+	virtual FileData* getSourceFileData();
+
+	inline std::string getSystemName() const { return mSystemName; }
+
+	// Returns our best guess at the "real" name for this file.
+	// Will attempt to perform MAME name translation.
 	std::string getDisplayName() const;
 
-	// As above, but also remove parenthesis
+	// As above, but also remove parenthesis.
 	std::string getCleanName() const;
 
 	void launchGame(Window* window);
 
 	typedef bool ComparisonFunction(const FileData* a, const FileData* b);
+
 	struct SortType
 	{
 		ComparisonFunction* comparisonFunction;
@@ -106,7 +120,11 @@ public:
 		std::string description;
 
 		SortType(ComparisonFunction* sortFunction, bool sortAscending, const std::string& sortDescription)
-			: comparisonFunction(sortFunction), ascending(sortAscending), description(sortDescription) {}
+			: comparisonFunction(sortFunction),
+			  ascending(sortAscending),
+			  description(sortDescription)
+		{
+		}
 	};
 
 	void sort(const SortType& type);
@@ -119,7 +137,7 @@ protected:
 	FileData* mParent;
 	std::string mSystemName;
 
-	// Art helpers
+	// Art helpers.
 	std::string getArtPathForSlot(ArtSlot slot) const;
 	std::string getArtBySource(const std::string& source) const;
 	std::vector<std::string> getFallbackOrderForSlot(ArtSlot slot, const std::string& preferred) const;
@@ -159,13 +177,14 @@ class CollectionFileData : public FileData
 public:
 	CollectionFileData(FileData* file, SystemData* system);
 	~CollectionFileData();
+
 	const std::string& getName();
 	void refreshMetadata();
 	FileData* getSourceFileData();
 	std::string getKey();
 
 private:
-	// needs to be updated when metadata changes
+	// Needs to be updated when metadata changes.
 	std::string mCollectionFileName;
 	bool mDirty;
 };

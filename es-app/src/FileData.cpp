@@ -263,13 +263,37 @@ std::string FileData::getArtBySource(const std::string& source) const
 	else if (source == "marquee")
 		return getMarqueeCandidate();
 	else if (source == "cover")
-		return getCoverCandidate();
-	else if (source == "boxart")
+	{
+		std::string cover = getCoverCandidate();
+		if (!cover.empty())
+			return cover;
+
 		return getBoxartCandidate();
+	}
+	else if (source == "boxart")
+	{
+		std::string boxart = getBoxartCandidate();
+		if (!boxart.empty())
+			return boxart;
+
+		return getCoverCandidate();
+	}
 	else if (source == "screenshot")
-		return getScreenshotCandidate();
+	{
+		std::string screenshot = getScreenshotCandidate();
+		if (!screenshot.empty())
+			return screenshot;
+
+		return getUniversalScreenshotCandidate();
+	}
 	else if (source == "wheel")
-		return getWheelCandidate();
+	{
+		std::string wheel = getWheelCandidate();
+		if (!wheel.empty())
+			return wheel;
+
+		return getMarqueeCandidate();
+	}
 	else if (source == "texture")
 		return getTextureCandidate();
 	else if (source == "fanart")
@@ -339,7 +363,7 @@ std::vector<std::string> FileData::getFallbackOrderForSlot(ArtSlot slot, const s
 		}
 		break;
 
-	case ArtSlot::Grid:
+		case ArtSlot::Grid:
 		appendUnique(preferred);
 		appendUnique("image");
 		appendUnique("thumbnail");
@@ -350,6 +374,22 @@ std::vector<std::string> FileData::getFallbackOrderForSlot(ArtSlot slot, const s
 		appendUnique("marquee");
 		appendUnique("wheel");
 		break;
+
+		case ArtSlot::Carousel:
+		// ES-X:
+		// Carrusel fake de gamelist. Por defecto prioriza capturas/gameplay,
+		// porque visualmente funciona mejor como fila tipo consola.
+		appendUnique(preferred);
+		appendUnique("screenshot");
+		appendUnique("thumbnail");
+		appendUnique("image");
+		appendUnique("boxart");
+		appendUnique("cover");
+		appendUnique("marquee");
+		appendUnique("wheel");
+		appendUnique("texture");
+		appendUnique("fanart");
+		break;;
 
 	case ArtSlot::VideoFallback:
 		appendUnique(preferred);
@@ -387,6 +427,10 @@ std::string FileData::getArtPathForSlot(ArtSlot slot) const
 
 	case ArtSlot::Grid:
 		preferred = getNormalizedSourceSetting("GridImageSource", "auto");
+		break;
+
+	case ArtSlot::Carousel:
+		preferred = "auto";
 		break;
 
 	case ArtSlot::VideoFallback:
@@ -432,6 +476,51 @@ const std::string FileData::getImagePath() const
 const std::string FileData::getGridImagePath() const
 {
 	return getArtPathForSlot(ArtSlot::Grid);
+}
+
+const std::string FileData::getCarouselImagePath() const
+{
+	return getCarouselImagePath("auto");
+}
+
+const std::string FileData::getCarouselImagePath(const std::string& preferredType) const
+{
+	std::string preferred = Utils::String::toLower(preferredType);
+
+	if (preferred.empty())
+		preferred = "auto";
+
+	if (preferred == "cover")
+		preferred = "boxart";
+
+	if (preferred != "auto" &&
+		preferred != "image" &&
+		preferred != "thumbnail" &&
+		preferred != "marquee" &&
+		preferred != "boxart" &&
+		preferred != "screenshot" &&
+		preferred != "wheel" &&
+		preferred != "texture" &&
+		preferred != "fanart" &&
+		preferred != "none")
+	{
+		LOG(LogWarning) << "Unknown carousel image source \"" << preferred << "\". Using auto.";
+		preferred = "auto";
+	}
+
+	std::vector<std::string> order = getFallbackOrderForSlot(ArtSlot::Carousel, preferred);
+
+	for (auto it = order.cbegin(); it != order.cend(); ++it)
+	{
+		if (*it == "auto")
+			continue;
+
+		std::string out = getArtBySource(*it);
+		if (!out.empty())
+			return out;
+	}
+
+	return "";
 }
 
 const std::string FileData::getVideoFallbackPath() const
