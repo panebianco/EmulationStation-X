@@ -16,6 +16,7 @@
 #include <cmath>
 #include <functional>
 #include <memory>
+#include <string>
 #include <type_traits>
 #include <vector>
 
@@ -214,12 +215,14 @@ private:
 	// ES-X: tarjetas y texto controlado del carrusel.
 	unsigned int mCarouselItemColor;
 	unsigned int mCarouselSelectedItemColor;
+	bool mCarouselShowText;
 	int mCarouselTextMaxLines;
 
 	// ES-X: imagen interna de tarjeta en modo carrusel.
 	bool mCarouselImage;
 	std::string mCarouselImageType;
 	std::string mCarouselImageFit;
+	std::string mCarouselFallbackImage;
 	Vector2f mCarouselImagePadding;
 
 	ImageComponent mSelectorImage;
@@ -276,11 +279,13 @@ TextListComponent<T>::TextListComponent(Window* window) :
 
 	mCarouselItemColor = 0x00000088;
 	mCarouselSelectedItemColor = 0x101020CC;
+	mCarouselShowText = true;
 	mCarouselTextMaxLines = 2;
 
 	mCarouselImage = false;
 	mCarouselImageType = "auto";
 	mCarouselImageFit = "contain";
+	mCarouselFallbackImage = "";
 	mCarouselImagePadding = Vector2f(0.04f, 0.04f);
 }
 
@@ -601,15 +606,97 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			bgColor);
 
 		// ES-X:
+		// En carouselMode el texto funciona como capa base tipo "index".
+		// Primero se dibuja el nombre del juego y después la imagen/fallback encima.
+		// Si no hay imagen ni fallback, el texto queda visible automáticamente.
+		{
+			unsigned int textColor;
+			if (visuallyCentered && mSelectedColor)
+				textColor = mSelectedColor;
+			else
+				textColor = mColors[entry.data.colorId];
+
+			textColor = applyOpacity(textColor, opacity01);
+
+			std::string displayName = mUppercase ? Utils::String::toUpper(entry.name) : entry.name;
+
+			if (mShowRowNumbers)
+				displayName = std::to_string(realIndex + 1) + ". " + displayName;
+
+			const float maxTextWidth = itemWidth * 0.86f;
+			std::vector<std::string> lines = makeLines(displayName, maxTextWidth, mCarouselTextMaxLines);
+
+			const float lineGap = baseTextHeight * 0.15f;
+			const float totalTextHeight =
+				(lines.size() * baseTextHeight) +
+				(lines.size() > 1 ? ((lines.size() - 1) * lineGap) : 0.0f);
+
+			float y = -(totalTextHeight * 0.5f);
+
+			if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
+				y = -(itemHeight * 0.5f) + (itemHeight * 0.08f);
+			else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
+				y = (itemHeight * 0.5f) - totalTextHeight - (itemHeight * 0.08f);
+
+			for (size_t line = 0; line < lines.size(); line++)
+			{
+				TextCache* cache = font->buildTextCache(lines[line], 0, 0, 0x000000FF);
+				cache->setColor(textColor);
+
+				float textX = -(cache->metrics.size.x() * 0.5f);
+
+				if (mCarouselLogoAlignment == CAROUSEL_ALIGN_LEFT || mAlignment == ALIGN_LEFT)
+					textX = -(itemWidth * 0.5f) + (itemWidth * 0.06f);
+				else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT || mAlignment == ALIGN_RIGHT)
+					textX = (itemWidth * 0.5f) - cache->metrics.size.x() - (itemWidth * 0.06f);
+
+				Transform4x4f drawTrans = trans;
+
+				drawTrans.translate(Vector3f(
+					drawX + (scaledW * 0.5f),
+					drawY + (scaledH * 0.5f),
+					0.0f));
+
+				drawTrans.scale(Vector3f(scale, scale, 1.0f));
+				drawTrans.translate(Vector3f(textX, y, 0.0f));
+
+				Renderer::setMatrix(drawTrans);
+				font->renderTextCache(cache);
+				delete cache;
+
+				y += baseTextHeight + lineGap;
+			}
+		}
+
+		// ES-X:
 		// Imagen interna de tarjeta.
-		// Usa FileData::getGridImagePath() cuando el textlist contiene juegos.
 		// La imagen vive dentro de la tarjeta ya escalada por logoScale.
+		// Si no hay arte real, puede usarse un icono fallback definido por tema.
 		std::string imagePath;
+		bool hasRealImage = false;
+		bool hasFallbackImage = false;
 
 		if (mCarouselImage)
+		{
 			imagePath = TextListCarouselArt::getImagePath(entry.object, mCarouselImageType);
 
-		if (mCarouselImage && !imagePath.empty())
+			if (!imagePath.empty())
+			{
+				hasRealImage = true;
+			}
+			else if (!mCarouselFallbackImage.empty())
+			{
+				imagePath = mCarouselFallbackImage;
+				hasFallbackImage = true;
+			}
+		}
+
+		const bool hasAnyCarouselImage = hasRealImage || hasFallbackImage;
+
+		// ES-X:
+		// La imagen real o fallback se dibuja encima del texto.
+		// Esto hace que, si existe arte, el texto quede oculto detrás de forma natural.
+		if (mCarouselImage && hasAnyCarouselImage && !imagePath.empty())
 		{
 			if (!entry.data.carouselImage)
 				entry.data.carouselImage = std::shared_ptr<ImageComponent>(new ImageComponent(this->mWindow, false, true));
@@ -626,82 +713,41 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			const float imageW = Math::max(1.0f, scaledW - (padX * 2.0f));
 			const float imageH = Math::max(1.0f, scaledH - (padY * 2.0f));
 
-			entry.data.carouselImage->uncrop();
+						entry.data.carouselImage->uncrop();
 
-			if (mCarouselImageFit == "cover")
-				entry.data.carouselImage->setMinSize(imageW, imageH);
-			else if (mCarouselImageFit == "stretch")
+			float imagePosX = drawX + (scaledW * 0.5f);
+			float imagePosY = drawY + (scaledH * 0.5f);
+
+			// ES-X:
+			// Si es fallback, tratarlo como placeholder completo de tarjeta.
+			// No usamos setMaxSize(), porque no siempre agranda imágenes pequeñas.
+			// Tampoco lo reducimos a cuadrado, porque el fallback puede ser una placa
+			// diseñada por el tema.
+			if (hasFallbackImage)
+			{
 				entry.data.carouselImage->setResize(imageW, imageH);
+			}
+			else if (mCarouselImageFit == "cover")
+			{
+				entry.data.carouselImage->setMinSize(imageW, imageH);
+			}
+			else if (mCarouselImageFit == "stretch")
+			{
+				entry.data.carouselImage->setResize(imageW, imageH);
+			}
 			else
+			{
 				entry.data.carouselImage->setMaxSize(imageW, imageH);
+			}
 
 			entry.data.carouselImage->setOrigin(0.5f, 0.5f);
 			entry.data.carouselImage->setPosition(
-				drawX + (scaledW * 0.5f),
-				drawY + (scaledH * 0.5f),
+				imagePosX,
+				imagePosY,
 				0.0f);
 
 			entry.data.carouselImage->setOpacity((unsigned char)(opacity01 * 255.0f));
 			entry.data.carouselImage->render(trans);
-		}
-
-		unsigned int textColor;
-		if (visuallyCentered && mSelectedColor)
-			textColor = mSelectedColor;
-		else
-			textColor = mColors[entry.data.colorId];
-
-		textColor = applyOpacity(textColor, opacity01);
-
-		std::string displayName = mUppercase ? Utils::String::toUpper(entry.name) : entry.name;
-
-		if (mShowRowNumbers)
-			displayName = std::to_string(realIndex + 1) + ". " + displayName;
-
-		const float maxTextWidth = itemWidth * 0.86f;
-		std::vector<std::string> lines = makeLines(displayName, maxTextWidth, mCarouselTextMaxLines);
-
-		const float lineGap = baseTextHeight * 0.15f;
-		const float totalTextHeight =
-			(lines.size() * baseTextHeight) +
-			(lines.size() > 1 ? ((lines.size() - 1) * lineGap) : 0.0f);
-
-		float y = -(totalTextHeight * 0.5f);
-
-		if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
-			y = -(itemHeight * 0.5f) + (itemHeight * 0.08f);
-		else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
-			y = (itemHeight * 0.5f) - totalTextHeight - (itemHeight * 0.08f);
-
-		for (size_t line = 0; line < lines.size(); line++)
-		{
-			TextCache* cache = font->buildTextCache(lines[line], 0, 0, 0x000000FF);
-			cache->setColor(textColor);
-
-			float textX = -(cache->metrics.size.x() * 0.5f);
-
-			if (mCarouselLogoAlignment == CAROUSEL_ALIGN_LEFT || mAlignment == ALIGN_LEFT)
-				textX = -(itemWidth * 0.5f) + (itemWidth * 0.06f);
-			else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT || mAlignment == ALIGN_RIGHT)
-				textX = (itemWidth * 0.5f) - cache->metrics.size.x() - (itemWidth * 0.06f);
-
-			Transform4x4f drawTrans = trans;
-
-			// ES-X:
-			// El texto se dibuja relativo al centro visual real de la tarjeta ya anclada.
-			drawTrans.translate(Vector3f(
-				drawX + (scaledW * 0.5f),
-				drawY + (scaledH * 0.5f),
-				0.0f));
-
-			drawTrans.scale(Vector3f(scale, scale, 1.0f));
-			drawTrans.translate(Vector3f(textX, y, 0.0f));
-
-			Renderer::setMatrix(drawTrans);
-			font->renderTextCache(cache);
-			delete cache;
-
-			y += baseTextHeight + lineGap;
 		}
 	};
 
@@ -1183,44 +1229,48 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 
 	// ES-X:
 	// Por defecto, si carouselMode está activo, intenta mostrar imagen interna.
-	// Si no hay imagen disponible, sigue mostrando solo tarjeta/texto.
-mCarouselImage = mCarouselMode;
-mCarouselImageType = "auto";
-mCarouselImageFit = "contain";
-mCarouselImagePadding = Vector2f(0.04f, 0.04f);
+	// El texto se dibuja como capa base y la imagen/fallback encima.
+	mCarouselImage = mCarouselMode;
+	mCarouselImageType = "auto";
+	mCarouselImageFit = "contain";
+	mCarouselFallbackImage = "";
+	mCarouselImagePadding = Vector2f(0.04f, 0.04f);
 
-if (elem->has("carouselImage"))
-	mCarouselImage = elem->get<bool>("carouselImage");
+	if (elem->has("carouselImage"))
+		mCarouselImage = elem->get<bool>("carouselImage");
 
-if (elem->has("carouselImageType"))
-{
-	mCarouselImageType = Utils::String::toLower(elem->get<std::string>("carouselImageType"));
-
-	if (mCarouselImageType != "auto" &&
-		mCarouselImageType != "image" &&
-		mCarouselImageType != "thumbnail" &&
-		mCarouselImageType != "marquee" &&
-		mCarouselImageType != "cover" &&
-		mCarouselImageType != "boxart" &&
-		mCarouselImageType != "screenshot" &&
-		mCarouselImageType != "wheel" &&
-		mCarouselImageType != "texture" &&
-		mCarouselImageType != "fanart" &&
-		mCarouselImageType != "none")
+	if (elem->has("carouselImageType"))
 	{
-		LOG(LogWarning) << "Unknown carouselImageType \"" << mCarouselImageType << "\"! Using auto.";
-		mCarouselImageType = "auto";
+		mCarouselImageType = Utils::String::toLower(elem->get<std::string>("carouselImageType"));
+
+		if (mCarouselImageType != "auto" &&
+			mCarouselImageType != "image" &&
+			mCarouselImageType != "thumbnail" &&
+			mCarouselImageType != "marquee" &&
+			mCarouselImageType != "cover" &&
+			mCarouselImageType != "boxart" &&
+			mCarouselImageType != "screenshot" &&
+			mCarouselImageType != "wheel" &&
+			mCarouselImageType != "texture" &&
+			mCarouselImageType != "fanart" &&
+			mCarouselImageType != "none")
+		{
+			LOG(LogWarning) << "Unknown carouselImageType \"" << mCarouselImageType << "\"! Using auto.";
+			mCarouselImageType = "auto";
+		}
 	}
-}
 
-if (mCarouselImageType == "none")
-	mCarouselImage = false;
+	if (mCarouselImageType == "none")
+		mCarouselImage = false;
 
-if (elem->has("carouselImageFit"))
-	mCarouselImageFit = Utils::String::toLower(elem->get<std::string>("carouselImageFit"));
+	if (elem->has("carouselImageFit"))
+		mCarouselImageFit = Utils::String::toLower(elem->get<std::string>("carouselImageFit"));
 
-if (elem->has("carouselImagePadding"))
-	mCarouselImagePadding = elem->get<Vector2f>("carouselImagePadding");
+	if (elem->has("carouselFallbackImage"))
+		mCarouselFallbackImage = elem->get<std::string>("carouselFallbackImage");
+
+	if (elem->has("carouselImagePadding"))
+		mCarouselImagePadding = elem->get<Vector2f>("carouselImagePadding");
 
 	// ES-X:
 	// Base estándar del modo carrusel.
@@ -1348,6 +1398,13 @@ if (elem->has("carouselImagePadding"))
 	mCarouselSelectedItemColor = 0x101020CC;
 	if (elem->has("carouselSelectedItemColor"))
 		mCarouselSelectedItemColor = elem->get<unsigned int>("carouselSelectedItemColor");
+
+	// ES-X:
+	// Se mantiene por compatibilidad con temas existentes,
+	// pero en carouselMode el texto ya se dibuja como capa base.
+	mCarouselShowText = true;
+	if (elem->has("carouselShowText"))
+		mCarouselShowText = elem->get<bool>("carouselShowText");
 
 	mCarouselTextMaxLines = 2;
 	if (elem->has("carouselTextMaxLines"))

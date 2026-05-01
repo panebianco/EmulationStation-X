@@ -117,6 +117,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "fontPath", PATH },
 	{ "fontSize", RESOLUTION_FLOAT },
 	{ "scrollSound", PATH },
+	{ "carouselFallbackImage", PATH },
 	{ "alignment", STRING },
 
 	// IMPORTANTE:
