@@ -526,7 +526,11 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		float distance = (float)virtualPos - mCarouselCamOffset;
 		float absDistance = distance < 0.0f ? -distance : distance;
 
-		float influence = Math::max(0.0f, 1.0f - absDistance);
+		// ES-X:
+		// Influencia un poco más amplia para que los vecinos preparen
+		// la escala antes de llegar exactamente al centro.
+		float influenceRange = 1.35f;
+		float influence = Math::max(0.0f, 1.0f - (absDistance / influenceRange));
 
 		float scale = 1.0f + ((mCarouselLogoScale - 1.0f) * influence);
 		if (scale < 0.1f)
@@ -577,7 +581,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
 			drawY = itemAnchorY - scaledH;
 
-		const bool visuallyCentered = (influence > 0.001f);
+		const bool visuallyCentered = (absDistance < 0.5f);
 
 		unsigned int bgColor = visuallyCentered ? mCarouselSelectedItemColor : mCarouselItemColor;
 		bgColor = applyOpacity(bgColor, opacity01);
@@ -591,6 +595,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			bgColor,
 			bgColor);
 
+		if (mCarouselShowText)
 		{
 			unsigned int textColor;
 			if (visuallyCentered && mSelectedColor)
@@ -682,39 +687,56 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				entry.data.carouselImage->setImage(imagePath);
 			}
 
-			const float padX = scaledW * mCarouselImagePadding.x();
-			const float padY = scaledH * mCarouselImagePadding.y();
+			// ES-X:
+			// La imagen interna se prepara al tamaño máximo posible,
+			// como en ES-DE. El tamaño visual se controla luego por transform.
+			// Esto evita que algunas imágenes queden mal hasta pasar por el centro.
+			const float maxScale = Math::max(1.0f, mCarouselLogoScale);
 
-			const float imageW = Math::max(1.0f, scaledW - (padX * 2.0f));
-			const float imageH = Math::max(1.0f, scaledH - (padY * 2.0f));
+			const float maxW = itemWidth * maxScale;
+			const float maxH = itemHeight * maxScale;
+
+			const float maxPadX = maxW * mCarouselImagePadding.x();
+			const float maxPadY = maxH * mCarouselImagePadding.y();
+
+			const float maxImageW = Math::max(1.0f, maxW - (maxPadX * 2.0f));
+			const float maxImageH = Math::max(1.0f, maxH - (maxPadY * 2.0f));
+
+			// Clip actual, según el tamaño visible de la tarjeta.
+			const float currentPadX = scaledW * mCarouselImagePadding.x();
+			const float currentPadY = scaledH * mCarouselImagePadding.y();
+
+			const float currentImageW = Math::max(1.0f, scaledW - (currentPadX * 2.0f));
+			const float currentImageH = Math::max(1.0f, scaledH - (currentPadY * 2.0f));
 
 			entry.data.carouselImage->uncrop();
 
-			float imagePosX = drawX + (scaledW * 0.5f);
-			float imagePosY = drawY + (scaledH * 0.5f);
+			// ES-X:
+// Redondeo suave para evitar vibración subpixel en algunas imágenes
+// durante la animación del carrusel.
+float imagePosX = std::round(drawX + (scaledW * 0.5f));
+float imagePosY = std::round(drawY + (scaledH * 0.5f));
 
 			// ES-X:
-			// Las imágenes reales obedecen carouselImageFit.
-			// La imagen fallback se trata como ícono cuadrado estable.
-			// Esto evita que algunos PNG fallback se achiquen progresivamente
-			// al pasar repetidas veces por el centro del carrusel.
-			if (hasFallbackImage)
-			{
-				const float fallbackSide = Math::min(imageW, imageH);
-				entry.data.carouselImage->setResize(fallbackSide, fallbackSide);
-			}
-			else if (mCarouselImageFit == "cover")
-			{
-				entry.data.carouselImage->setMinSize(imageW, imageH);
-			}
-			else if (mCarouselImageFit == "stretch")
-			{
-				entry.data.carouselImage->setResize(imageW, imageH);
-			}
-			else
-			{
-				entry.data.carouselImage->setMaxSize(imageW, imageH);
-			}
+// Variante anti-temblor: usar tamaño visible actual.
+// Es menos "ES-DE puro", pero evita la escala extra de matriz.
+if (hasFallbackImage)
+{
+	const float fallbackSide = Math::min(currentImageW, currentImageH);
+	entry.data.carouselImage->setResize(fallbackSide, fallbackSide);
+}
+else if (mCarouselImageFit == "cover")
+{
+	entry.data.carouselImage->setMinSize(currentImageW, currentImageH);
+}
+else if (mCarouselImageFit == "stretch")
+{
+	entry.data.carouselImage->setResize(currentImageW, currentImageH);
+}
+else
+{
+	entry.data.carouselImage->setMaxSize(currentImageW, currentImageH);
+}
 
 			entry.data.carouselImage->setOrigin(0.5f, 0.5f);
 			entry.data.carouselImage->setPosition(
@@ -723,7 +745,26 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				0.0f);
 
 			entry.data.carouselImage->setOpacity((unsigned char)(opacity01 * 255.0f));
-			entry.data.carouselImage->render(trans);
+
+			// ES-X:
+			// Render con escala visual alrededor del centro de la imagen.
+			// La imagen está preparada al tamaño máximo, pero se ve chica/grande
+			// según la posición actual del carrusel.
+		Transform4x4f imageTrans = trans;
+
+			Vector3f clipPos(drawX + currentPadX, drawY + currentPadY, 0.0f);
+Vector3f clipSize(currentImageW, currentImageH, 0.0f);
+
+clipPos = trans * clipPos;
+clipSize = trans * clipSize - trans.translation();
+
+Renderer::pushClipRect(
+	Vector2i((int)std::round(clipPos.x()), (int)std::round(clipPos.y())),
+	Vector2i((int)std::round(clipSize.x()), (int)std::round(clipSize.y())));
+
+			entry.data.carouselImage->render(imageTrans);
+
+			Renderer::popClipRect();
 		}
 	};
 
@@ -1225,6 +1266,14 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 
 	if (elem->has("carouselImageFit"))
 		mCarouselImageFit = Utils::String::toLower(elem->get<std::string>("carouselImageFit"));
+
+	if (mCarouselImageFit != "contain" &&
+		mCarouselImageFit != "cover" &&
+		mCarouselImageFit != "stretch")
+	{
+		LOG(LogWarning) << "Unknown carouselImageFit \"" << mCarouselImageFit << "\"! Using contain.";
+		mCarouselImageFit = "contain";
+	}
 
 	if (elem->has("carouselFallbackImage"))
 		mCarouselFallbackImage = elem->get<std::string>("carouselFallbackImage");
