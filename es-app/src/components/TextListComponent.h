@@ -346,11 +346,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 	const float centerX = (mSize.x() * 0.5f) + mCarouselLogoOffsetX;
 
-	// ES-X:
-	// Línea base vertical del carrusel.
-	// center = el item se centra dentro del rectángulo.
-	// top    = el item nace desde arriba y crece hacia abajo.
-	// bottom = el item nace desde abajo y crece hacia arriba.
 	float anchorY = (mSize.y() * 0.5f) + mSelectorOffsetY + mCarouselLogoOffsetY;
 
 	if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
@@ -515,9 +510,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		return lines;
 	};
 
-	// ES-X:
-	// El elemento que se dibuja encima debe ser el centro visual del carrusel,
-	// no necesariamente el cursor lógico.
 	int activeVirtualPos = visualCenter;
 
 	if (getRealIndex(activeVirtualPos) < 0)
@@ -551,7 +543,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		float itemAnchorX = centerX + (distance * spacing);
 		float itemAnchorY = anchorY;
 
-		// Separación dinámica alrededor del centro.
 		if (mCarouselScaledLogoSpacing != 0.0f && absDistance > 0.001f)
 		{
 			float pushInfluence = Math::min(absDistance, 1.0f);
@@ -569,7 +560,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				itemAnchorX += logoDiffX;
 		}
 
-		// Offset del seleccionado por cercanía visual al centro.
 		if (influence > 0.001f)
 		{
 			itemAnchorX += mCarouselSelectedLogoOffsetX * influence;
@@ -579,10 +569,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		const float scaledW = itemWidth * scale;
 		const float scaledH = itemHeight * scale;
 
-		// ES-X:
-		// drawX/drawY representan la esquina superior izquierda real de la tarjeta.
-		// Esto hace que logoAlignment=top/bottom afecte la tarjeta completa,
-		// no solamente el texto.
 		float drawX = itemAnchorX - (scaledW * 0.5f);
 		float drawY = itemAnchorY - (scaledH * 0.5f);
 
@@ -605,10 +591,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			bgColor,
 			bgColor);
 
-		// ES-X:
-		// En carouselMode el texto funciona como capa base tipo "index".
-		// Primero se dibuja el nombre del juego y después la imagen/fallback encima.
-		// Si no hay imagen ni fallback, el texto queda visible automáticamente.
 		{
 			unsigned int textColor;
 			if (visuallyCentered && mSelectedColor)
@@ -668,10 +650,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			}
 		}
 
-		// ES-X:
-		// Imagen interna de tarjeta.
-		// La imagen vive dentro de la tarjeta ya escalada por logoScale.
-		// Si no hay arte real, puede usarse un icono fallback definido por tema.
 		std::string imagePath;
 		bool hasRealImage = false;
 		bool hasFallbackImage = false;
@@ -693,9 +671,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 		const bool hasAnyCarouselImage = hasRealImage || hasFallbackImage;
 
-		// ES-X:
-		// La imagen real o fallback se dibuja encima del texto.
-		// Esto hace que, si existe arte, el texto quede oculto detrás de forma natural.
 		if (mCarouselImage && hasAnyCarouselImage && !imagePath.empty())
 		{
 			if (!entry.data.carouselImage)
@@ -713,19 +688,20 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			const float imageW = Math::max(1.0f, scaledW - (padX * 2.0f));
 			const float imageH = Math::max(1.0f, scaledH - (padY * 2.0f));
 
-						entry.data.carouselImage->uncrop();
+			entry.data.carouselImage->uncrop();
 
 			float imagePosX = drawX + (scaledW * 0.5f);
 			float imagePosY = drawY + (scaledH * 0.5f);
 
 			// ES-X:
-			// Si es fallback, tratarlo como placeholder completo de tarjeta.
-			// No usamos setMaxSize(), porque no siempre agranda imágenes pequeñas.
-			// Tampoco lo reducimos a cuadrado, porque el fallback puede ser una placa
-			// diseñada por el tema.
+			// Las imágenes reales obedecen carouselImageFit.
+			// La imagen fallback se trata como ícono cuadrado estable.
+			// Esto evita que algunos PNG fallback se achiquen progresivamente
+			// al pasar repetidas veces por el centro del carrusel.
 			if (hasFallbackImage)
 			{
-				entry.data.carouselImage->setResize(imageW, imageH);
+				const float fallbackSide = Math::min(imageW, imageH);
+				entry.data.carouselImage->setResize(fallbackSide, fallbackSide);
 			}
 			else if (mCarouselImageFit == "cover")
 			{
@@ -759,7 +735,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		renderEntry(virtualPos, false);
 	}
 
-	// El elemento visualmente central se dibuja al final para quedar encima.
 	if (getRealIndex(activeVirtualPos) >= 0)
 		renderEntry(activeVirtualPos, true);
 
@@ -956,10 +931,6 @@ bool TextListComponent<T>::input(InputConfig* config, Input input)
 	const bool horizontalCarouselMode =
 		(mCarouselMode && mOrientation == ORIENTATION_HORIZONTAL);
 
-	// ES-X:
-	// En modo carrusel horizontal, L/R shoulder NO deben mover la lista.
-	// Esto permite que L/R sigan quedando libres para cambiar sistemas
-	// desde BasicGameListView/ViewController.
 	bool isPageStep = !horizontalCarouselMode &&
 		(config->isMappedLike("rightshoulder", input) ||
 		 config->isMappedLike("leftshoulder", input));
@@ -1002,8 +973,6 @@ void TextListComponent<T>::update(int deltaTime)
 {
 	listUpdate(deltaTime);
 
-	// La cámara del carrusel se anima desde onCursorChanged().
-	// Si no está en modo carrusel, se sincroniza directo con el cursor.
 	if ((!mCarouselMode || mOrientation != ORIENTATION_HORIZONTAL) && size() > 0)
 		mCarouselCamOffset = (float)mCursor;
 
@@ -1080,7 +1049,6 @@ void TextListComponent<T>::onCursorChanged(const CursorState& state)
 			{
 				float dist = std::fabs(endPos - startPos);
 
-				// Buscar el camino más corto, como hace el carrusel real.
 				if (std::fabs(target + posMax - startPos) < dist)
 					endPos = target + posMax;
 
@@ -1093,7 +1061,6 @@ void TextListComponent<T>::onCursorChanged(const CursorState& state)
 			Animation* anim = new LambdaAnimation(
 				[this, startPos, endPos, posMax](float t)
 				{
-					// Easing parecido al usado por carruseles reales.
 					t = 1.0f - (1.0f - t) * (1.0f - t);
 
 					float f = (endPos * t) + (startPos * (1.0f - t));
@@ -1200,10 +1167,6 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 		}
 	}
 
-	// ES-X:
-	// orientation gobierna el control real del textlist.
-	// No usar <type> aquí, porque <type> pertenece al lenguaje de carousel
-	// y puede mezclarse con la navegación izquierda/derecha del gamelist.
 	if (elem->has("orientation"))
 	{
 		const std::string& str = elem->get<std::string>("orientation");
@@ -1227,9 +1190,6 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	if (elem->has("carouselMode"))
 		mCarouselMode = elem->get<bool>("carouselMode");
 
-	// ES-X:
-	// Por defecto, si carouselMode está activo, intenta mostrar imagen interna.
-	// El texto se dibuja como capa base y la imagen/fallback encima.
 	mCarouselImage = mCarouselMode;
 	mCarouselImageType = "auto";
 	mCarouselImageFit = "contain";
@@ -1272,10 +1232,6 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	if (elem->has("carouselImagePadding"))
 		mCarouselImagePadding = elem->get<Vector2f>("carouselImagePadding");
 
-	// ES-X:
-	// Base estándar del modo carrusel.
-	// Primero se crea una estructura usable por defecto; luego el tema
-	// puede pisar cada valor con sus propias propiedades.
 	mCarouselLoop = false;
 	mCarouselMaxLogoCount = 5;
 	mCarouselLogoScale = 1.20f;
@@ -1286,9 +1242,6 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 
 	if (mCarouselMode)
 	{
-		// Preset base tipo tarjeta/portada.
-		// Con un textlist de size 1.00 x 0.32 y logoScale 1.30,
-		// la tarjeta central queda cerca de 0.172 x 0.305 de pantalla.
 		mCarouselLoop = true;
 		mCarouselMaxLogoCount = 9;
 		mCarouselLogoScale = 1.30f;
@@ -1329,20 +1282,15 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	if (elem->has("logoSpacingY"))
 		mCarouselLogoSpacingY = elem->get<float>("logoSpacingY") * mSize.y();
 
-	// ES-X:
-	// Si el tema define logoSize, pisa el preset base.
 	if (elem->has("logoSize"))
 	{
 		Vector2f logoSize = elem->get<Vector2f>("logoSize");
 
-		// Igual que SystemView: el tamaño vive dentro del rectángulo del carrusel/textlist.
 		mCarouselLogoSize = Vector2f(
 			logoSize.x() * mSize.x(),
 			logoSize.y() * mSize.y());
 	}
 
-	// ES-X:
-	// Si el tema define logoAlignment, pisa el preset base.
 	if (elem->has("logoAlignment"))
 	{
 		const std::string& str = elem->get<std::string>("logoAlignment");
@@ -1399,9 +1347,6 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	if (elem->has("carouselSelectedItemColor"))
 		mCarouselSelectedItemColor = elem->get<unsigned int>("carouselSelectedItemColor");
 
-	// ES-X:
-	// Se mantiene por compatibilidad con temas existentes,
-	// pero en carouselMode el texto ya se dibuja como capa base.
 	mCarouselShowText = true;
 	if (elem->has("carouselShowText"))
 		mCarouselShowText = elem->get<bool>("carouselShowText");
@@ -1473,10 +1418,6 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 		mSelectorImage.setImage("");
 	}
 
-	// ES-X:
-	// Mantener la cámara visual sincronizada al aplicar tema.
-	// Evita que al entrar a la vista el carrusel aparezca desplazado
-	// hasta recibir el primer input.
 	if (size() > 0)
 		mCarouselCamOffset = (float)mCursor;
 }
