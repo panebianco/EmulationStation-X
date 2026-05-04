@@ -225,6 +225,10 @@ private:
 	std::string mCarouselFallbackImage;
 	Vector2f mCarouselImagePadding;
 
+	// ES-X: caja fija opcional para blindar artes raros del scraper.
+	bool mCarouselImageLockSize;
+	Vector2f mCarouselImageBoxSize;
+
 	ImageComponent mSelectorImage;
 };
 
@@ -287,6 +291,9 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mCarouselImageFit = "contain";
 	mCarouselFallbackImage = "";
 	mCarouselImagePadding = Vector2f(0.04f, 0.04f);
+
+	mCarouselImageLockSize = false;
+	mCarouselImageBoxSize = Vector2f::Zero();
 }
 
 template <typename T>
@@ -690,11 +697,24 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				entry.data.carouselImage->setImage(imagePath);
 			}
 
-			const float currentPadX = scaledW * mCarouselImagePadding.x();
-			const float currentPadY = scaledH * mCarouselImagePadding.y();
+			float currentPadX = scaledW * mCarouselImagePadding.x();
+			float currentPadY = scaledH * mCarouselImagePadding.y();
 
-			const float currentImageW = Math::max(1.0f, scaledW - (currentPadX * 2.0f));
-			const float currentImageH = Math::max(1.0f, scaledH - (currentPadY * 2.0f));
+			float currentImageW = Math::max(1.0f, scaledW - (currentPadX * 2.0f));
+			float currentImageH = Math::max(1.0f, scaledH - (currentPadY * 2.0f));
+
+			// ES-X:
+			// Caja fija opcional para artes problemáticos.
+			// Con esto el tema define una caja estable para la imagen interna.
+			// La tarjeta puede seguir escalando, pero el arte deja de mandar por proporciones raras.
+			if (mCarouselImageLockSize && mCarouselImageBoxSize.x() > 1.0f && mCarouselImageBoxSize.y() > 1.0f)
+			{
+				currentImageW = Math::max(1.0f, mCarouselImageBoxSize.x() * scale);
+				currentImageH = Math::max(1.0f, mCarouselImageBoxSize.y() * scale);
+
+				currentPadX = 0.0f;
+				currentPadY = 0.0f;
+			}
 
 			entry.data.carouselImage->uncrop();
 
@@ -1220,6 +1240,9 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 	mCarouselFallbackImage = "";
 	mCarouselImagePadding = Vector2f(0.04f, 0.04f);
 
+	mCarouselImageLockSize = false;
+	mCarouselImageBoxSize = Vector2f::Zero();
+
 	if (elem->has("carouselImage"))
 		mCarouselImage = elem->get<bool>("carouselImage");
 
@@ -1263,6 +1286,18 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 
 	if (elem->has("carouselImagePadding"))
 		mCarouselImagePadding = elem->get<Vector2f>("carouselImagePadding");
+
+	if (elem->has("carouselImageLockSize"))
+		mCarouselImageLockSize = elem->get<bool>("carouselImageLockSize");
+
+	if (elem->has("carouselImageBoxSize"))
+	{
+		Vector2f boxSize = elem->get<Vector2f>("carouselImageBoxSize");
+
+		mCarouselImageBoxSize = Vector2f(
+			boxSize.x() * mSize.x(),
+			boxSize.y() * mSize.y());
+	}
 
 	mCarouselLoop = false;
 	mCarouselMaxLogoCount = 5;

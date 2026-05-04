@@ -119,6 +119,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "scrollSound", PATH },
 	{ "carouselFallbackImage", PATH },
 	{ "alignment", STRING },
+	
 
 	// IMPORTANTE:
 	// orientation queda como control real del textlist.
@@ -133,12 +134,18 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "logoScale", FLOAT },
 	{ "minLogoOpacity", FLOAT },
 	{ "scaledLogoSpacing", FLOAT },
+	
 
 	// ES-X: imagen interna de tarjeta en modo carrusel
 	{ "carouselImage", BOOLEAN },
 	{ "carouselImageType", STRING },
 	{ "carouselImageFit", STRING },
 	{ "carouselImagePadding", NORMALIZED_PAIR },
+	
+	// ES-X: caja fija opcional para blindar artes raros del scraper
+	{ "carouselImageLockSize", BOOLEAN },
+	{ "carouselImageBoxSize", NORMALIZED_PAIR },
+	
 	{ "carouselShowText", BOOLEAN },
 
 	// ES-X: tamaño/alineación estilo systemcarousel
@@ -165,6 +172,8 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "lineSpacing", FLOAT },
 	{ "showRowNumbers", BOOLEAN },
 	{ "zIndex", FLOAT } } },
+	
+	
 
 
 	{ "container", {
