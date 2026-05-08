@@ -111,6 +111,12 @@ public:
 		return mCarouselMode && mOrientation == ORIENTATION_HORIZONTAL;
 	}
 
+	inline bool isCarouselMode() const
+	{
+		return mCarouselMode &&
+			(mOrientation == ORIENTATION_HORIZONTAL || mOrientation == ORIENTATION_VERTICAL);
+	}
+
 	inline void setCursorChangedCallback(const std::function<void(CursorState state)>& func) { mCursorChangedCallback = func; }
 
 	inline void setFont(const std::shared_ptr<Font>& font)
@@ -166,6 +172,10 @@ private:
 	float mHorizontalMargin;
 
 	int viewportTop();
+
+	// ES-X:
+	// Aunque conserva el nombre histórico, esta función ahora renderiza carrusel
+	// horizontal o vertical según mOrientation.
 	void renderHorizontalCarousel(const Transform4x4f& trans);
 
 	std::function<void(CursorState state)> mCursorChangedCallback;
@@ -189,6 +199,12 @@ private:
 	float mSelectorHorizontalOffset;
 	bool mTopAligned;
 	bool mShowRowNumbers;
+
+	// ES-X: fila fantasma visual tipo XMB.
+	// No altera navegación, cursor ni lista real; solo desplaza el render vertical.
+	bool mVirtualGap;
+	float mVirtualGapHeight;
+	int mVirtualGapOffset;
 
 	// ES-X: modo carrusel opcional para textlist/gamelist.
 	bool mCarouselMode;
@@ -262,6 +278,10 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mTopAligned = std::is_same<T, SystemData*>::value;
 	mShowRowNumbers = false;
 
+	mVirtualGap = false;
+	mVirtualGapHeight = 0.0f;
+	mVirtualGapOffset = 0;
+
 	mCarouselMode = false;
 	mCarouselLoop = false;
 	mCarouselMaxLogoCount = 5;
@@ -304,6 +324,8 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 	if (size() == 0)
 		return;
 
+	const bool verticalCarousel = (mOrientation == ORIENTATION_VERTICAL);
+
 	int visibleCount = mCarouselMaxLogoCount;
 	if (visibleCount < 1)
 		visibleCount = 1;
@@ -340,25 +362,29 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		itemHeight = baseTextHeight * 4.0f;
 
 	if (itemWidth <= 1.0f)
-		itemWidth = mSize.x() / 5.0f;
+		itemWidth = verticalCarousel ? (mSize.x() * 0.80f) : (mSize.x() / 5.0f);
 
 	if (itemHeight <= 1.0f)
 		itemHeight = baseTextHeight * 4.0f;
 
-	float spacing = mCarouselLogoSpacingX;
+	float spacing = verticalCarousel ? mCarouselLogoSpacingY : mCarouselLogoSpacingX;
+
 	if (spacing <= 1.0f)
-		spacing = itemWidth + mHorizontalMargin;
+		spacing = verticalCarousel ? itemHeight : (itemWidth + mHorizontalMargin);
+
 	if (spacing <= 1.0f)
-		spacing = itemWidth;
+		spacing = verticalCarousel ? itemHeight : itemWidth;
 
 	const float centerX = (mSize.x() * 0.5f) + mCarouselLogoOffsetX;
-
 	float anchorY = (mSize.y() * 0.5f) + mSelectorOffsetY + mCarouselLogoOffsetY;
 
-	if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
-		anchorY = mSelectorOffsetY + mCarouselLogoOffsetY;
-	else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
-		anchorY = mSize.y() + mSelectorOffsetY + mCarouselLogoOffsetY;
+	if (!verticalCarousel)
+	{
+		if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
+			anchorY = mSelectorOffsetY + mCarouselLogoOffsetY;
+		else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
+			anchorY = mSize.y() + mSelectorOffsetY + mCarouselLogoOffsetY;
+	}
 
 	Vector3f dim(mSize.x(), mSize.y(), 0);
 	dim = trans * dim - trans.translation();
@@ -533,9 +559,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		float distance = (float)virtualPos - mCarouselCamOffset;
 		float absDistance = distance < 0.0f ? -distance : distance;
 
-		// ES-X:
-		// Influencia de escala/opacidad limitada al tramo entre un logo y el centro.
-		// Así los vecinos exactos del logo central NO quedan levemente agrandados.
 		const float influenceRange = 1.0f;
 		float influence = Math::max(0.0f, 1.0f - (absDistance / influenceRange));
 
@@ -551,29 +574,41 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 		float opacity01 = minOpacity + ((1.0f - minOpacity) * influence);
 
-		float itemAnchorX = centerX + (distance * spacing);
+		float itemAnchorX = centerX;
 		float itemAnchorY = anchorY;
+
+		if (verticalCarousel)
+			itemAnchorY = anchorY + (distance * spacing);
+		else
+			itemAnchorX = centerX + (distance * spacing);
 
 		if (mCarouselScaledLogoSpacing != 0.0f && absDistance > 0.001f)
 		{
 			float pushInfluence = Math::min(absDistance, 1.0f);
 			float scaleBonus = Math::max(0.0f, mCarouselLogoScale - 1.0f);
 
-			float logoDiffX = spacing *
+			float logoDiff = spacing *
 				scaleBonus *
 				0.5f *
 				mCarouselScaledLogoSpacing *
 				pushInfluence;
 
-			if (distance < 0.0f)
-				itemAnchorX -= logoDiffX;
+			if (verticalCarousel)
+			{
+				if (distance < 0.0f)
+					itemAnchorY -= logoDiff;
+				else
+					itemAnchorY += logoDiff;
+			}
 			else
-				itemAnchorX += logoDiffX;
+			{
+				if (distance < 0.0f)
+					itemAnchorX -= logoDiff;
+				else
+					itemAnchorX += logoDiff;
+			}
 		}
 
-		// ES-X:
-		// El offset del seleccionado también debe seguir solo al centro real.
-		// Antes, al usar una influencia amplia, movía/alteraba los vecinos.
 		if (influence > 0.001f)
 		{
 			itemAnchorX += mCarouselSelectedLogoOffsetX * influence;
@@ -586,10 +621,24 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		float drawX = itemAnchorX - (scaledW * 0.5f);
 		float drawY = itemAnchorY - (scaledH * 0.5f);
 
-		if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
-			drawY = itemAnchorY;
-		else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
-			drawY = itemAnchorY - scaledH;
+		if (verticalCarousel)
+		{
+			if (mCarouselLogoAlignment == CAROUSEL_ALIGN_LEFT)
+				drawX = itemAnchorX;
+			else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT)
+				drawX = itemAnchorX - scaledW;
+			else
+				drawX = itemAnchorX - (scaledW * 0.5f);
+
+			drawY = itemAnchorY - (scaledH * 0.5f);
+		}
+		else
+		{
+			if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
+				drawY = itemAnchorY;
+			else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
+				drawY = itemAnchorY - scaledH;
+		}
 
 		const bool visuallyCentered = (absDistance < 0.5f);
 
@@ -630,10 +679,13 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 			float y = -(totalTextHeight * 0.5f);
 
-			if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
-				y = -(itemHeight * 0.5f) + (itemHeight * 0.08f);
-			else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
-				y = (itemHeight * 0.5f) - totalTextHeight - (itemHeight * 0.08f);
+			if (!verticalCarousel)
+			{
+				if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
+					y = -(itemHeight * 0.5f) + (itemHeight * 0.08f);
+				else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
+					y = (itemHeight * 0.5f) - totalTextHeight - (itemHeight * 0.08f);
+			}
 
 			for (size_t line = 0; line < lines.size(); line++)
 			{
@@ -703,10 +755,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			float currentImageW = Math::max(1.0f, scaledW - (currentPadX * 2.0f));
 			float currentImageH = Math::max(1.0f, scaledH - (currentPadY * 2.0f));
 
-			// ES-X:
-			// Caja fija opcional para artes problemáticos.
-			// Con esto el tema define una caja estable para la imagen interna.
-			// La tarjeta puede seguir escalando, pero el arte deja de mandar por proporciones raras.
 			if (mCarouselImageLockSize && mCarouselImageBoxSize.x() > 1.0f && mCarouselImageBoxSize.y() > 1.0f)
 			{
 				currentImageW = Math::max(1.0f, mCarouselImageBoxSize.x() * scale);
@@ -718,15 +766,9 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 			entry.data.carouselImage->uncrop();
 
-			// ES-X:
-			// Redondeo suave para evitar vibración subpixel en algunas imágenes
-			// durante la animación del carrusel.
 			float imagePosX = std::round(drawX + (scaledW * 0.5f));
 			float imagePosY = std::round(drawY + (scaledH * 0.5f));
 
-			// ES-X:
-			// Variante anti-temblor: usar tamaño visible actual.
-			// Es menos "ES-DE puro", pero evita la escala extra de matriz.
 			if (hasFallbackImage)
 			{
 				const float fallbackSide = Math::min(currentImageW, currentImageH);
@@ -799,7 +841,7 @@ void TextListComponent<T>::render(const Transform4x4f& parentTrans)
 	if (size() == 0)
 		return;
 
-	if (mOrientation == ORIENTATION_HORIZONTAL && mCarouselMode)
+	if (isCarouselMode())
 	{
 		renderHorizontalCarousel(trans);
 		return;
@@ -821,7 +863,16 @@ void TextListComponent<T>::render(const Transform4x4f& parentTrans)
 		mCursorPrev = mCursor;
 	}
 
+	const bool useVirtualGap =
+		mVirtualGap &&
+		mOrientation == ORIENTATION_VERTICAL &&
+		mVirtualGapHeight > 0.0f;
+
 	unsigned int listCutoff = mViewportTop + mViewportHeight;
+
+	if (useVirtualGap)
+		listCutoff++;
+
 	if (listCutoff > size())
 		listCutoff = size();
 
@@ -831,13 +882,33 @@ void TextListComponent<T>::render(const Transform4x4f& parentTrans)
 	else
 		y = (mSize.y() - (mViewportHeight * entrySize)) * 0.5f;
 
+	auto getVirtualGapShift = [&](int index) -> float
+	{
+		if (!useVirtualGap)
+			return 0.0f;
+
+		const int visualIndex = index - mViewportTop;
+		const int selectedVisualIndex = mCursor - mViewportTop;
+		const int gapVisualIndex = selectedVisualIndex + mVirtualGapOffset;
+
+		if (visualIndex >= gapVisualIndex)
+			return mVirtualGapHeight;
+
+		return 0.0f;
+	};
+
 	const float selectorWidth = (mSelectorWidth > 0.0f) ? mSelectorWidth : mSize.x();
+
+	const float selectorY =
+		y +
+		(mCursor - mViewportTop) * entrySize +
+		mSelectorOffsetY +
+		getVirtualGapShift(mCursor);
 
 	if (mSelectorImage.hasImage())
 	{
 		mSelectorImage.setSize(selectorWidth, mSelectorHeight);
-		mSelectorImage.setPosition(mSelectorHorizontalOffset,
-			y + (mCursor - mViewportTop) * entrySize + mSelectorOffsetY, 0.0f);
+		mSelectorImage.setPosition(mSelectorHorizontalOffset, selectorY, 0.0f);
 		mSelectorImage.render(trans);
 	}
 	else
@@ -845,7 +916,7 @@ void TextListComponent<T>::render(const Transform4x4f& parentTrans)
 		Renderer::setMatrix(trans);
 		Renderer::drawRect(
 			mSelectorHorizontalOffset,
-			y + (mCursor - mViewportTop) * entrySize + mSelectorOffsetY,
+			selectorY,
 			selectorWidth,
 			mSelectorHeight,
 			mSelectorColor,
@@ -881,7 +952,9 @@ void TextListComponent<T>::render(const Transform4x4f& parentTrans)
 
 		entry.data.textCache->setColor(color);
 
-		Vector3f offset(0, y, 0);
+		const float drawY = y + getVirtualGapShift(i);
+
+		Vector3f offset(0, drawY, 0);
 
 		switch (mAlignment)
 		{
@@ -972,10 +1045,9 @@ bool TextListComponent<T>::input(InputConfig* config, Input input)
 	else
 		isSingleStep = config->isMappedLike("down", input) || config->isMappedLike("up", input);
 
-	const bool horizontalCarouselMode =
-		(mCarouselMode && mOrientation == ORIENTATION_HORIZONTAL);
+	const bool carouselMode = isCarouselMode();
 
-	bool isPageStep = !horizontalCarouselMode &&
+	bool isPageStep = !carouselMode &&
 		(config->isMappedLike("rightshoulder", input) ||
 		 config->isMappedLike("leftshoulder", input));
 
@@ -1017,7 +1089,7 @@ void TextListComponent<T>::update(int deltaTime)
 {
 	listUpdate(deltaTime);
 
-	if ((!mCarouselMode || mOrientation != ORIENTATION_HORIZONTAL) && size() > 0)
+	if (!isCarouselMode() && size() > 0)
 		mCarouselCamOffset = (float)mCursor;
 
 	if (!isScrolling() && size() > 0)
@@ -1079,7 +1151,7 @@ void TextListComponent<T>::onCursorChanged(const CursorState& state)
 
 	if (size() > 0)
 	{
-		if (mCarouselMode && mOrientation == ORIENTATION_HORIZONTAL)
+		if (isCarouselMode())
 		{
 			float startPos = mCarouselCamOffset;
 			float posMax = (float)size();
@@ -1299,6 +1371,22 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 			boxSize.y() * mSize.y());
 	}
 
+	mVirtualGap = false;
+	mVirtualGapHeight = 0.0f;
+	mVirtualGapOffset = 0;
+
+	if (elem->has("virtualGap"))
+		mVirtualGap = elem->get<bool>("virtualGap");
+
+	if (elem->has("virtualGapHeight"))
+	{
+		float scale = this->mParent ? this->mParent->getSize().y() : (float)Renderer::getScreenHeight();
+		mVirtualGapHeight = elem->get<float>("virtualGapHeight") * scale;
+	}
+
+	if (elem->has("virtualGapOffset"))
+		mVirtualGapOffset = (int)std::round(elem->get<float>("virtualGapOffset"));
+
 	mCarouselLoop = false;
 	mCarouselMaxLogoCount = 5;
 	mCarouselLogoScale = 1.20f;
@@ -1315,7 +1403,11 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 		mCarouselMinLogoOpacity = 0.75f;
 		mCarouselScaledLogoSpacing = 0.58f;
 		mCarouselLogoAlignment = CAROUSEL_ALIGN_CENTER;
-		mCarouselLogoSize = Vector2f(0.132f * mSize.x(), 0.733f * mSize.y());
+
+		if (mOrientation == ORIENTATION_VERTICAL)
+			mCarouselLogoSize = Vector2f(0.733f * mSize.x(), 0.132f * mSize.y());
+		else
+			mCarouselLogoSize = Vector2f(0.132f * mSize.x(), 0.733f * mSize.y());
 	}
 
 	if (elem->has("carouselLoop"))

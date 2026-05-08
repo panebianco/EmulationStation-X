@@ -171,6 +171,12 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "forceUppercase", BOOLEAN },
 	{ "lineSpacing", FLOAT },
 	{ "showRowNumbers", BOOLEAN },
+	
+	// ES-X: fila fantasma visual tipo XMB
+{ "virtualGap", BOOLEAN },
+{ "virtualGapHeight", RESOLUTION_FLOAT },
+{ "virtualGapOffset", FLOAT },
+
 	{ "zIndex", FLOAT } } },
 	
 	
