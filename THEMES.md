@@ -269,6 +269,71 @@ Themes can define navigation audio.
 
 Only .wav files are supported.
 
+### Gamelist Carousel Mode (ES-X)
+
+ES-X extends `TextListComponent` with an optional carousel mode for game lists.
+
+This allows themes to create modern carousel-based game browsing layouts while still using the classic EmulationStation gamelist structure.
+
+The carousel can be horizontal or vertical.
+
+#### Horizontal carousel
+
+<textlist name="gamelist">
+  <orientation>horizontal</orientation>
+  <carouselMode>true</carouselMode>
+
+  <carouselImage>true</carouselImage>
+  <carouselImageType>image</carouselImageType>
+  <carouselImageFit>contain</carouselImageFit>
+
+  <logoSize>0.132 0.733</logoSize>
+  <logoScale>1.40</logoScale>
+  <logoSpacingX>0.13</logoSpacingX>
+  <scaledLogoSpacing>0.58</scaledLogoSpacing>
+
+  <maxLogoCount>9</maxLogoCount>
+  <minLogoOpacity>0.75</minLogoOpacity>
+
+  <carouselShowText>false</carouselShowText>
+</textlist>
+
+#### Vertical carousel
+
+<textlist name="gamelist">
+	<pos>0.03 0.16</pos>
+	<size>0.42 0.74</size>
+	<origin>0 0</origin>
+
+	<orientation>vertical</orientation>
+	<carouselMode>true</carouselMode>
+	<carouselLoop>true</carouselLoop>
+	<carouselShowText>false</carouselShowText>
+
+	<carouselImage>true</carouselImage>
+	<carouselImageType>image</carouselImageType>
+	<carouselImageFit>contain</carouselImageFit>
+
+	<logoAlignment>center</logoAlignment>
+
+	<logoSize>0.30 0.105</logoSize>
+	<logoScale>2.25</logoScale>
+
+	<logoOffsetX>-0.06</logoOffsetX>
+	<logoOffsetY>0.00</logoOffsetY>
+
+	<logoSpacingY>0.125</logoSpacingY>
+
+	<maxLogoCount>5</maxLogoCount>
+	<minLogoOpacity>0.55</minLogoOpacity>
+	<scaledLogoSpacing>0.45</scaledLogoSpacing>
+
+	<carouselItemColor>00000000</carouselItemColor>
+	<carouselSelectedItemColor>00000000</carouselSelectedItemColor>
+
+	<carouselTextMaxLines>2</carouselTextMaxLines>
+</textlist>
+
 Theme Options (ES-X)
 
 Themes can expose configurable options in the UI.
