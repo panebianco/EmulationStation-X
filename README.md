@@ -198,7 +198,7 @@ Beautiful themes should not require engine hacks.
 | Navigation sounds | ✅ Stable |
 | Audio ducking | ✅ Stable |
 | Controller overlay | 🔄 Planned |
-| Network indicator | 🔄 Planned |
+| Network indicator |  ✅ Stable |
 
 Core systems are stable for daily use. New capabilities are introduced carefully to preserve compatibility and performance.
 
