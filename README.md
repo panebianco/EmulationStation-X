@@ -29,7 +29,16 @@
 ![photo_2026-04-04_09-59-24](https://github.com/user-attachments/assets/44ad1a7b-16ac-482f-afdc-014bb9e81dde)
 
 
+## Example Gamelist Carousel
 
+ES-X adds carousel support directly to `TextListComponent`, allowing themes to build modern game list layouts without creating a separate view.
+
+The gamelist can now be presented as a horizontal or vertical carousel using scraped artwork, with theme-controlled scaling, spacing, opacity, image source, image fit, and selected item emphasis.
+
+This makes it possible to create PS5-style horizontal game carousels, classic screenshot-based vertical layouts, and other console-inspired interfaces while still using the classic EmulationStation theme structure.
+
+<img width="1280" height="719" alt="photo_2026-05-08_20-49-32" src="https://github.com/user-attachments/assets/7f3e2664-f2e3-4bbc-b72f-802453a25e00" />
+<img width="1280" height="719" alt="photo_2026-05-08_20-49-48" src="https://github.com/user-attachments/assets/61321cb0-693c-4f7a-8ca5-def7a5ccebbe" />
 
 
 
@@ -114,11 +123,14 @@ See: `THEME_OPTIONS.md`
 - True `zIndex` layering
 - Advanced scale, spacing, and opacity controls
 - Text borders & shadows (engine-level)
-- Improved carousel flexibility
+- Theme-controlled image source and fallback handling
 - Safe metadata fallback handling
+- Expanded carousel support for system and game views
+- Horizontal and vertical gamelist carousel modes using `TextListComponent`
 
-Designed to remain compatible with classic themes.
+ES-X extends the classic theme engine while preserving compatibility with existing EmulationStation themes.
 
+The goal is to make advanced layouts possible through theme XML instead of requiring hardcoded engine hacks.
 ### 🎮 Enhanced Grid Layout Control
 
 ES-X expands Grid view flexibility, enabling themes to:
