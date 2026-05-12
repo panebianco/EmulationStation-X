@@ -99,7 +99,7 @@ namespace
 		list->add(_("IMAGE"), "image", selected == "image");
 		list->add(_("THUMBNAIL"), "thumbnail", selected == "thumbnail");
 		list->add(_("MARQUEE"), "marquee", selected == "marquee");
-		list->add(_("BOXART"), "boxart", selected == "boxart");
+		list->add(_("FANART"), "fanart", selected == "fanart");
 		list->add(_("SCREENSHOT"), "screenshot", selected == "screenshot");
 		list->add(_("WHEEL"), "wheel", selected == "wheel");
 		list->add(_("TEXTURE"), "texture", selected == "texture");
