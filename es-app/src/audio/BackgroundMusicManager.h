@@ -1,3 +1,4 @@
+#include <SDL_mixer.h>
 #pragma once
 
 #include <string>
@@ -5,8 +6,6 @@
 #include <deque>
 #include <atomic>
 
-struct _Mix_Music;
-typedef struct _Mix_Music Mix_Music;
 
 class BackgroundMusicManager
 {
