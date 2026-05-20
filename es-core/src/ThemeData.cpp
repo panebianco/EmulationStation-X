@@ -38,6 +38,7 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 		{ "colorEnd", COLOR },
 		{ "gradientType", STRING },
 		{ "visible", BOOLEAN },
+		{ "hideWhenSingleGame", BOOLEAN },
 		{ "zIndex", FLOAT } } },
 
 	{ "imagegrid", {
@@ -1033,9 +1034,12 @@ const std::shared_ptr<ThemeData>& ThemeData::getDefault()
 	return theme;
 }
 
-std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window)
+std::vector<ThemeData::ThemeExtra> ThemeData::makeExtrasWithMetadata(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window)
 {
-	std::vector<GuiComponent*> comps;
+	std::vector<ThemeExtra> comps;
+
+	if (!theme)
+		return comps;
 
 	auto viewIt = theme->mViews.find(view);
 	if (viewIt == theme->mViews.cend())
@@ -1060,7 +1064,25 @@ std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData
 
 		comp->setDefaultZIndex(10);
 		comp->applyTheme(theme, view, *it, ThemeFlags::ALL);
-		comps.push_back(comp);
+
+		const bool hideWhenSingle =
+			elem.has("hideWhenSingleGame") && elem.get<bool>("hideWhenSingleGame");
+
+		comps.push_back(ThemeExtra(comp, hideWhenSingle));
+	}
+
+	return comps;
+}
+
+std::vector<GuiComponent*> ThemeData::makeExtras(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window)
+{
+	std::vector<GuiComponent*> comps;
+
+	std::vector<ThemeExtra> extras = makeExtrasWithMetadata(theme, view, window);
+	for (auto& extra : extras)
+	{
+		if (extra.component)
+			comps.push_back(extra.component);
 	}
 
 	return comps;

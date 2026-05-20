@@ -1,4 +1,3 @@
-
 #pragma once
 #ifndef ES_APP_VIEWS_GAME_LIST_ISIMPLE_GAME_LIST_VIEW_H
 #define ES_APP_VIEWS_GAME_LIST_ISIMPLE_GAME_LIST_VIEW_H
@@ -6,13 +5,16 @@
 #include "components/ImageComponent.h"
 #include "components/TextComponent.h"
 #include "views/gamelist/IGameListView.h"
+#include "ThemeData.h"
+
 #include <stack>
+#include <vector>
 
 class ISimpleGameListView : public IGameListView
 {
 public:
 	ISimpleGameListView(Window* window, FileData* root);
-	virtual ~ISimpleGameListView() {}
+	virtual ~ISimpleGameListView();
 
 	// Called when a new file is added, a file is removed, a file's metadata changes, or a file's children are sorted.
 	// NOTE: FILE_SORTED is only reported for the topmost FileData, where the sort started.
@@ -37,11 +39,14 @@ protected:
 	virtual std::string getQuickSystemSelectLeftButton() = 0;
 	virtual void populateList(const std::vector<FileData*>& files) = 0;
 
+	bool isSingleGameList();
+	void updateThemeExtrasVisibility();
+
 	TextComponent mHeaderText;
 	ImageComponent mHeaderImage;
 	ImageComponent mBackground;
 
-	std::vector<GuiComponent*> mThemeExtras;
+	std::vector<ThemeData::ThemeExtra> mThemeExtras;
 
 	std::stack<FileData*> mCursorStack;
 };

@@ -35,23 +35,46 @@ ISimpleGameListView::ISimpleGameListView(Window* window, FileData* root)
 	addChild(&mBackground);
 }
 
+ISimpleGameListView::~ISimpleGameListView()
+{
+	for (auto& extra : mThemeExtras)
+	{
+		if (extra.component)
+		{
+			removeChild(extra.component);
+			delete extra.component;
+		}
+	}
+
+	mThemeExtras.clear();
+}
+
 void ISimpleGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme)
 {
 	using namespace ThemeFlags;
+
 	mBackground.applyTheme(theme, getName(), "background", ALL);
 	mHeaderImage.applyTheme(theme, getName(), "logo", ALL);
 	mHeaderText.applyTheme(theme, getName(), "logoText", ALL);
 
-	for (auto extra : mThemeExtras)
+	for (auto& extra : mThemeExtras)
 	{
-		removeChild(extra);
-		delete extra;
+		if (extra.component)
+		{
+			removeChild(extra.component);
+			delete extra.component;
+		}
 	}
 	mThemeExtras.clear();
 
-	mThemeExtras = ThemeData::makeExtras(theme, getName(), mWindow);
-	for (auto extra : mThemeExtras)
-		addChild(extra);
+	mThemeExtras = ThemeData::makeExtrasWithMetadata(theme, getName(), mWindow);
+	for (auto& extra : mThemeExtras)
+	{
+		if (extra.component)
+			addChild(extra.component);
+	}
+
+	updateThemeExtrasVisibility();
 
 	if (mHeaderImage.hasImage())
 	{
@@ -65,9 +88,45 @@ void ISimpleGameListView::onThemeChanged(const std::shared_ptr<ThemeData>& theme
 	}
 }
 
+bool ISimpleGameListView::isSingleGameList()
+{
+	FileData* cursor = getCursor();
+
+	if (!cursor || cursor->isPlaceHolder())
+		return false;
+
+	FileData* parent = cursor->getParent();
+	if (!parent)
+		return false;
+
+	const std::vector<FileData*>& list = parent->getChildrenListToDisplay();
+
+	return list.size() <= 1;
+}
+
+void ISimpleGameListView::updateThemeExtrasVisibility()
+{
+	const bool single = isSingleGameList();
+
+	for (auto& extra : mThemeExtras)
+	{
+		if (!extra.component)
+			continue;
+
+		extra.component->setVisible(!(single && extra.hideWhenSingleGame));
+	}
+}
+
 void ISimpleGameListView::onFileChanged(FileData* /*file*/, FileChangeType /*change*/)
 {
 	FileData* cursor = getCursor();
+
+	if (!cursor)
+	{
+		updateThemeExtrasVisibility();
+		return;
+	}
+
 	if (!cursor->isPlaceHolder())
 	{
 		populateList(cursor->getParent()->getChildrenListToDisplay());
@@ -78,12 +137,15 @@ void ISimpleGameListView::onFileChanged(FileData* /*file*/, FileChangeType /*cha
 		populateList(mRoot->getChildrenListToDisplay());
 		setCursor(cursor);
 	}
+
+	updateThemeExtrasVisibility();
 }
 
 bool ISimpleGameListView::input(InputConfig* config, Input input)
 {
 	bool horizontalGameList = false;
 	const std::shared_ptr<ThemeData>& activeTheme = getTheme();
+
 	if (activeTheme)
 	{
 		const ThemeData::ThemeElement* gamelistElem = activeTheme->getElement(getName(), "gamelist", "textlist");
@@ -99,6 +161,13 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 		if (config->isMappedTo("a", input))
 		{
 			FileData* cursor = getCursor();
+
+			if (!cursor)
+			{
+				updateThemeExtrasVisibility();
+				return true;
+			}
+
 			if (cursor->getType() == GAME)
 			{
 				std::shared_ptr<Sound> launchSnd;
@@ -126,15 +195,18 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 					mCursorStack.push(cursor);
 					populateList(cursor->getChildrenListToDisplay());
 					setCursor(getCursor());
+					updateThemeExtrasVisibility();
 				}
 			}
 
+			updateThemeExtrasVisibility();
 			return true;
 		}
 		else if (config->isMappedTo("b", input))
 		{
 			std::shared_ptr<Sound> backSnd;
 			SystemData* sys = mRoot ? mRoot->getSystem() : nullptr;
+
 			if (sys != nullptr)
 			{
 				const std::shared_ptr<ThemeData>& theme = sys->getTheme();
@@ -153,27 +225,40 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 				populateList(mCursorStack.top()->getParent()->getChildrenListToDisplay());
 				setCursor(mCursorStack.top());
 				mCursorStack.pop();
+				updateThemeExtrasVisibility();
 			}
 			else
 			{
 				onFocusLost();
-				SystemData* systemToView = getCursor()->getSystem();
+
+				FileData* cursor = getCursor();
+				if (!cursor)
+				{
+					updateThemeExtrasVisibility();
+					return true;
+				}
+
+				SystemData* systemToView = cursor->getSystem();
 				if (systemToView->isCollection())
 					systemToView = CollectionSystemManager::get()->getSystemToView(systemToView);
 
 				ViewController::get()->goToSystemView(systemToView);
 			}
 
+			updateThemeExtrasVisibility();
 			return true;
 		}
 		else if (config->isMappedTo("x", input))
 		{
 			if (mRoot->getSystem()->isGameSystem())
 			{
-				FileData* randomGame = getCursor()->getSystem()->getRandomGame();
+				FileData* cursor = getCursor();
+				FileData* randomGame = cursor ? cursor->getSystem()->getRandomGame() : nullptr;
+
 				if (randomGame)
 					setCursor(randomGame);
 
+				updateThemeExtrasVisibility();
 				return true;
 			}
 		}
@@ -196,6 +281,8 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 								favSnd->play();
 						}
 					}
+
+					updateThemeExtrasVisibility();
 					return true;
 				}
 			}
@@ -244,6 +331,7 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 					else
 						ViewController::get()->goToPrevGameList();
 
+					updateThemeExtrasVisibility();
 					return true;
 				}
 			}
@@ -252,7 +340,8 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 
 	FileData* cursor = getCursor();
 	SystemData* currentSystem = this->mRoot->getSystem();
-	if (currentSystem != NULL)
+
+	if (cursor && currentSystem != NULL)
 	{
 		Scripting::fireEvent("game-select", currentSystem->getName(), cursor->getPath(), cursor->getName(), "input");
 	}
@@ -261,5 +350,7 @@ bool ISimpleGameListView::input(InputConfig* config, Input input)
 		Scripting::fireEvent("game-select", "NULL", "NULL", "NULL", "input");
 	}
 
-	return IGameListView::input(config, input);
+	bool handled = IGameListView::input(config, input);
+	updateThemeExtrasVisibility();
+	return handled;
 }

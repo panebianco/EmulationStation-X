@@ -127,6 +127,24 @@ public:
 		inline bool has(const std::string& prop) const { return (properties.find(prop) != properties.cend()); }
 	};
 
+	struct ThemeExtra
+	{
+		GuiComponent* component;
+		bool hideWhenSingleGame;
+
+		ThemeExtra() :
+			component(nullptr),
+			hideWhenSingleGame(false)
+		{
+		}
+
+		ThemeExtra(GuiComponent* comp, bool hideSingle) :
+			component(comp),
+			hideWhenSingleGame(hideSingle)
+		{
+		}
+	};
+
 private:
 	class ThemeView
 	{
@@ -161,6 +179,7 @@ public:
 	const ThemeElement* getElement(const std::string& view, const std::string& element, const std::string& expectedType) const;
 
 	static std::vector<GuiComponent*> makeExtras(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window);
+	static std::vector<ThemeExtra> makeExtrasWithMetadata(const std::shared_ptr<ThemeData>& theme, const std::string& view, Window* window);
 
 	static const std::shared_ptr<ThemeData>& getDefault();
 
