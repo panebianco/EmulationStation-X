@@ -117,7 +117,10 @@ public:
 			(mOrientation == ORIENTATION_HORIZONTAL || mOrientation == ORIENTATION_VERTICAL);
 	}
 
-	inline void setCursorChangedCallback(const std::function<void(CursorState state)>& func) { mCursorChangedCallback = func; }
+	inline void setCursorChangedCallback(const std::function<void(CursorState state)>& func)
+	{
+		mCursorChangedCallback = func;
+	}
 
 	inline void setFont(const std::shared_ptr<Font>& font)
 	{
@@ -187,13 +190,15 @@ private:
 	float mSelectorOffsetY;
 	unsigned int mSelectorColor;
 	unsigned int mSelectorColorEnd;
-	bool mSelectorColorGradientHorizontal = true;
+	bool mSelectorColorGradientHorizontal;
 	unsigned int mSelectedColor;
 	std::string mScrollSound;
+
 	static const unsigned int COLOR_ID_COUNT = 2;
 	unsigned int mColors[COLOR_ID_COUNT];
+
 	int mViewportHeight;
-	int mCursorPrev = -1;
+	int mCursorPrev;
 
 	float mSelectorWidth;
 	float mSelectorHorizontalOffset;
@@ -245,12 +250,25 @@ private:
 	bool mCarouselImageLockSize;
 	Vector2f mCarouselImageBoxSize;
 
+	// ES-X: borde/overlay opcional para imagen de tarjeta en modo carrusel.
+	// No recorta la imagen; solo dibuja un PNG encima.
+	std::string mCarouselImageBorder;
+	std::string mCarouselImageBorderSelected;
+	float mCarouselImageBorderScale;
+	unsigned int mCarouselImageBorderColor;
+
+	ImageComponent mCarouselImageBorderComponent;
+	ImageComponent mCarouselImageBorderSelectedComponent;
+
 	ImageComponent mSelectorImage;
 };
 
 template <typename T>
 TextListComponent<T>::TextListComponent(Window* window) :
-	IList<TextListData, T>(window), mSelectorImage(window)
+	IList<TextListData, T>(window),
+	mCarouselImageBorderComponent(window),
+	mCarouselImageBorderSelectedComponent(window),
+	mSelectorImage(window)
 {
 	mMarqueeOffset = 0;
 	mMarqueeOffset2 = 0;
@@ -271,6 +289,9 @@ TextListComponent<T>::TextListComponent(Window* window) :
 	mSelectedColor = 0;
 	mColors[0] = 0x0000FFFF;
 	mColors[1] = 0x00FF00FF;
+
+	mViewportHeight = 0;
+	mCursorPrev = -1;
 
 	mSelectorWidth = 0.0f;
 	mSelectorHorizontalOffset = 0.0f;
@@ -314,6 +335,11 @@ TextListComponent<T>::TextListComponent(Window* window) :
 
 	mCarouselImageLockSize = false;
 	mCarouselImageBoxSize = Vector2f::Zero();
+
+	mCarouselImageBorder = "";
+	mCarouselImageBorderSelected = "";
+	mCarouselImageBorderScale = 1.0f;
+	mCarouselImageBorderColor = 0xFFFFFFFF;
 }
 
 template <typename T>
@@ -340,7 +366,12 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		visibleCount = 1;
 
 	const int sideCount = visibleCount / 2;
-	const int buffer = (mCarouselLoop && size() > 1) ? 2 : 1;
+
+	// ES-X:
+	// En carrusel vertical respetamos maxLogoCount de forma estricta.
+	// Antes el buffer agregaba ítems extra, por eso al reducir maxLogoCount
+	// parecía que no cambiaba la cantidad visible.
+	const int buffer = verticalCarousel ? 0 : ((mCarouselLoop && size() > 1) ? 2 : 1);
 
 	const float baseTextHeight = Math::max(font->getHeight(1.0f), (float)font->getSize());
 
@@ -788,11 +819,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			}
 
 			entry.data.carouselImage->setOrigin(0.5f, 0.5f);
-			entry.data.carouselImage->setPosition(
-				imagePosX,
-				imagePosY,
-				0.0f);
-
+			entry.data.carouselImage->setPosition(imagePosX, imagePosY, 0.0f);
 			entry.data.carouselImage->setOpacity((unsigned char)(opacity01 * 255.0f));
 
 			Transform4x4f imageTrans = trans;
@@ -810,6 +837,30 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			entry.data.carouselImage->render(imageTrans);
 
 			Renderer::popClipRect();
+
+			// ES-X:
+			// Borde/overlay opcional para la imagen del carrusel.
+			// Se renderiza fuera del clip para permitir glow, sombra o marco más grande.
+			ImageComponent* border = nullptr;
+
+			if (visuallyCentered && !mCarouselImageBorderSelected.empty())
+				border = &mCarouselImageBorderSelectedComponent;
+			else if (!mCarouselImageBorder.empty())
+				border = &mCarouselImageBorderComponent;
+
+			if (border)
+			{
+				float borderScale = mCarouselImageBorderScale;
+
+				if (borderScale <= 0.0f)
+					borderScale = 1.0f;
+
+				border->setOrigin(0.5f, 0.5f);
+				border->setPosition(imagePosX, imagePosY, 0.0f);
+				border->setMaxSize(currentImageW * borderScale, currentImageH * borderScale);
+				border->setOpacity((unsigned char)(opacity01 * 255.0f));
+				border->render(imageTrans);
+			}
 		}
 	};
 
@@ -1008,6 +1059,9 @@ int TextListComponent<T>::viewportTop()
 	int viewportTopMax = size() - mViewportHeight;
 	int topNew = mViewportTop;
 
+	if (viewportTopMax < 0)
+		viewportTopMax = 0;
+
 	if (mCursorPrev == -1)
 		mCursorPrev = mCursor;
 
@@ -1030,6 +1084,11 @@ int TextListComponent<T>::viewportTop()
 	if (mCursor <= mViewportHeight / 2)
 		topNew = 0;
 	else if (mCursor >= viewportTopMax + mViewportHeight / 2)
+		topNew = viewportTopMax;
+
+	if (topNew < 0)
+		topNew = 0;
+	else if (topNew > viewportTopMax)
 		topNew = viewportTopMax;
 
 	return topNew;
@@ -1370,6 +1429,46 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 			boxSize.x() * mSize.x(),
 			boxSize.y() * mSize.y());
 	}
+
+	// ES-X: borde/overlay opcional para imagen de tarjeta en modo carrusel.
+	// Requiere que ThemeData.cpp tenga registradas:
+	// carouselImageBorder, carouselImageBorderSelected,
+	// carouselImageBorderScale, carouselImageBorderColor.
+	mCarouselImageBorder = "";
+	mCarouselImageBorderSelected = "";
+	mCarouselImageBorderScale = 1.0f;
+	mCarouselImageBorderColor = 0xFFFFFFFF;
+
+	mCarouselImageBorderComponent.setImage("");
+	mCarouselImageBorderSelectedComponent.setImage("");
+
+	if (elem->has("carouselImageBorder"))
+	{
+		mCarouselImageBorder = elem->get<std::string>("carouselImageBorder");
+
+		if (!mCarouselImageBorder.empty())
+			mCarouselImageBorderComponent.setImage(mCarouselImageBorder);
+	}
+
+	if (elem->has("carouselImageBorderSelected"))
+	{
+		mCarouselImageBorderSelected = elem->get<std::string>("carouselImageBorderSelected");
+
+		if (!mCarouselImageBorderSelected.empty())
+			mCarouselImageBorderSelectedComponent.setImage(mCarouselImageBorderSelected);
+	}
+
+	if (elem->has("carouselImageBorderScale"))
+		mCarouselImageBorderScale = elem->get<float>("carouselImageBorderScale");
+
+	if (mCarouselImageBorderScale <= 0.0f)
+		mCarouselImageBorderScale = 1.0f;
+
+	if (elem->has("carouselImageBorderColor"))
+		mCarouselImageBorderColor = elem->get<unsigned int>("carouselImageBorderColor");
+
+	mCarouselImageBorderComponent.setColorShift(mCarouselImageBorderColor);
+	mCarouselImageBorderSelectedComponent.setColorShift(mCarouselImageBorderColor);
 
 	mVirtualGap = false;
 	mVirtualGapHeight = 0.0f;

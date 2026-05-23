@@ -143,6 +143,12 @@ std::map<std::string, std::map<std::string, ThemeData::ElementPropertyType>> The
 	{ "carouselImageFit", STRING },
 	{ "carouselImagePadding", NORMALIZED_PAIR },
 	
+	// ES-X: borde/overlay opcional para imagen de tarjeta en modo carrusel
+{ "carouselImageBorder", PATH },
+{ "carouselImageBorderSelected", PATH },
+{ "carouselImageBorderScale", FLOAT },
+{ "carouselImageBorderColor", COLOR },
+	
 	// ES-X: caja fija opcional para blindar artes raros del scraper
 	{ "carouselImageLockSize", BOOLEAN },
 	{ "carouselImageBoxSize", NORMALIZED_PAIR },
