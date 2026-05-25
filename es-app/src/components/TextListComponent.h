@@ -780,42 +780,61 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				entry.data.carouselImage->setImage(imagePath);
 			}
 
-			float currentPadX = scaledW * mCarouselImagePadding.x();
-			float currentPadY = scaledH * mCarouselImagePadding.y();
+			// ES-X:
+			// Caja base estable para la imagen del carrusel.
+			// La imagen acompaña el resalte del centro, pero sin depender
+			// directamente de medidas deformadas por cover/contain.
+			const float baseCardW = itemWidth;
+			const float baseCardH = itemHeight;
 
-			float currentImageW = Math::max(1.0f, scaledW - (currentPadX * 2.0f));
-			float currentImageH = Math::max(1.0f, scaledH - (currentPadY * 2.0f));
+			float basePadX = baseCardW * mCarouselImagePadding.x();
+			float basePadY = baseCardH * mCarouselImagePadding.y();
+
+			float baseImageW = Math::max(1.0f, baseCardW - (basePadX * 2.0f));
+			float baseImageH = Math::max(1.0f, baseCardH - (basePadY * 2.0f));
 
 			if (mCarouselImageLockSize && mCarouselImageBoxSize.x() > 1.0f && mCarouselImageBoxSize.y() > 1.0f)
 			{
-				currentImageW = Math::max(1.0f, mCarouselImageBoxSize.x() * scale);
-				currentImageH = Math::max(1.0f, mCarouselImageBoxSize.y() * scale);
+				baseImageW = Math::max(1.0f, mCarouselImageBoxSize.x());
+				baseImageH = Math::max(1.0f, mCarouselImageBoxSize.y());
 
-				currentPadX = 0.0f;
-				currentPadY = 0.0f;
+				basePadX = 0.0f;
+				basePadY = 0.0f;
 			}
+
+			// ES-X:
+			// El centro debe seguir resaltando.
+			// 0.90f evita el crecimiento agresivo que hacía que algunas imágenes se perdieran.
+			float visualImageScale = 1.0f + ((scale - 1.0f) * 0.90f);
+
+			if (visualImageScale < 0.1f)
+				visualImageScale = 1.0f;
+
+			float visualImageW = Math::max(1.0f, baseImageW * visualImageScale);
+			float visualImageH = Math::max(1.0f, baseImageH * visualImageScale);
 
 			entry.data.carouselImage->uncrop();
 
+			// Centro visual del item escalado.
 			float imagePosX = std::round(drawX + (scaledW * 0.5f));
 			float imagePosY = std::round(drawY + (scaledH * 0.5f));
 
 			if (hasFallbackImage)
 			{
-				const float fallbackSide = Math::min(currentImageW, currentImageH);
+				const float fallbackSide = Math::min(visualImageW, visualImageH);
 				entry.data.carouselImage->setResize(fallbackSide, fallbackSide);
 			}
 			else if (mCarouselImageFit == "cover")
 			{
-				entry.data.carouselImage->setMinSize(currentImageW, currentImageH);
+				entry.data.carouselImage->setMinSize(visualImageW, visualImageH);
 			}
 			else if (mCarouselImageFit == "stretch")
 			{
-				entry.data.carouselImage->setResize(currentImageW, currentImageH);
+				entry.data.carouselImage->setResize(visualImageW, visualImageH);
 			}
 			else
 			{
-				entry.data.carouselImage->setMaxSize(currentImageW, currentImageH);
+				entry.data.carouselImage->setMaxSize(visualImageW, visualImageH);
 			}
 
 			entry.data.carouselImage->setOrigin(0.5f, 0.5f);
@@ -824,8 +843,13 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 			Transform4x4f imageTrans = trans;
 
-			Vector3f clipPos(drawX + currentPadX, drawY + currentPadY, 0.0f);
-			Vector3f clipSize(currentImageW, currentImageH, 0.0f);
+			// Clip centrado en la caja visual real.
+			Vector3f clipPos(
+				imagePosX - (visualImageW * 0.5f),
+				imagePosY - (visualImageH * 0.5f),
+				0.0f);
+
+			Vector3f clipSize(visualImageW, visualImageH, 0.0f);
 
 			clipPos = trans * clipPos;
 			clipSize = trans * clipSize - trans.translation();
@@ -840,7 +864,8 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 			// ES-X:
 			// Borde/overlay opcional para la imagen del carrusel.
-			// Se renderiza fuera del clip para permitir glow, sombra o marco más grande.
+			// Acompaña el tamaño visual de la imagen, pero no hereda
+			// la opacidad lateral para evitar verse semitransparente.
 			ImageComponent* border = nullptr;
 
 			if (visuallyCentered && !mCarouselImageBorderSelected.empty())
@@ -855,10 +880,17 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				if (borderScale <= 0.0f)
 					borderScale = 1.0f;
 
+				const float borderW = Math::max(1.0f, visualImageW * borderScale);
+				const float borderH = Math::max(1.0f, visualImageH * borderScale);
+
 				border->setOrigin(0.5f, 0.5f);
 				border->setPosition(imagePosX, imagePosY, 0.0f);
-				border->setMaxSize(currentImageW * borderScale, currentImageH * borderScale);
-				border->setOpacity((unsigned char)(opacity01 * 255.0f));
+				border->setMaxSize(borderW, borderH);
+
+				// El marco debe mantenerse sólido.
+				// No usamos opacity01 porque minLogoOpacity lo lava en laterales.
+				border->setOpacity(255);
+
 				border->render(imageTrans);
 			}
 		}
