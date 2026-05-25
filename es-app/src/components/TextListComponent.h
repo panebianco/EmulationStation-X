@@ -649,26 +649,48 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		const float scaledW = itemWidth * scale;
 		const float scaledH = itemHeight * scale;
 
+		// ES-X:
+		// drawX/drawY se usan para imagen/texto escalados.
+		// cardX/cardY se usan para la tarjeta/fondo fijo.
 		float drawX = itemAnchorX - (scaledW * 0.5f);
 		float drawY = itemAnchorY - (scaledH * 0.5f);
+
+		float cardX = itemAnchorX - (itemWidth * 0.5f);
+		float cardY = itemAnchorY - (itemHeight * 0.5f);
 
 		if (verticalCarousel)
 		{
 			if (mCarouselLogoAlignment == CAROUSEL_ALIGN_LEFT)
+			{
 				drawX = itemAnchorX;
+				cardX = itemAnchorX;
+			}
 			else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_RIGHT)
+			{
 				drawX = itemAnchorX - scaledW;
+				cardX = itemAnchorX - itemWidth;
+			}
 			else
+			{
 				drawX = itemAnchorX - (scaledW * 0.5f);
+				cardX = itemAnchorX - (itemWidth * 0.5f);
+			}
 
 			drawY = itemAnchorY - (scaledH * 0.5f);
+			cardY = itemAnchorY - (itemHeight * 0.5f);
 		}
 		else
 		{
 			if (mCarouselLogoAlignment == CAROUSEL_ALIGN_TOP)
+			{
 				drawY = itemAnchorY;
+				cardY = itemAnchorY;
+			}
 			else if (mCarouselLogoAlignment == CAROUSEL_ALIGN_BOTTOM)
+			{
 				drawY = itemAnchorY - scaledH;
+				cardY = itemAnchorY - itemHeight;
+			}
 		}
 
 		const bool visuallyCentered = (absDistance < 0.5f);
@@ -677,11 +699,16 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 		bgColor = applyOpacity(bgColor, opacity01);
 
 		Renderer::setMatrix(trans);
+
+		// ES-X:
+		// La tarjeta/fondo del carrusel queda fija.
+		// Antes usaba scaledW/scaledH, por eso el borde se achicaba/crecía
+		// al pasar por el centro, especialmente en carrusel vertical.
 		Renderer::drawRect(
-			drawX,
-			drawY,
-			scaledW,
-			scaledH,
+			cardX,
+			cardY,
+			itemWidth,
+			itemHeight,
 			bgColor,
 			bgColor);
 
@@ -780,10 +807,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				entry.data.carouselImage->setImage(imagePath);
 			}
 
-			// ES-X:
-			// Caja base estable para la imagen del carrusel.
-			// La imagen acompaña el resalte del centro, pero sin depender
-			// directamente de medidas deformadas por cover/contain.
 			const float baseCardW = itemWidth;
 			const float baseCardH = itemHeight;
 
@@ -802,9 +825,7 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				basePadY = 0.0f;
 			}
 
-			// ES-X:
-			// El centro debe seguir resaltando.
-			// 0.90f evita el crecimiento agresivo que hacía que algunas imágenes se perdieran.
+			// La imagen conserva el efecto de escala del centro.
 			float visualImageScale = 1.0f + ((scale - 1.0f) * 0.90f);
 
 			if (visualImageScale < 0.1f)
@@ -815,7 +836,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 			entry.data.carouselImage->uncrop();
 
-			// Centro visual del item escalado.
 			float imagePosX = std::round(drawX + (scaledW * 0.5f));
 			float imagePosY = std::round(drawY + (scaledH * 0.5f));
 
@@ -843,7 +863,6 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 
 			Transform4x4f imageTrans = trans;
 
-			// Clip centrado en la caja visual real.
 			Vector3f clipPos(
 				imagePosX - (visualImageW * 0.5f),
 				imagePosY - (visualImageH * 0.5f),
@@ -863,9 +882,10 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 			Renderer::popClipRect();
 
 			// ES-X:
-			// Borde/overlay opcional para la imagen del carrusel.
-			// Acompaña el tamaño visual de la imagen, pero no hereda
-			// la opacidad lateral para evitar verse semitransparente.
+			// Borde/overlay opcional para imagen de tarjeta en modo carrusel.
+			// Laterales: tamaño fijo.
+			// Centro: tamaño seleccionado estable, adaptado al logo central.
+			// No usa el scale animado por distancia, para evitar que respire.
 			ImageComponent* border = nullptr;
 
 			if (visuallyCentered && !mCarouselImageBorderSelected.empty())
@@ -880,15 +900,39 @@ void TextListComponent<T>::renderHorizontalCarousel(const Transform4x4f& trans)
 				if (borderScale <= 0.0f)
 					borderScale = 1.0f;
 
-				const float borderW = Math::max(1.0f, visualImageW * borderScale);
-				const float borderH = Math::max(1.0f, visualImageH * borderScale);
+				float fixedBorderW = baseImageW;
+				float fixedBorderH = baseImageH;
 
+				if (mCarouselImageLockSize &&
+					mCarouselImageBoxSize.x() > 1.0f &&
+					mCarouselImageBoxSize.y() > 1.0f)
+				{
+					fixedBorderW = mCarouselImageBoxSize.x();
+					fixedBorderH = mCarouselImageBoxSize.y();
+				}
+
+				float selectedBorderScale = 1.0f;
+
+// ES-X:
+// El borde central acompaña exactamente la escala visual de la imagen.
+// Los laterales quedan fijos para evitar el efecto de achicamiento.
+if (visuallyCentered)
+{
+	selectedBorderScale = visualImageScale;
+
+	if (selectedBorderScale < 0.1f)
+		selectedBorderScale = 1.0f;
+}
+
+fixedBorderW = Math::max(1.0f, fixedBorderW * selectedBorderScale * borderScale);
+fixedBorderH = Math::max(1.0f, fixedBorderH * selectedBorderScale * borderScale);
 				border->setOrigin(0.5f, 0.5f);
 				border->setPosition(imagePosX, imagePosY, 0.0f);
-				border->setMaxSize(borderW, borderH);
 
-				// El marco debe mantenerse sólido.
-				// No usamos opacity01 porque minLogoOpacity lo lava en laterales.
+				// setResize fuerza el tamaño exacto del PNG.
+				border->setResize(fixedBorderW, fixedBorderH);
+
+				// El marco se mantiene sólido, sin heredar minLogoOpacity.
 				border->setOpacity(255);
 
 				border->render(imageTrans);
@@ -1462,10 +1506,6 @@ void TextListComponent<T>::applyTheme(const std::shared_ptr<ThemeData>& theme, c
 			boxSize.y() * mSize.y());
 	}
 
-	// ES-X: borde/overlay opcional para imagen de tarjeta en modo carrusel.
-	// Requiere que ThemeData.cpp tenga registradas:
-	// carouselImageBorder, carouselImageBorderSelected,
-	// carouselImageBorderScale, carouselImageBorderColor.
 	mCarouselImageBorder = "";
 	mCarouselImageBorderSelected = "";
 	mCarouselImageBorderScale = 1.0f;
